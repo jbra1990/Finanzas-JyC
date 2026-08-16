@@ -13,24 +13,49 @@
 <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAB+UlEQVR42u3cyQ3CMBBA0dRDhbRDU3RBDYQbl+BsNvGM3+g3QPSEFC+ZbventNjkEQgOwSE4BIfgEByCQ3AIDsEhwSE4BIfgEByCQ3AIDsEhOCQ4BIfgEByCQ3AIDsEhOASHBIfgEByCQ3AIDsEhOASH4BAcEhyCQ3AIDsEhOASH4BAcgqNRb1N14DBwGDgMHHDAAQcc7XB4Uez/6cEBBxxwwAEHHHDAITgEBxxwwAEHHHBYPrd8DgcccMABBxxwwAGHgcPAYeCAAw444IADDjjggAMOOOCwZW/LHg444BAcggMOOOCAAw444IADDjjggAMOOOCAA45MvR4THHB8NZSD49TPC7pRvspiLxE4kuDYJWOjDzgy4DggY4sPOMLjOCxj1QccsXGclFH2AUdgHFVkFHzAAQcc6XBUlPHLBxxpF7vggAMOOOCAAw44upOx6AMOPvxzXPcqCwcccMABBxxwwBEYh70VOOCA41IfznPkxOEkmEUwZ0jh+K8Pp88HutTk3gocbrw1wzHafDT4SC0cvmAMBxxwwAEHHHDA0SEORQwOwSE4BIfgEByCQ3AIDsEhOCQ4BIfgEByCQ3AIDsEhOASHBIfgEByCQ3AIDsEhOASH4JDgEByCQ3AIDsEhOASH4BAcgkOCQ3AIDsEhOASH4BAcgkMDNgOjIn8gigbVBwAAAABJRU5ErkJggg==">
 <style>
 /* =============================================================================
-   Finanzas J & C — hoja de estilos única.
-   Paleta de series validada (adjacent-pair CVD/normal-vision) en claro y oscuro.
+   Finanzas J & C
+   -----------------------------------------------------------------------------
+   Un libro de cuentas compartido por dos personas. La idea visual: cada
+   pantalla abre con un PANEL con forma de tarjeta de crédito —oscuro en los dos
+   temas, porque es un objeto y no una superficie— con la cifra que importa y el
+   cupo cruzándolo; debajo, tarjetas claras y calladas.
+
+   Los neutros llevan un sesgo azul-pizarra a propósito: un gris puro se lee sin
+   decidir. Los colores de las series de los gráficos están validados aparte
+   (contraste y daltonismo) y no se tocan desde aquí.
    ========================================================================== */
 
 :root {
   color-scheme: light;
 
-  --plano: #f9f9f7;
-  --superficie: #fcfcfb;
-  --superficie-2: #f2f2ee;
-  --tinta: #0b0b0b;
-  --tinta-2: #52514e;
-  --tinta-3: #898781;
-  --grid: #e1e0d9;
-  --baseline: #c3c2b7;
-  --borde: rgba(11, 11, 11, 0.1);
-  --sombra: 0 1px 2px rgba(11, 11, 11, 0.06), 0 8px 24px rgba(11, 11, 11, 0.06);
+  /* Superficies */
+  --plano: #eef1f6;
+  --superficie: #ffffff;
+  --superficie-2: #f2f5fa;
+  --superficie-3: #e6ebf3;
 
+  /* El panel es el mismo objeto en los dos temas. */
+  --panel: #101828;
+  --panel-2: #1b263c;
+  --panel-tinta: #ffffff;
+  --panel-tinta-2: #9fb0cc;
+
+  /* Tinta */
+  --tinta: #0d1420;
+  --tinta-2: #4a5568;
+  --tinta-3: #8792a8;
+
+  /* Líneas */
+  --grid: #e3e8f0;
+  --baseline: #c7d0de;
+  --borde: rgba(13, 20, 32, 0.08);
+  --borde-fuerte: rgba(13, 20, 32, 0.14);
+
+  --sombra: 0 1px 2px rgba(13, 20, 32, 0.04), 0 6px 20px rgba(13, 20, 32, 0.06);
+  --sombra-panel: 0 10px 32px rgba(16, 24, 40, 0.24);
+  --sombra-nav: 0 4px 24px rgba(13, 20, 32, 0.12);
+
+  /* Series de gráficos: paleta validada, no cambiar sin volver a validar. */
   --serie-1: #2a78d6;
   --serie-2: #eb6834;
   --serie-3: #1baf7a;
@@ -40,31 +65,48 @@
   --serie-7: #4a3aa7;
   --serie-8: #e34948;
 
+  /* Estado: separado del acento, nunca hace de «serie 9». */
   --ok: #0ca30c;
-  --ok-texto: #006300;
+  --ok-texto: #067306;
   --alerta: #fab219;
   --grave: #ec835a;
   --critico: #d03b3b;
 
   --acento: var(--serie-1);
-  --radio: 14px;
-  --radio-s: 9px;
+  --acento-suave: rgba(42, 120, 214, 0.1);
+
+  --radio-xl: 22px;
+  --radio: 16px;
+  --radio-s: 11px;
+  --radio-pill: 999px;
+
   --fuente: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-tema="claro"]) {
     color-scheme: dark;
-    --plano: #0d0d0d;
-    --superficie: #1a1a19;
-    --superficie-2: #232322;
-    --tinta: #ffffff;
-    --tinta-2: #c3c2b7;
-    --tinta-3: #898781;
-    --grid: #2c2c2a;
-    --baseline: #383835;
-    --borde: rgba(255, 255, 255, 0.1);
-    --sombra: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --plano: #080b11;
+    --superficie: #151b25;
+    --superficie-2: #1c2431;
+    --superficie-3: #26303f;
+
+    --panel: #101828;
+    --panel-2: #223049;
+
+    --tinta: #eef2f8;
+    --tinta-2: #a7b4c8;
+    --tinta-3: #74839b;
+
+    --grid: #232c3a;
+    --baseline: #33404f;
+    --borde: rgba(255, 255, 255, 0.09);
+    --borde-fuerte: rgba(255, 255, 255, 0.16);
+
+    /* En oscuro la profundidad la da el bloque de color, no la sombra. */
+    --sombra: none;
+    --sombra-panel: none;
+    --sombra-nav: 0 -1px 0 rgba(255, 255, 255, 0.06);
 
     --serie-1: #3987e5;
     --serie-2: #d95926;
@@ -74,23 +116,29 @@
     --serie-6: #008300;
     --serie-7: #9085e9;
     --serie-8: #e66767;
-    --ok-texto: #0ca30c;
+    --ok-texto: #37c837;
+    --acento-suave: rgba(57, 135, 229, 0.16);
   }
 }
 
 :root[data-tema="oscuro"] {
   color-scheme: dark;
-  --plano: #0d0d0d;
-  --superficie: #1a1a19;
-  --superficie-2: #232322;
-  --tinta: #ffffff;
-  --tinta-2: #c3c2b7;
-  --tinta-3: #898781;
-  --grid: #2c2c2a;
-  --baseline: #383835;
-  --borde: rgba(255, 255, 255, 0.1);
-  --sombra: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.35);
-
+  --plano: #080b11;
+  --superficie: #151b25;
+  --superficie-2: #1c2431;
+  --superficie-3: #26303f;
+  --panel: #101828;
+  --panel-2: #223049;
+  --tinta: #eef2f8;
+  --tinta-2: #a7b4c8;
+  --tinta-3: #74839b;
+  --grid: #232c3a;
+  --baseline: #33404f;
+  --borde: rgba(255, 255, 255, 0.09);
+  --borde-fuerte: rgba(255, 255, 255, 0.16);
+  --sombra: none;
+  --sombra-panel: none;
+  --sombra-nav: 0 -1px 0 rgba(255, 255, 255, 0.06);
   --serie-1: #3987e5;
   --serie-2: #d95926;
   --serie-3: #199e70;
@@ -99,7 +147,8 @@
   --serie-6: #008300;
   --serie-7: #9085e9;
   --serie-8: #e66767;
-  --ok-texto: #0ca30c;
+  --ok-texto: #37c837;
+  --acento-suave: rgba(57, 135, 229, 0.16);
 }
 
 * { box-sizing: border-box; }
@@ -113,11 +162,17 @@ html, body {
   font-size: 15px;
   line-height: 1.45;
   -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
 }
 
 body { padding-bottom: env(safe-area-inset-bottom); }
 
-h1, h2, h3, h4 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+h1, h2, h3, h4 {
+  margin: 0;
+  font-weight: 640;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
 a { color: var(--acento); }
 
 /* --- Estructura ---------------------------------------------------------- */
@@ -125,36 +180,704 @@ a { color: var(--acento); }
 .app {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 0 14px 92px;
+  padding: 0 16px 104px;
 }
 
 .cabecera {
-  position: sticky;
-  top: 0;
-  z-index: 30;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 0 10px;
-  background: color-mix(in srgb, var(--plano) 88%, transparent);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--borde);
+  gap: 12px;
+  padding: 18px 0 14px;
 }
 
-.cabecera h1 { font-size: 17px; }
+.cabecera h1 {
+  font-size: 21px;
+  letter-spacing: -0.025em;
+}
+
 .cabecera .marca {
   display: grid;
   place-items: center;
-  width: 32px; height: 32px;
-  border-radius: 9px;
-  background: var(--acento);
+  width: 38px; height: 38px;
+  border-radius: 12px;
+  background: var(--panel);
   color: #fff;
   font-weight: 700;
   font-size: 13px;
+  letter-spacing: 0.02em;
   flex: none;
 }
-.cabecera .crece { flex: 1; }
-.cabecera .sub { font-size: 12px; color: var(--tinta-3); }
+
+.cabecera .crece { flex: 1; min-width: 0; }
+
+.cabecera .sub {
+  font-size: 12.5px;
+  color: var(--tinta-3);
+  margin-top: 1px;
+}
+
+/* --- Navegación ---------------------------------------------------------- */
+
+.nav {
+  position: fixed;
+  left: 12px; right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 40;
+  display: flex;
+  justify-content: space-around;
+  gap: 2px;
+  padding: 6px;
+  background: color-mix(in srgb, var(--superficie) 92%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-xl);
+  box-shadow: var(--sombra-nav);
+}
+
+.nav button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 7px 2px;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  color: var(--tinta-3);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.nav button svg { width: 21px; height: 21px; }
+.nav button[aria-current="page"] {
+  color: var(--acento);
+  background: var(--acento-suave);
+}
+.nav button span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+
+@media (min-width: 860px) {
+  .nav {
+    position: sticky;
+    left: auto; right: auto;
+    top: 12px;
+    bottom: auto;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    margin: 0 0 8px;
+  }
+  .nav button { flex: 0 0 auto; flex-direction: row; font-size: 13.5px; padding: 9px 15px; gap: 7px; }
+  .app { padding-bottom: 48px; }
+}
+
+/* --- El panel: la tarjeta como objeto ------------------------------------ */
+
+.panel {
+  position: relative;
+  overflow: hidden;
+  margin: 14px 0;
+  padding: 20px;
+  border-radius: var(--radio-xl);
+  background: var(--panel);
+  color: var(--panel-tinta);
+  box-shadow: var(--sombra-panel);
+}
+
+/* Banda diagonal muy tenue: da materia a la superficie sin hacer ruido. */
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.07) 0%,
+    rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+}
+
+.panel > * { position: relative; z-index: 1; }
+
+.panel .etiqueta {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--panel-tinta-2);
+}
+
+.panel .cifra {
+  display: block;
+  margin: 6px 0 2px;
+  font-size: clamp(34px, 10vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+}
+.panel .cifra.neg { color: #ff8f8f; }
+
+.panel .nota { font-size: 12.5px; color: var(--panel-tinta-2); }
+
+.panel-cab {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Fila de datos secundarios dentro del panel. */
+.panel-datos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 26px;
+  margin-top: 16px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.11);
+}
+.panel-datos > div { min-width: 0; }
+.panel-datos .etq {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--panel-tinta-2);
+}
+.panel-datos .val {
+  font-size: 16px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fila de un segmentado ancho junto a un botón: el segmentado se encoge y
+   desplaza, el botón nunca baja de línea. */
+.barra-accion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 0;
+}
+.barra-accion > *:first-child { flex: 1 1 auto; min-width: 0; }
+.barra-accion > .btn { flex: none; }
+
+/* El segmentado dentro del panel se viste de panel. */
+.panel .segmentado {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.panel .segmentado button { color: var(--panel-tinta-2); }
+.panel .segmentado button[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.95);
+  color: #101828;
+  box-shadow: none;
+}
+.panel .medidor { margin: 14px 0 0; }
+.panel .btn {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--panel-tinta);
+}
+.panel .btn:hover { background: rgba(255, 255, 255, 0.2); }
+.panel .btn.primario { background: var(--acento); border-color: transparent; color: #fff; }
+
+/* --- Tarjetas ------------------------------------------------------------ */
+
+.tarjeta {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 16px;
+  margin: 12px 0;
+  box-shadow: var(--sombra);
+}
+
+.tarjeta > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+.tarjeta > header > * { min-width: 0; max-width: 100%; }
+.tarjeta > header h2 {
+  font-size: 15px;
+  letter-spacing: -0.015em;
+}
+.tarjeta > header .pista { font-size: 12px; color: var(--tinta-3); }
+
+.rejilla { display: grid; gap: 12px; }
+.rejilla.dos { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+.rejilla.kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+
+/* --- Indicadores --------------------------------------------------------- */
+
+.kpi {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 14px;
+}
+
+.kpi .etq {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+  line-height: 1.3;
+}
+.kpi .valor {
+  font-size: 23px;
+  font-weight: 660;
+  letter-spacing: -0.03em;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi .delta { font-size: 11.5px; color: var(--tinta-2); margin-top: 3px; }
+.kpi .delta.bien { color: var(--ok-texto); font-weight: 550; }
+.kpi .delta.mal { color: var(--critico); font-weight: 550; }
+
+/* Cifra suelta fuera del panel (vistas que aún no lo usan). */
+.heroe {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  margin: 4px 0 6px;
+}
+.heroe.neg { color: var(--critico); }
+
+/* --- Controles ----------------------------------------------------------- */
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin: 10px 0;
+}
+.campo { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1 1 150px; }
+.campo > label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+.campo.ancho { flex-basis: 100%; }
+
+input, select, textarea, button { font: inherit; color: var(--tinta); }
+
+input, select, textarea {
+  width: 100%;
+  padding: 11px 12px;
+  background: var(--superficie-2);
+  border: 1px solid transparent;
+  border-radius: var(--radio-s);
+  min-height: 44px;
+  transition: border-color 0.15s, background 0.15s;
+}
+input:hover, select:hover, textarea:hover { background: var(--superficie-3); }
+input:focus, select:focus, textarea:focus {
+  background: var(--superficie);
+  border-color: var(--acento);
+  outline: none;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible,
+button:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+textarea { min-height: 66px; resize: vertical; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 18px;
+  min-height: 44px;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-pill);
+  background: var(--superficie);
+  font-weight: 560;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, transform 0.06s;
+}
+.btn:hover { background: var(--superficie-2); }
+.btn:active { transform: scale(0.975); }
+.btn.primario {
+  background: var(--acento);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 620;
+}
+.btn.primario:hover { filter: brightness(1.08); }
+.btn.peligro { color: var(--critico); }
+.btn.pequeno { padding: 0 13px; min-height: 34px; font-size: 12.5px; }
+
+.segmentado {
+  display: flex;
+  max-width: 100%;
+  padding: 3px;
+  gap: 2px;
+  background: var(--superficie-2);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-pill);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.segmentado::-webkit-scrollbar { display: none; }
+.segmentado button {
+  flex: none;
+  white-space: nowrap;
+  border: 0;
+  background: transparent;
+  padding: 0 15px;
+  min-height: 34px;
+  border-radius: var(--radio-pill);
+  color: var(--tinta-2);
+  font-size: 13px;
+  font-weight: 540;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.segmentado button[aria-pressed="true"] {
+  background: var(--superficie);
+  color: var(--tinta);
+  font-weight: 640;
+  box-shadow: 0 1px 3px rgba(13, 20, 32, 0.14);
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: var(--radio-pill);
+  border: 1px solid var(--borde);
+  background: var(--superficie-2);
+  font-size: 12px;
+  font-weight: 540;
+  color: var(--tinta-2);
+}
+/* J y C: cada persona con su color, el mismo de las series 1 y 2. */
+.chip.j { background: color-mix(in srgb, var(--serie-1) 14%, transparent);
+  border-color: color-mix(in srgb, var(--serie-1) 34%, transparent); }
+.chip.c { background: color-mix(in srgb, var(--serie-2) 14%, transparent);
+  border-color: color-mix(in srgb, var(--serie-2) 34%, transparent); }
+
+/* --- Tablas -------------------------------------------------------------- */
+
+.tabla-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -16px;
+  padding: 0 16px;
+}
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 9px 10px; text-align: right; white-space: nowrap; }
+th:first-child, td:first-child {
+  text-align: left;
+  position: sticky; left: 0;
+  background: var(--superficie);
+  z-index: 1;
+}
+thead th {
+  position: sticky; top: 0;
+  background: var(--superficie);
+  color: var(--tinta-3);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--borde);
+  z-index: 2;
+}
+thead th:first-child { z-index: 3; }
+tbody td {
+  border-bottom: 1px solid var(--grid);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+tbody tr:hover td { background: var(--superficie-2); }
+tbody tr:hover td:first-child { background: var(--superficie-2); }
+tfoot td {
+  font-weight: 660;
+  border-top: 2px solid var(--baseline);
+  font-variant-numeric: tabular-nums;
+}
+td.cero { color: var(--tinta-3); }
+
+/* --- Listas -------------------------------------------------------------- */
+
+.lista { list-style: none; margin: 0; padding: 0; }
+.lista li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--grid);
+}
+.lista li:last-child { border-bottom: 0; }
+.lista .principal { flex: 1; min-width: 0; }
+.lista .titulo {
+  font-weight: 570;
+  letter-spacing: -0.01em;
+  display: flex; align-items: center; gap: 7px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lista .meta {
+  font-size: 11.5px; color: var(--tinta-3); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lista .monto {
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.lista .monto.neg { color: var(--critico); }
+.lista .monto.pos { color: var(--ok-texto); }
+
+.vacio {
+  padding: 30px 12px;
+  text-align: center;
+  color: var(--tinta-3);
+  font-size: 13.5px;
+}
+
+/* --- Medidor de cupo ----------------------------------------------------- */
+
+.medidor { margin: 8px 0; }
+.medidor-pista {
+  height: 7px;
+  border-radius: var(--radio-pill);
+  background: var(--superficie-3);
+  overflow: hidden;
+}
+.medidor-relleno {
+  height: 100%;
+  border-radius: var(--radio-pill);
+  background: var(--acento);
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.medidor[data-estado="alerta"] .medidor-relleno { background: var(--alerta); }
+.medidor[data-estado="critico"] .medidor-relleno { background: var(--critico); }
+.medidor-pie {
+  display: flex; justify-content: space-between; gap: 10px;
+  margin-top: 7px; font-size: 12px; color: var(--tinta-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* El mismo medidor dentro del panel oscuro. */
+.panel .medidor-pista { background: rgba(255, 255, 255, 0.15); }
+.panel .medidor-pie { color: var(--panel-tinta-2); }
+.panel .medidor-pie strong { color: var(--panel-tinta); }
+
+/* --- Gráficos ------------------------------------------------------------ */
+
+.viz-svg { display: block; overflow: visible; }
+.viz-grid { stroke: var(--grid); stroke-width: 1; }
+.viz-baseline { stroke: var(--baseline); stroke-width: 1; }
+.viz-tick {
+  fill: var(--tinta-3); font-size: 10.5px; font-family: var(--fuente);
+  font-variant-numeric: tabular-nums;
+}
+.viz-etq-directa {
+  fill: var(--tinta-2); font-size: 11px; font-family: var(--fuente); font-weight: 620;
+}
+.viz-centro-etq { fill: var(--tinta-3); font-size: 10.5px; font-family: var(--fuente); }
+.viz-centro-valor {
+  fill: var(--tinta); font-size: 19px; font-weight: 660;
+  font-family: var(--fuente); letter-spacing: -0.02em;
+}
+.viz-barra, .viz-arco { transition: opacity 0.15s; }
+.viz-barra:hover, .viz-arco:hover { opacity: 0.8; }
+.viz-punto-fin { stroke: var(--superficie); stroke-width: 2; }
+.viz-zona:hover { fill: color-mix(in srgb, var(--tinta) 4%, transparent); }
+.viz-caja { width: 100%; }
+.viz-vacio { padding: 30px 8px; text-align: center; color: var(--tinta-3); font-size: 13px; }
+
+.viz-dona { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.viz-dona-svg { width: 190px; height: 190px; flex: none; margin: 0 auto; }
+
+.viz-leyenda { list-style: none; margin: 0; padding: 0; flex: 1 1 190px; min-width: 0; }
+.viz-leyenda li {
+  display: flex; align-items: center; gap: 9px;
+  padding: 4px 0; font-size: 12.5px; color: var(--tinta-2);
+}
+.viz-leyenda-nombre { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viz-leyenda-valor { font-variant-numeric: tabular-nums; color: var(--tinta); font-weight: 560; }
+.viz-leyenda-pct {
+  width: 36px; text-align: right; color: var(--tinta-3);
+  font-variant-numeric: tabular-nums;
+}
+.viz-leyenda-h { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; }
+.viz-leyenda-h li { padding: 0; }
+.viz-leyenda-h .viz-leyenda-nombre { flex: 0 0 auto; }
+.viz-punto { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+
+.viz-ranking { display: flex; flex-direction: column; gap: 9px; }
+.viz-ranking-fila {
+  display: grid; grid-template-columns: minmax(72px, 1.1fr) 2fr auto;
+  gap: 10px; align-items: center; font-size: 12.5px;
+}
+.viz-ranking-nombre {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tinta-2);
+}
+.viz-ranking-pista {
+  height: 10px; background: var(--superficie-2);
+  border-radius: var(--radio-pill); overflow: hidden;
+}
+.viz-ranking-barra { display: block; height: 100%; border-radius: var(--radio-pill); }
+.viz-ranking-valor {
+  font-variant-numeric: tabular-nums; color: var(--tinta); font-weight: 560;
+}
+
+.viz-tooltip {
+  position: fixed;
+  z-index: 90;
+  pointer-events: none;
+  max-width: 240px;
+  padding: 9px 12px;
+  border-radius: var(--radio-s);
+  background: var(--panel);
+  color: #fff;
+  box-shadow: 0 8px 28px rgba(16, 24, 40, 0.32);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.viz-tt-tenue { color: var(--panel-tinta-2); }
+
+/* --- Modal --------------------------------------------------------------- */
+
+dialog {
+  width: min(560px, calc(100vw - 20px));
+  max-height: min(88vh, 780px);
+  padding: 0;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-xl);
+  background: var(--superficie);
+  color: var(--tinta);
+  box-shadow: 0 24px 64px rgba(13, 20, 32, 0.3);
+}
+dialog::backdrop { background: rgba(8, 11, 17, 0.55); backdrop-filter: blur(3px); }
+dialog .modal-cab {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 16px 16px 13px;
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borde);
+}
+dialog .modal-cab h2 { font-size: 16px; }
+dialog .modal-cuerpo { padding: 16px; overflow-y: auto; }
+dialog .modal-pie {
+  position: sticky; bottom: 0;
+  display: flex; gap: 8px; justify-content: flex-end;
+  padding: 13px 16px calc(13px + env(safe-area-inset-bottom));
+  background: var(--superficie);
+  border-top: 1px solid var(--borde);
+}
+.cerrar {
+  border: 0; background: transparent; font-size: 22px; line-height: 1;
+  cursor: pointer; color: var(--tinta-3); padding: 4px 8px; border-radius: var(--radio-s);
+}
+.cerrar:hover { background: var(--superficie-2); color: var(--tinta); }
+
+.previsualizacion {
+  margin-top: 12px;
+  padding: 13px;
+  border-radius: var(--radio-s);
+  background: var(--superficie-2);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--tinta-2);
+}
+.previsualizacion strong { color: var(--tinta); }
+.previsualizacion .cuotas-lista {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px;
+  max-height: 132px; overflow-y: auto;
+}
+.previsualizacion .cuotas-lista span {
+  padding: 4px 10px; border-radius: var(--radio-pill);
+  background: var(--superficie); border: 1px solid var(--borde);
+  font-variant-numeric: tabular-nums; font-size: 11.5px;
+}
+
+/* --- Botón flotante ------------------------------------------------------ */
+
+.fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  z-index: 45;
+  width: 56px; height: 56px;
+  border: 0; border-radius: 50%;
+  background: var(--acento);
+  color: #fff;
+  font-size: 28px; line-height: 1;
+  box-shadow: 0 8px 24px rgba(42, 120, 214, 0.42);
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+.fab:active { transform: scale(0.93); }
+@media (min-width: 860px) { .fab { bottom: 26px; } }
+
+/* --- Avisos -------------------------------------------------------------- */
+
+.aviso {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: var(--radio-s);
+  border: 1px solid var(--borde);
+  background: var(--superficie-2);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 10px 0;
+}
+.aviso .crece { flex: 1; min-width: 0; }
+.aviso.ok {
+  border-color: color-mix(in srgb, var(--ok) 38%, transparent);
+  background: color-mix(in srgb, var(--ok) 8%, var(--superficie));
+}
+.aviso.alerta {
+  border-color: color-mix(in srgb, var(--alerta) 52%, transparent);
+  background: color-mix(in srgb, var(--alerta) 10%, var(--superficie));
+}
+.aviso.critico {
+  border-color: color-mix(in srgb, var(--critico) 44%, transparent);
+  background: color-mix(in srgb, var(--critico) 8%, var(--superficie));
+}
+.aviso .icono { flex: none; font-size: 15px; line-height: 1.4; }
+
+.brindis {
+  position: fixed;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(100px + env(safe-area-inset-bottom));
+  z-index: 95;
+  padding: 12px 20px;
+  border-radius: var(--radio-pill);
+  background: var(--panel);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 540;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.34);
+  animation: subir 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+@keyframes subir { from { opacity: 0; transform: translate(-50%, 12px); } }
+
+/* --- Estado de sincronización -------------------------------------------- */
 
 .estado-sync {
   flex: none;
@@ -166,416 +889,15 @@ a { color: var(--acento); }
 .estado-sync[data-estado="error"] { background: var(--critico); }
 @keyframes latir { 50% { opacity: 0.3; } }
 
-/* --- Navegación ---------------------------------------------------------- */
-
-.nav {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  z-index: 40;
-  display: flex;
-  justify-content: space-around;
-  gap: 2px;
-  padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
-  background: color-mix(in srgb, var(--superficie) 94%, transparent);
-  backdrop-filter: blur(14px);
-  border-top: 1px solid var(--borde);
-}
-
-.nav button {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  min-width: 0;
-  padding: 6px 2px;
-  border: 0;
-  border-radius: var(--radio-s);
-  background: transparent;
-  color: var(--tinta-3);
-  font: inherit;
-  font-size: 10.5px;
-  cursor: pointer;
-}
-.nav button svg { width: 21px; height: 21px; }
-.nav button[aria-current="page"] { color: var(--acento); background: color-mix(in srgb, var(--acento) 10%, transparent); }
-.nav button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-
-@media (min-width: 860px) {
-  .nav {
-    position: sticky;
-    top: 58px;
-    bottom: auto;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-    margin: 10px 0 4px;
-    padding: 5px;
-    border: 1px solid var(--borde);
-    border-radius: var(--radio);
-    background: var(--superficie);
-  }
-  .nav button { flex: 0 0 auto; flex-direction: row; font-size: 13.5px; padding: 8px 13px; }
-  .app { padding-bottom: 40px; }
-}
-
-/* --- Tarjetas ------------------------------------------------------------ */
-
-.tarjeta {
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  padding: 14px;
-  margin: 12px 0;
-  box-shadow: var(--sombra);
-}
-.tarjeta > header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.tarjeta > header > * { min-width: 0; max-width: 100%; }
-.tarjeta > header h2 { font-size: 14.5px; }
-.tarjeta > header .pista { font-size: 12px; color: var(--tinta-3); }
-
-.rejilla { display: grid; gap: 12px; }
-.rejilla.dos { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
-.rejilla.kpis { grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); }
-
-/* --- KPI / cifra principal ----------------------------------------------- */
-
-.kpi {
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  padding: 12px 13px;
-}
-.kpi .etq { font-size: 11.5px; color: var(--tinta-3); text-transform: none; }
-.kpi .valor { font-size: 22px; font-weight: 660; margin-top: 3px; letter-spacing: -0.02em; }
-.kpi .delta { font-size: 11.5px; color: var(--tinta-2); margin-top: 2px; }
-.kpi .delta.bien { color: var(--ok-texto); }
-.kpi .delta.mal { color: var(--critico); }
-
-.heroe {
-  font-size: 44px;
-  font-weight: 680;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
-  margin: 2px 0 4px;
-}
-.heroe.neg { color: var(--critico); }
-
-/* --- Controles ----------------------------------------------------------- */
-
-.filtros {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: flex-end;
-  margin: 10px 0;
-}
-.campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 150px; }
-.campo > label { font-size: 11.5px; color: var(--tinta-3); }
-.campo.ancho { flex-basis: 100%; }
-
-input, select, textarea, button {
-  font: inherit;
-  color: var(--tinta);
-}
-
-input, select, textarea {
-  width: 100%;
-  padding: 9px 10px;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-s);
-  min-height: 40px;
-}
-input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
-  outline: 2px solid var(--acento);
-  outline-offset: 1px;
-}
-textarea { min-height: 62px; resize: vertical; }
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 9px 15px;
-  min-height: 40px;
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-s);
-  background: var(--superficie);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.btn:hover { background: var(--superficie-2); }
-.btn.primario { background: var(--acento); border-color: transparent; color: #fff; font-weight: 600; }
-.btn.primario:hover { filter: brightness(1.07); }
-.btn.peligro { color: var(--critico); }
-.btn.pequeno { padding: 5px 10px; min-height: 32px; font-size: 12.5px; }
-
-.segmentado {
-  display: flex;
-  max-width: 100%;
-  padding: 3px;
-  gap: 2px;
-  background: var(--superficie-2);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-s);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.segmentado::-webkit-scrollbar { display: none; }
-.segmentado button {
-  flex: none;
-  white-space: nowrap;
-  border: 0;
-  background: transparent;
-  padding: 6px 13px;
-  min-height: 32px;
-  border-radius: 6px;
-  color: var(--tinta-2);
-  cursor: pointer;
-}
-.segmentado button[aria-pressed="true"] {
-  background: var(--superficie);
-  color: var(--tinta);
-  font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
-}
-
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip {
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--borde);
-  background: var(--superficie-2);
-  font-size: 12px;
-  color: var(--tinta-2);
-}
-.chip.j { border-color: color-mix(in srgb, var(--serie-1) 45%, transparent); }
-.chip.c { border-color: color-mix(in srgb, var(--serie-2) 45%, transparent); }
-
-/* --- Tablas -------------------------------------------------------------- */
-
-.tabla-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-table { border-collapse: collapse; width: 100%; font-size: 13px; }
-th, td { padding: 7px 9px; text-align: right; white-space: nowrap; }
-th:first-child, td:first-child { text-align: left; position: sticky; left: 0; background: var(--superficie); z-index: 1; }
-thead th {
-  position: sticky; top: 0;
-  background: var(--superficie);
-  color: var(--tinta-3);
-  font-weight: 600;
-  font-size: 11.5px;
-  border-bottom: 1px solid var(--borde);
-  z-index: 2;
-}
-thead th:first-child { z-index: 3; }
-tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--superficie-2) 60%, transparent); }
-tbody tr:nth-child(even) td:first-child { background: color-mix(in srgb, var(--superficie-2) 60%, var(--superficie)); }
-tbody td { border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
-tfoot td { font-weight: 650; border-top: 2px solid var(--baseline); font-variant-numeric: tabular-nums; }
-td.cero { color: var(--tinta-3); }
-
-/* --- Lista de registros -------------------------------------------------- */
-
-.lista { list-style: none; margin: 0; padding: 0; }
-.lista li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 2px;
-  border-bottom: 1px solid var(--grid);
-}
-.lista li:last-child { border-bottom: 0; }
-.lista .principal { flex: 1; min-width: 0; }
-.lista .titulo { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lista .meta { font-size: 11.5px; color: var(--tinta-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lista .monto { font-weight: 620; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.lista .monto.neg { color: var(--critico); }
-.lista .monto.pos { color: var(--ok-texto); }
-
-.vacio { padding: 22px 8px; text-align: center; color: var(--tinta-3); font-size: 13.5px; }
-
-/* --- Medidor ------------------------------------------------------------- */
-
-.medidor { margin: 6px 0; }
-.medidor-pista {
-  height: 9px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--serie-1) 16%, var(--superficie-2));
-  overflow: hidden;
-}
-.medidor-relleno { height: 100%; border-radius: 999px; background: var(--acento); transition: width 0.3s; }
-.medidor[data-estado="alerta"] .medidor-relleno { background: var(--alerta); }
-.medidor[data-estado="critico"] .medidor-relleno { background: var(--critico); }
-.medidor-pie {
-  display: flex; justify-content: space-between; gap: 10px;
-  margin-top: 5px; font-size: 12px; color: var(--tinta-2);
-}
-
-/* --- Gráficos ------------------------------------------------------------ */
-
-.viz-svg { display: block; overflow: visible; }
-.viz-grid { stroke: var(--grid); stroke-width: 1; }
-.viz-baseline { stroke: var(--baseline); stroke-width: 1; }
-.viz-tick { fill: var(--tinta-3); font-size: 10.5px; font-family: var(--fuente); font-variant-numeric: tabular-nums; }
-.viz-etq-directa { fill: var(--tinta-2); font-size: 11px; font-family: var(--fuente); font-weight: 600; }
-.viz-centro-etq { fill: var(--tinta-3); font-size: 11px; font-family: var(--fuente); }
-.viz-centro-valor { fill: var(--tinta); font-size: 19px; font-weight: 650; font-family: var(--fuente); }
-.viz-barra, .viz-arco { transition: opacity 0.15s; }
-.viz-barra:hover, .viz-arco:hover { opacity: 0.82; }
-.viz-punto-fin { stroke: var(--superficie); stroke-width: 2; }
-.viz-zona:hover { fill: color-mix(in srgb, var(--tinta) 4%, transparent); }
-.viz-caja { width: 100%; }
-.viz-vacio { padding: 26px 8px; text-align: center; color: var(--tinta-3); font-size: 13px; }
-
-.viz-dona { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
-.viz-dona-svg { width: 190px; height: 190px; flex: none; margin: 0 auto; }
-
-.viz-leyenda { list-style: none; margin: 0; padding: 0; flex: 1 1 190px; min-width: 0; }
-.viz-leyenda li {
-  display: flex; align-items: center; gap: 8px;
-  padding: 3px 0; font-size: 12.5px; color: var(--tinta-2);
-}
-.viz-leyenda-nombre { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.viz-leyenda-valor { font-variant-numeric: tabular-nums; color: var(--tinta); }
-.viz-leyenda-pct { width: 34px; text-align: right; color: var(--tinta-3); font-variant-numeric: tabular-nums; }
-.viz-leyenda-h { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
-.viz-leyenda-h li { padding: 0; }
-.viz-leyenda-h .viz-leyenda-nombre { flex: 0 0 auto; }
-.viz-punto { width: 9px; height: 9px; border-radius: 3px; flex: none; }
-
-.viz-ranking { display: flex; flex-direction: column; gap: 7px; }
-.viz-ranking-fila { display: grid; grid-template-columns: minmax(72px, 1.1fr) 2fr auto; gap: 9px; align-items: center; font-size: 12.5px; }
-.viz-ranking-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tinta-2); }
-.viz-ranking-pista { height: 12px; background: var(--superficie-2); border-radius: 4px; overflow: hidden; }
-.viz-ranking-barra { display: block; height: 100%; border-radius: 0 4px 4px 0; }
-.viz-ranking-valor { font-variant-numeric: tabular-nums; color: var(--tinta); }
-
-.viz-tooltip {
-  position: fixed;
-  z-index: 90;
-  pointer-events: none;
-  max-width: 240px;
-  padding: 7px 10px;
-  border-radius: 9px;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  box-shadow: var(--sombra);
-  font-size: 12.5px;
-  line-height: 1.4;
-  color: var(--tinta);
-}
-.viz-tt-tenue { color: var(--tinta-3); }
-
-/* --- Modal / formularios ------------------------------------------------- */
-
-dialog {
-  width: min(560px, calc(100vw - 20px));
-  max-height: min(88vh, 780px);
-  padding: 0;
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  background: var(--superficie);
-  color: var(--tinta);
-  box-shadow: var(--sombra);
-}
-dialog::backdrop { background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(2px); }
-dialog .modal-cab {
-  position: sticky; top: 0; z-index: 2;
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 13px 14px;
-  background: var(--superficie);
-  border-bottom: 1px solid var(--borde);
-}
-dialog .modal-cuerpo { padding: 14px; overflow-y: auto; }
-dialog .modal-pie {
-  position: sticky; bottom: 0;
-  display: flex; gap: 8px; justify-content: flex-end;
-  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
-  background: var(--superficie);
-  border-top: 1px solid var(--borde);
-}
-.cerrar { border: 0; background: transparent; font-size: 21px; line-height: 1; cursor: pointer; color: var(--tinta-3); padding: 4px 8px; }
-
-.previsualizacion {
-  margin-top: 10px;
-  padding: 10px;
-  border-radius: var(--radio-s);
-  background: var(--superficie-2);
-  font-size: 12.5px;
-  color: var(--tinta-2);
-}
-.previsualizacion strong { color: var(--tinta); }
-.previsualizacion .cuotas-lista {
-  display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px;
-  max-height: 132px; overflow-y: auto;
-}
-.previsualizacion .cuotas-lista span {
-  padding: 3px 8px; border-radius: 6px;
-  background: var(--superficie); border: 1px solid var(--borde);
-  font-variant-numeric: tabular-nums; font-size: 11.5px;
-}
-
-/* --- Botón flotante ------------------------------------------------------ */
-
-.fab {
-  position: fixed;
-  right: 16px;
-  bottom: calc(72px + env(safe-area-inset-bottom));
-  z-index: 45;
-  width: 54px; height: 54px;
-  border: 0; border-radius: 50%;
-  background: var(--acento);
-  color: #fff;
-  font-size: 27px; line-height: 1;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
-  cursor: pointer;
-}
-@media (min-width: 860px) { .fab { bottom: 22px; } }
-
-/* --- Avisos -------------------------------------------------------------- */
-
-.aviso {
-  display: flex; gap: 9px; align-items: flex-start;
-  padding: 10px 12px;
-  border-radius: var(--radio-s);
-  border: 1px solid var(--borde);
-  background: var(--superficie-2);
-  font-size: 13px;
-  margin: 10px 0;
-}
-.aviso.ok { border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
-.aviso.alerta { border-color: color-mix(in srgb, var(--alerta) 55%, transparent); }
-.aviso.critico { border-color: color-mix(in srgb, var(--critico) 45%, transparent); }
-.aviso .icono { flex: none; font-size: 15px; }
-
-.brindis {
-  position: fixed;
-  left: 50%; transform: translateX(-50%);
-  bottom: calc(84px + env(safe-area-inset-bottom));
-  z-index: 95;
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: var(--tinta);
-  color: var(--plano);
-  font-size: 13px;
-  box-shadow: var(--sombra);
-  animation: subir 0.22s ease-out;
-}
-@keyframes subir { from { opacity: 0; transform: translate(-50%, 10px); } }
-
 .oculto { display: none !important; }
 .solo-lectura { color: var(--tinta-3); }
+.pista { color: var(--tinta-3); font-size: 12.5px; }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 </style>
@@ -1907,17 +2229,21 @@ function leyendaHorizontal(series) {
 
 // --- Medidor -----------------------------------------------------------------
 
-/** Barra de uso de cupo: el color del relleno indica severidad. */
-function medidor(contenedor, { usado, total, etiqueta = '' }) {
+/**
+ * Barra de uso de cupo: el color del relleno indica severidad.
+ * Con `sinPie` se dibuja solo la barra, para cuando las cifras ya están al lado.
+ */
+function medidor(contenedor, { usado, total, etiqueta = '', sinPie = false }) {
   const pct = total > 0 ? Math.min(100, (usado / total) * 100) : 0;
   const estado = pct >= 90 ? 'critico' : pct >= 70 ? 'alerta' : 'bien';
-  contenedor.innerHTML = `
-    <div class="medidor" data-estado="${estado}">
-      <div class="medidor-pista"><div class="medidor-relleno" style="width:${pct}%"></div></div>
+  const pie = sinPie ? '' : `
       <div class="medidor-pie">
         <span>${etiqueta}</span>
         <span><strong>${money(usado)}</strong> de ${money(total)} · ${pct.toFixed(0)}%</span>
-      </div>
+      </div>`;
+  contenedor.innerHTML = `
+    <div class="medidor" data-estado="${estado}">
+      <div class="medidor-pista"><div class="medidor-relleno" style="width:${pct}%"></div></div>${pie}
     </div>`;
 }
 
@@ -4305,29 +4631,24 @@ function render(raiz, { irA }) {
   const deuda = deudaTotalTarjetas();
 
   raiz.innerHTML = `
-    <section class="tarjeta">
-      <header>
+    <section class="panel">
+      <div class="panel-cab">
         <div>
-          <span class="pista">Gasto de ${esc(nombreMes(mes))}</span>
-          <div class="heroe">${money(gastoMes)}</div>
-          <span class="pista">
+          <span class="etiqueta">Gasto de ${esc(nombreMes(mes))}</span>
+          <span class="cifra">${money(gastoMes)}</span>
+          <span class="nota">
             ${gastoPrevio > 0
-    ? `${variacion >= 0 ? '▲' : '▼'} ${Math.abs(variacion).toFixed(1)} % vs. ${esc(nombreMes(mesPrevio, true))}`
+    ? `${variacion >= 0 ? '▲' : '▼'} ${Math.abs(variacion).toFixed(1)} % frente a ${esc(nombreMes(mesPrevio, true))}`
     : 'Sin mes anterior para comparar'}
           </span>
         </div>
         <div id="seg-usuario"></div>
-      </header>
-      <div class="rejilla kpis">
-        <div class="kpi"><div class="etq">Ingresos del mes</div>
-          <div class="valor">${money(ingreso)}</div></div>
-        <div class="kpi"><div class="etq">Balance del mes</div>
-          <div class="valor">${money(balance)}</div>
-          <div class="delta ${balance >= 0 ? 'bien' : 'mal'}">
-            ${balance >= 0 ? 'Te queda disponible' : 'Gastaste más de lo que ingresó'}</div></div>
-        <div class="kpi"><div class="etq">Total a pagar en tarjetas</div>
-          <div class="valor">${money(tarjetas().reduce((s, t) => s + pagoDelMes(t.id, mes, usuarioFiltro), 0))}</div>
-          <div class="delta">${esc(nombreMes(mes, true))}</div></div>
+      </div>
+      <div class="panel-datos">
+        <div><div class="etq">Ingresos</div><div class="val">${money(ingreso)}</div></div>
+        <div><div class="etq">Balance</div><div class="val">${money(balance)}</div></div>
+        <div><div class="etq">A pagar en tarjetas</div>
+          <div class="val">${money(tarjetas().reduce((s, t) => s + pagoDelMes(t.id, mes, usuarioFiltro), 0))}</div></div>
       </div>
     </section>
 
@@ -4339,11 +4660,11 @@ function render(raiz, { irA }) {
       <div class="tarjeta">
         <header><h2>Patrimonio</h2><span class="pista">Hoy</span></header>
         <div class="rejilla kpis">
-          <div class="kpi"><div class="etq">Ahorrado en cuentas</div>
+          <div class="kpi"><div class="etq">En cuentas</div>
             <div class="valor">${money(ahorro)}</div></div>
           <div class="kpi"><div class="etq">Invertido</div>
             <div class="valor">${money(invertido)}</div></div>
-          <div class="kpi"><div class="etq">Deuda en tarjetas</div>
+          <div class="kpi"><div class="etq">Deuda tarjetas</div>
             <div class="valor">${money(deuda)}</div></div>
           <div class="kpi"><div class="etq">Patrimonio neto</div>
             <div class="valor">${money(patrimonioNeto())}</div>
@@ -4367,12 +4688,12 @@ function render(raiz, { irA }) {
       <header><h2>Acumulado de todos los registros</h2>
         <button class="btn pequeno" data-ir="anual">Ver año completo</button></header>
       <div class="rejilla kpis">
-        <div class="kpi"><div class="etq">Ingresos acumulados</div>
+        <div class="kpi"><div class="etq">Ingresos</div>
           <div class="valor">${money(hist.ingresos)}</div>
           <div class="delta">${hist.meses.length} meses con registros</div></div>
-        <div class="kpi"><div class="etq">Gastos acumulados</div>
+        <div class="kpi"><div class="etq">Gastos</div>
           <div class="valor">${money(hist.gastos)}</div></div>
-        <div class="kpi"><div class="etq">Balance acumulado</div>
+        <div class="kpi"><div class="etq">Balance</div>
           <div class="valor">${money(hist.balance)}</div>
           <div class="delta ${hist.balance >= 0 ? 'bien' : 'mal'}">
             ${hist.balance >= 0 ? 'Superávit' : 'Déficit'}</div></div>
@@ -4548,11 +4869,11 @@ function render(raiz) {
     </section>
 
     <section class="rejilla kpis">
-      <div class="kpi"><div class="etq">Gasto del periodo</div>
+      <div class="kpi"><div class="etq">Gasto</div>
         <div class="valor">${money(matriz.granTotal)}</div></div>
-      <div class="kpi"><div class="etq">Promedio mensual</div>
+      <div class="kpi"><div class="etq">Promedio/mes</div>
         <div class="valor">${money(meses.length ? matriz.granTotal / meses.length : 0)}</div></div>
-      <div class="kpi"><div class="etq">Ingresos del periodo</div>
+      <div class="kpi"><div class="etq">Ingresos</div>
         <div class="valor">${money(serie.reduce((s, x) => s + x.ingreso, 0))}</div></div>
       <div class="kpi"><div class="etq">Balance</div>
         <div class="valor">${money(serie.reduce((s, x) => s + x.balance, 0))}</div></div>
@@ -4896,27 +5217,20 @@ function render(raiz) {
     .map((m) => ({ valor: m, texto: nombreMes(m) }));
 
   raiz.innerHTML = `
-    <section class="tarjeta">
-      <header>
-        <div id="seg-tarjeta"></div>
-        <button class="btn primario pequeno" id="btn-nuevo">+ Gasto</button>
-      </header>
+    <div class="barra-accion">
+      <div id="seg-tarjeta"></div>
+      <button class="btn primario pequeno" id="btn-nuevo">+ Gasto</button>
+    </div>
 
-      <div style="margin:6px 0 2px">
-        <span class="pista">Saldo pendiente de ${esc(t.nombre)}</span>
-        <div class="heroe">${money(est.utilizado)}</div>
-      </div>
+    <section class="panel">
+      <span class="etiqueta">Saldo pendiente · ${esc(t.nombre)}</span>
+      <span class="cifra">${money(est.utilizado)}</span>
       <div id="cupo"></div>
-
-      <div class="rejilla kpis" style="margin-top:12px">
-        <div class="kpi"><div class="etq">Cupo total</div><div class="valor">${money(est.cupo)}</div></div>
-        <div class="kpi"><div class="etq">Disponible</div>
-          <div class="valor">${money(est.disponible)}</div>
-          <div class="delta ${est.uso >= 90 ? 'mal' : ''}">${est.uso.toFixed(0)} % utilizado</div></div>
+      <div class="panel-datos">
+        <div><div class="etq">Cupo</div><div class="val">${money(est.cupo)}</div></div>
+        <div><div class="etq">Disponible</div><div class="val">${money(est.disponible)}</div></div>
         ${Object.entries(est.porUsuario).map(([u, v]) => `
-          <div class="kpi"><div class="etq">Pendiente de ${esc(u)}</div>
-            <div class="valor">${money(v)}</div>
-            <div class="delta">${est.utilizado ? ((v / est.utilizado) * 100).toFixed(0) : 0} % del saldo</div></div>
+          <div><div class="etq">Pendiente ${esc(u)}</div><div class="val">${money(v)}</div></div>
         `).join('')}
       </div>
     </section>
@@ -4935,11 +5249,12 @@ function render(raiz) {
             Registrar pago de ${money(pagoTotal)}</button></div>
       </div>
       <div class="rejilla kpis">
-        <div class="kpi"><div class="etq">Total a pagar (${estado.usuario === 'ambos' ? 'J + C' : estado.usuario})</div>
-          <div class="valor">${money(pago)}</div></div>
-        <div class="kpi"><div class="etq">Corrientes del mes</div>
+        <div class="kpi"><div class="etq">A pagar</div>
+          <div class="valor">${money(pago)}</div>
+          <div class="delta">${estado.usuario === 'ambos' ? 'J y C' : `Solo ${esc(estado.usuario)}`}</div></div>
+        <div class="kpi"><div class="etq">Corrientes</div>
           <div class="valor">${money(sumaPorTipo(t.id, mes, estado.usuario, 'Corriente'))}</div></div>
-        <div class="kpi"><div class="etq">Cuotas de diferidos</div>
+        <div class="kpi"><div class="etq">Diferidos</div>
           <div class="valor">${money(sumaPorTipo(t.id, mes, estado.usuario, 'Diferido'))}</div></div>
         <div class="kpi"><div class="etq">Recurrentes</div>
           <div class="valor">${money(sumaPorTipo(t.id, mes, estado.usuario, 'Recurrente'))}</div></div>
@@ -4984,9 +5299,8 @@ function render(raiz) {
     formPagoTarjeta(t.id, mes, pagoTotal, () => render(raiz));
   });
 
-  medidor($('#cupo', raiz), {
-    usado: est.utilizado, total: est.cupo, etiqueta: `Cupo de ${esc(t.nombre)}`,
-  });
+  // En el panel las cifras ya están debajo: la barra va sola.
+  medidor($('#cupo', raiz), { usado: est.utilizado, total: est.cupo, sinPie: true });
 
   const pintar = () => {
     columnas($('#g-meses', raiz), meses12.map((m) => nombreMes(m, true)), [
@@ -5108,30 +5422,25 @@ function render(raiz) {
   const ganado = redondear(liquidadas.reduce((s, p) => s + (Number(p.interes_neto) || 0), 0));
 
   raiz.innerHTML = `
-    <section class="tarjeta">
-      <header>
+    <section class="panel">
+      <div class="panel-cab">
         <div>
-          <span class="pista">Capital invertido</span>
-          <div class="heroe">${money(capital)}</div>
-          <span class="pista">${activas.length} ${activas.length === 1 ? 'póliza activa' : 'pólizas activas'}</span>
+          <span class="etiqueta">Capital invertido</span>
+          <span class="cifra">${money(capital)}</span>
+          <span class="nota">${activas.length} ${activas.length === 1 ? 'póliza activa' : 'pólizas activas'}</span>
         </div>
         <button class="btn primario pequeno" id="btn-nueva">+ Inversión</button>
-      </header>
-      <div class="rejilla kpis">
-        <div class="kpi"><div class="etq">Interés por cobrar</div>
-          <div class="valor">${money(interes)}</div>
-          <div class="delta">Neto, al vencimiento</div></div>
-        <div class="kpi"><div class="etq">Valor al vencimiento</div>
-          <div class="valor">${money(redondear(capital + interes))}</div></div>
-        <div class="kpi"><div class="etq">Rendimiento ya cobrado</div>
-          <div class="valor">${money(ganado)}</div>
-          <div class="delta">${liquidadas.length} ${liquidadas.length === 1 ? 'póliza liquidada' : 'pólizas liquidadas'}</div></div>
       </div>
-      ${vencidas.length ? `
-        <div class="aviso alerta"><span class="icono">⏰</span>
-          <span><strong>${vencidas.length} ${vencidas.length === 1 ? 'póliza venció' : 'pólizas vencieron'}.</strong>
-          Liquídalas para que el capital y el interés entren a la cuenta.</span></div>` : ''}
+      <div class="panel-datos">
+        <div><div class="etq">Interés por cobrar</div><div class="val">${money(interes)}</div></div>
+        <div><div class="etq">Al vencimiento</div><div class="val">${money(redondear(capital + interes))}</div></div>
+        <div><div class="etq">Ya cobrado</div><div class="val">${money(ganado)}</div></div>
+      </div>
     </section>
+    ${vencidas.length ? `
+      <div class="aviso alerta"><span class="icono">⏰</span>
+        <span><strong>${vencidas.length} ${vencidas.length === 1 ? 'póliza venció' : 'pólizas vencieron'}.</strong>
+        Liquídalas para que el capital y el interés entren a la cuenta.</span></div>` : ''}
 
     <section class="tarjeta">
       <header><h2>Calculadora de póliza</h2>
@@ -5294,25 +5603,22 @@ function render(raiz) {
   const ahorro = totalAhorrado();
 
   raiz.innerHTML = `
-    <section class="tarjeta">
-      <header>
+    <section class="panel">
+      <div class="panel-cab">
         <div>
-          <span class="pista">Total ahorrado</span>
-          <div class="heroe">${money(ahorro)}</div>
-          <span class="pista">Suma de bancos y efectivo</span>
+          <span class="etiqueta">Total ahorrado</span>
+          <span class="cifra">${money(ahorro)}</span>
+          <span class="nota">Suma de bancos y efectivo</span>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
           <button class="btn pequeno" id="btn-mov">+ Movimiento</button>
           <button class="btn primario pequeno" id="btn-ing">+ Ingreso</button>
         </div>
-      </header>
-      <div class="rejilla kpis">
-        <div class="kpi"><div class="etq">Invertido</div><div class="valor">${money(totalInvertido())}</div></div>
-        <div class="kpi"><div class="etq">Deuda de tarjetas</div>
-          <div class="valor">${money(deudaTotalTarjetas())}</div></div>
-        <div class="kpi"><div class="etq">Patrimonio neto</div>
-          <div class="valor">${money(patrimonioNeto())}</div>
-          <div class="delta">Ahorro + inversión − deuda</div></div>
+      </div>
+      <div class="panel-datos">
+        <div><div class="etq">Invertido</div><div class="val">${money(totalInvertido())}</div></div>
+        <div><div class="etq">Deuda tarjetas</div><div class="val">${money(deudaTotalTarjetas())}</div></div>
+        <div><div class="etq">Patrimonio neto</div><div class="val">${money(patrimonioNeto())}</div></div>
       </div>
     </section>
 
@@ -5353,7 +5659,7 @@ function render(raiz) {
           <div class="valor">${money(ingresoDelMes(mesActual()))}</div></div>
         <div class="kpi"><div class="etq">Ingresos del año</div>
           <div class="valor">${money(ingresosDelAnio())}</div></div>
-        <div class="kpi"><div class="etq">Acumulado histórico</div>
+        <div class="kpi"><div class="etq">Histórico</div>
           <div class="valor">${money(db.ingresos.reduce((s, i) => s + (Number(i.neto) || 0), 0))}</div>
           <div class="delta">${db.ingresos.length} ${db.ingresos.length === 1 ? 'registro' : 'registros'}</div></div>
       </div>
@@ -6116,11 +6422,11 @@ const inversiones = M["views/inversiones"];
 const cuentas = M["views/cuentas"];
 const datos = M["views/datos"];
 const VISTAS = [
-  { id: 'resumen', titulo: 'Resumen', modulo: resumen, icono: ICONOS.resumen },
+  { id: 'resumen', titulo: 'Inicio', rotulo: 'Resumen', modulo: resumen, icono: ICONOS.resumen },
   { id: 'mensual', titulo: 'Mensual', modulo: mensual, icono: ICONOS.mensual },
   { id: 'anual', titulo: 'Año', modulo: anual, icono: ICONOS.anual },
   { id: 'tarjetas', titulo: 'Tarjetas', modulo: vistaTarjetas, icono: ICONOS.tarjetas },
-  { id: 'inversiones', titulo: 'Inversión', modulo: inversiones, icono: ICONOS.inversiones },
+  { id: 'inversiones', titulo: 'Invertir', rotulo: 'Inversiones', modulo: inversiones, icono: ICONOS.inversiones },
   { id: 'cuentas', titulo: 'Cuentas', modulo: cuentas, icono: ICONOS.cuentas },
   { id: 'datos', titulo: 'Datos', modulo: datos, icono: ICONOS.datos },
 ];
@@ -6199,7 +6505,7 @@ function irA(id) {
   vistaActual = vista.id;
   if (location.hash !== `#${vista.id}`) location.hash = vista.id;
   pintarNav();
-  $('#titulo-vista').textContent = vista.titulo;
+  $('#titulo-vista').textContent = vista.rotulo || vista.titulo;
   const raiz = $('#vista');
   raiz.textContent = '';
   vista.modulo.render(raiz, { irA });
