@@ -62,6 +62,17 @@
   --sombra-panel: 0 18px 44px rgba(11, 31, 61, 0.32);
   --sombra-nav: 0 10px 34px rgba(11, 31, 61, 0.18);
 
+  /*
+   * Cristal. Lo que hace que una superficie parezca vidrio no es la
+   * transparencia sola: es el desenfoque de lo que hay detrás, la saturación
+   * subida —el color de abajo se ve más vivo a través del vidrio— y sobre todo
+   * el filo de luz del borde superior, que es donde rebota el reflejo.
+   */
+  --vidrio: rgba(255, 255, 255, 0.62);
+  --vidrio-borde: rgba(255, 255, 255, 0.75);
+  --vidrio-brillo: rgba(255, 255, 255, 0.85);
+  --vidrio-sombra: rgba(11, 31, 61, 0.1);
+
   /* Series de gráficos: paleta validada, no cambiar sin volver a validar. */
   --serie-1: #2a78d6;
   --serie-2: #eb6834;
@@ -124,6 +135,12 @@
     --sombra-panel: none;
     --sombra-nav: 0 8px 30px rgba(0, 0, 0, 0.5);
 
+    /* En oscuro el vidrio tiñe de azul en vez de blanquear. */
+    --vidrio: rgba(24, 58, 102, 0.58);
+    --vidrio-borde: rgba(255, 255, 255, 0.16);
+    --vidrio-brillo: rgba(255, 255, 255, 0.3);
+    --vidrio-sombra: rgba(0, 0, 0, 0.45);
+
     --serie-1: #5aa2f0;
     --serie-2: #d95926;
     --serie-3: #199e70;
@@ -159,6 +176,10 @@
   --sombra: none;
   --sombra-panel: none;
   --sombra-nav: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --vidrio: rgba(24, 58, 102, 0.58);
+  --vidrio-borde: rgba(255, 255, 255, 0.16);
+  --vidrio-brillo: rgba(255, 255, 255, 0.3);
+  --vidrio-sombra: rgba(0, 0, 0, 0.45);
   --serie-1: #5aa2f0;
   --serie-2: #d95926;
   --serie-3: #199e70;
@@ -295,12 +316,32 @@ a { color: var(--acento); }
   justify-content: space-between;
   gap: 1px;
   padding: 8px 6px;
-  background: color-mix(in srgb, var(--superficie) 88%, transparent);
-  backdrop-filter: saturate(180%) blur(22px);
-  -webkit-backdrop-filter: saturate(180%) blur(22px);
-  border: 1px solid var(--borde);
   border-radius: var(--radio-xl);
-  box-shadow: var(--sombra-nav);
+
+  /* Vidrio: lo de detrás se ve, desenfocado y con el color más vivo. */
+  background: var(--vidrio);
+  backdrop-filter: saturate(210%) blur(34px);
+  -webkit-backdrop-filter: saturate(210%) blur(34px);
+  border: 1px solid var(--vidrio-borde);
+
+  /*
+   * Las tres capas que convierten una superficie translúcida en vidrio:
+   * la sombra que la separa del fondo, el filo de luz de arriba —donde
+   * rebotaría el reflejo— y una caída suave en el canto de abajo.
+   */
+  box-shadow:
+    0 12px 36px var(--vidrio-sombra),
+    inset 0 1px 0 var(--vidrio-brillo),
+    inset 0 -1px 0 var(--borde);
+}
+
+/*
+ * Safari sin `backdrop-filter` (o con él desactivado) dejaría la barra casi
+ * invisible sobre el contenido. Ahí se vuelve opaca: es preferible perder el
+ * efecto a perder los rótulos.
+ */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .nav { background: var(--superficie); }
 }
 
 .nav button {
@@ -314,7 +355,9 @@ a { color: var(--acento); }
   border: 0;
   border-radius: 15px;
   background: transparent;
-  color: var(--tinta-3);
+  /* Sobre vidrio el rótulo compite con lo que se transparenta: por eso va en
+     la tinta media y no en la clara que usan las pistas del resto de la app. */
+  color: var(--tinta-2);
   font: inherit;
   font-size: 9px;
   font-weight: 560;
@@ -351,7 +394,9 @@ a { color: var(--acento); }
   color: #fff;
   line-height: 0;
   box-shadow: 0 12px 26px rgba(11, 31, 61, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28);
-  border: 3px solid color-mix(in srgb, var(--superficie) 88%, transparent);
+  /* El aro que lo separa de la barra es del mismo vidrio, no un blanco sólido:
+     así el botón se ve incrustado en el cristal y no pegado encima. */
+  border: 3px solid var(--vidrio-borde);
   transition: transform 0.12s, box-shadow 0.12s;
 }
 .nav .nav-mas svg { width: 26px; height: 26px; display: block; }
