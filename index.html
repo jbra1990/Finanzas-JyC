@@ -876,8 +876,8 @@ td.cero { color: var(--tinta-3); }
 /* Rótulo escrito sobre el propio segmento del anillo. */
 .viz-arco-etq {
   font-family: var(--fuente);
-  font-size: 11.5px;
-  font-weight: 680;
+  font-size: 12.5px;
+  font-weight: 700;
   letter-spacing: 0.005em;
   pointer-events: none;
 }
@@ -889,7 +889,7 @@ td.cero { color: var(--tinta-3); }
 .viz-vacio { padding: 30px 8px; text-align: center; color: var(--tinta-3); font-size: 13px; }
 
 .viz-dona { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
-.viz-dona-svg { width: 230px; height: 230px; flex: none; margin: 0 auto; }
+.viz-dona-svg { width: 250px; height: 250px; flex: none; margin: 0 auto; }
 
 .viz-leyenda { list-style: none; margin: 0; padding: 0; flex: 1 1 190px; min-width: 0; }
 .viz-leyenda li {
@@ -2138,14 +2138,25 @@ function caminoArco(cx, cy, r, desde, hasta, invertido = false) {
 let nDona = 0;
 
 /**
- * Dona de composición con leyenda. `datos` = [{nombre, valor}] ya ordenados.
+ * Anillo de composición con leyenda. `datos` = [{nombre, valor}] ya ordenados.
  *
- * Los segmentos son gruesos, van separados y llevan las puntas redondeadas, y
- * los que dan de sí llevan su nombre y su importe ESCRITOS SOBRE EL ARCO. Eso
- * quita trabajo al color: el rótulo va en el propio segmento, así que el
- * gráfico se sigue leyendo sin distinguir los tonos. El centro guarda el total
- * y la leyenda de al lado recoge lo que no cupo en el anillo.
+ * El anillo es ABIERTO: reparte los valores sobre 290° en vez de sobre los 360
+ * de un círculo, dejando arriba un hueco de aire. Las proporciones entre
+ * segmentos se mantienen intactas —lo que cambia es la escala, no las
+ * relaciones— y a cambio el gráfico respira y el hueco marca dónde empieza y
+ * dónde acaba la vuelta.
+ *
+ * La banda es ancha, los segmentos van bien separados y con las puntas
+ * redondeadas, y los que dan de sí llevan su nombre al principio y su importe
+ * al final, ESCRITOS SOBRE EL ARCO. Eso quita trabajo al color: el rótulo va
+ * en el propio segmento, así que el gráfico se sigue leyendo sin distinguir
+ * los tonos. En el centro, el total; en la leyenda, lo que no cupo.
  */
+
+/** Grados que ocupa el anillo y giro inicial, con el hueco centrado arriba. */
+const VUELTA = 290;
+const ARRANQUE = (360 - VUELTA) / 2;
+
 function dona(contenedor, datos, { titulo = 'Total' } = {}) {
   const serie = plegarOtros(datos.filter((d) => d.valor > 0));
   const total = serie.reduce((s, d) => s + d.valor, 0);
@@ -2156,7 +2167,7 @@ function dona(contenedor, datos, { titulo = 'Total' } = {}) {
   envoltura.className = 'viz-dona';
   contenedor.appendChild(envoltura);
 
-  const lado = 240;
+  const lado = 250;
   const svg = el('svg', {
     viewBox: `0 0 ${lado} ${lado}`,
     class: 'viz-svg viz-dona-svg',
@@ -2165,31 +2176,31 @@ function dona(contenedor, datos, { titulo = 'Total' } = {}) {
   });
   const cx = lado / 2;
   const cy = lado / 2;
-  const r = 88;
-  const grosor = 32;
+  const r = 96;
+  const grosor = 27;
   const circ = 2 * Math.PI * r;
 
-  // Separación entre segmentos, en grados. Las puntas redondas se comen medio
-  // grosor por lado, así que el hueco tiene que ser algo mayor que eso.
-  const hueco = ((grosor * 0.44) / circ) * 360;
+  /*
+   * Separación entre segmentos. No puede ser fija: con dos o tres porciones el
+   * aire generoso del diseño de referencia queda precioso, pero con siete se
+   * come el anillo y lo deja hecho pegotes sueltos. Así que el hueco se
+   * estrecha a medida que hay más porciones.
+   */
+  const aire = serie.length <= 3 ? 0.8 : serie.length <= 5 ? 0.6 : 0.42;
+  const hueco = ((grosor * aire) / circ) * 360;
   const idBase = `dona${(nDona += 1)}`;
   const defs = svg.appendChild(el('defs'));
 
-  let ang = 0;
+  let ang = ARRANQUE;
   serie.forEach((d, i) => {
     const frac = d.valor / total;
-    const barrido = frac * 360;
+    const barrido = frac * VUELTA;
     const pista = barrido > hueco * 2 + 3;
     const a0 = ang + (pista ? hueco : 0);
     const a1 = ang + barrido - (pista ? hueco : 0);
     const sugerencia = `<strong>${d.nombre}</strong><br>${money(d.valor)} · ${(frac * 100).toFixed(1)}%`;
 
-    let arco;
-    if (barrido >= 359.9) {
-      arco = el('circle', { cx, cy, r, fill: 'none' });
-    } else {
-      arco = el('path', { d: caminoArco(cx, cy, r, a0, a1), fill: 'none' });
-    }
+    const arco = el('path', { d: caminoArco(cx, cy, r, a0, a1), fill: 'none' });
     arco.setAttribute('stroke', colorSerie(i));
     arco.setAttribute('stroke-width', grosor);
     arco.setAttribute('stroke-linecap', pista ? 'round' : 'butt');
@@ -2206,7 +2217,7 @@ function dona(contenedor, datos, { titulo = 'Total' } = {}) {
      */
     const medio = a0 + (a1 - a0) / 2;
     const largoArco = ((a1 - a0) / 360) * circ;
-    const cabe = (txt) => txt.length * 6.1 < largoArco - 16;
+    const cabe = (txt) => txt.length * 6.7 < largoArco - 18;
 
     if (largoArco > 44 && cabe(d.nombre)) {
       const invertido = medio > 90 && medio < 270;
@@ -2250,7 +2261,7 @@ function dona(contenedor, datos, { titulo = 'Total' } = {}) {
   const textoCentro = money(total);
   const radioHueco = r - grosor / 2 - 7;
   const anchoUtil = 2 * Math.sqrt(Math.max(1, radioHueco ** 2 - 15 ** 2));
-  const tam = Math.max(15, Math.min(34, Math.floor(anchoUtil / (textoCentro.length * 0.62))));
+  const tam = Math.max(15, Math.min(34, Math.floor(anchoUtil / (textoCentro.length * 0.68))));
   svg.appendChild(el('text', {
     x: cx,
     y: cy + tam * 0.34,
