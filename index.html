@@ -4028,9 +4028,9 @@ M["forms"] = (function () {
  * coma y punto al enviar.
  */
 
-const {db, guardar, nuevoId, upsert, tocar, cuentasBancarias, tarjetas, categoriasGasto, categoriasIngreso, usuarios,} = M["store"];
-const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, mesDeFacturacion, textoCorte,} = M["calc"];
-const {modal, opciones, brindis, hoyISO, esc, $, aNumero, campoMonto,} = M["ui"];
+const {db, guardar, nuevoId, upsert, tocar, cuentasBancarias, tarjetas, categoriasGasto, categoriasIngreso, usuarios} = M["store"];
+const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, mesDeFacturacion, textoCorte} = M["calc"];
+const {modal, opciones, brindis, hoyISO, esc, $, aNumero, campoMonto} = M["ui"];
 const selUsuarios = (sel) => opciones(usuarios(), sel);
 const val = (form, sel) => aNumero($(sel, form).value);
 
@@ -4608,7 +4608,7 @@ M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
 const {db, tarjetas} = M["store"];
-const {mesActual, nombreMes, money, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre,} = M["calc"];
+const {mesActual, nombreMes, money, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
 const {crear, esc, $, segmentado} = M["ui"];
 let usuarioFiltro = 'ambos';
@@ -4798,8 +4798,8 @@ M["views/mensual"] = (function () {
  */
 
 const {tarjetas, categoriasGasto} = M["store"];
-const {mesActual, nombreMes, money, sumarMeses, rangoMeses, mesesConDatos, matrizCategoriaMes, totalPorCategoria, totalPorUsuario, serieMensual, presupuestoVsReal,} = M["calc"];
-const {dona, barrasHorizontales, columnas, alRedimensionar,} = M["charts"];
+const {mesActual, nombreMes, money, sumarMeses, rangoMeses, mesesConDatos, matrizCategoriaMes, totalPorCategoria, totalPorUsuario, serieMensual, presupuestoVsReal} = M["calc"];
+const {dona, barrasHorizontales, columnas, alRedimensionar} = M["charts"];
 const {esc, $, opciones, segmentado} = M["ui"];
 const estado = {
   usuario: 'ambos',
@@ -5014,8 +5014,8 @@ M["views/anual"] = (function () {
 /** Vista «Año»: el cuadro visual del año completo, mes a mes. */
 
 const {tarjetas} = M["store"];
-const {nombreMes, money, matrizCategoriaMes, totalPorCategoria, serieMensual, añosDisponibles, redondear, totalPorUsuario,} = M["calc"];
-const {columnas, columnasApiladas, linea, dona, barrasHorizontales, plegarOtros, alRedimensionar,} = M["charts"];
+const {nombreMes, money, matrizCategoriaMes, totalPorCategoria, serieMensual, añosDisponibles, redondear, totalPorUsuario} = M["calc"];
+const {columnas, columnasApiladas, linea, dona, barrasHorizontales, plegarOtros, alRedimensionar} = M["charts"];
 const {esc, $, opciones, segmentado} = M["ui"];
 const estado = { año: null, usuario: 'ambos', tarjeta: 'todas' };
 
@@ -5191,7 +5191,7 @@ M["views/tarjetas"] = (function () {
 /** Vista «Tarjetas»: cupo, consumo del mes, diferidos vivos y movimientos. */
 
 const {db, tarjetas, eliminar} = M["store"];
-const {mesActual, nombreMes, money, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear,} = M["calc"];
+const {mesActual, nombreMes, money, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear} = M["calc"];
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, opciones} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta} = M["forms"];
@@ -5407,7 +5407,7 @@ M["views/inversiones"] = (function () {
 /** Vista «Inversiones»: pólizas activas, calculadora y rendimientos. */
 
 const {db, eliminar, cuenta} = M["store"];
-const {money, calcularPoliza, sumarDias, diasEntre, redondear, nombreMes, claveMes, totalInvertido, rendimientoProyectado,} = M["calc"];
+const {money, calcularPoliza, sumarDias, diasEntre, redondear, nombreMes, claveMes, totalInvertido, rendimientoProyectado} = M["calc"];
 const {dona, barrasHorizontales, alRedimensionar} = M["charts"];
 const {aNumero, esc, $, $$, confirmar, hoyISO} = M["ui"];
 const {formInversion, liquidarInversion} = M["forms"];
@@ -5594,7 +5594,7 @@ M["views/cuentas"] = (function () {
 /** Vista «Cuentas»: saldos reales de banco y efectivo, y sus movimientos. */
 
 const {db, cuentasBancarias, eliminar, upsert, cuenta} = M["store"];
-const {money, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes,} = M["calc"];
+const {money, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes} = M["calc"];
 const {dona, linea, alRedimensionar} = M["charts"];
 const {esc, $, $$, confirmar, modal, brindis} = M["ui"];
 const {formMovimiento, formIngreso, formGastoEfectivo} = M["forms"];
@@ -5874,14 +5874,14 @@ M["views/datos"] = (function () {
  * y ajustes generales.
  */
 
-const {db, guardar, reemplazar, limpiarTodo, instantanea, tocar, CLAVES,} = M["store"];
+const {db, guardar, reemplazar, limpiarTodo, instantanea, tocar, CLAVES} = M["store"];
 const {money, redondear, nombreMes} = M["calc"];
-const {aNumero, esc, $, $$, brindis, modal, confirmar, descargar, pedirArchivo, opciones,} = M["ui"];
+const {aNumero, esc, $, $$, brindis, modal, confirmar, descargar, pedirArchivo, opciones} = M["ui"];
 const {escribirLibro, leerLibro} = M["xlsx"];
 const {ESQUEMA, construirLibro, libroADatos} = M["esquema"];
 const archivoExcel = M["archivo"];
-const {libroTarjetasAEntidades, esLibroDeTarjetas, NOTA_IMPORTADO as NOTA} = M["importar_libro"];
-const {estadoSync, configurado, sincronizar, probarConexion, iniciarSync, SQL_TABLA,} = M["sync"];
+const {libroTarjetasAEntidades, esLibroDeTarjetas, NOTA_IMPORTADO: NOTA} = M["importar_libro"];
+const {estadoSync, configurado, sincronizar, probarConexion, iniciarSync, SQL_TABLA} = M["sync"];
 // --- Excel -------------------------------------------------------------------
 
 function exportarExcel() {
@@ -6413,7 +6413,7 @@ const {db, cargar, alCambiar, almacenamiento, instantanea} = M["store"];
 const {iniciarSync, empujarDiferido, alCambiarSync, estadoSync, configurado} = M["sync"];
 const archivoExcel = M["archivo"];
 const {$, crear, ICONOS, modal, brindis, descargar} = M["ui"];
-const {formGastoTarjeta, formGastoEfectivo, formIngreso, formInversion, formMovimiento,} = M["forms"];
+const {formGastoTarjeta, formGastoEfectivo, formIngreso, formInversion, formMovimiento} = M["forms"];
 const resumen = M["views/resumen"];
 const mensual = M["views/mensual"];
 const anual = M["views/anual"];
