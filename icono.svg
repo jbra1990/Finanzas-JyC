@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img"
+     aria-label="Finanzas J y C">
+  <!--
+    Línea de tendencia sobre columnas apagadas, en tinta marina sobre un azul
+    muy claro. Se eligió frente a otras cuatro (tarjetas apiladas, monograma
+    JC, billetera y la versión oscura de esta misma marca) comparándolas a
+    48 px, que es el tamaño real en la pantalla de inicio: ahí es donde se cae
+    la mitad de los dibujos que en grande funcionan.
+
+    Sin texto: una letra a ese tamaño es una mancha.
+    Zona segura de «maskable»: el dibujo cabe dentro del 80 % central.
+  -->
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cfe2f7"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="114" fill="url(#fondo)"/>
+  <g transform="translate(-18 0)">
+    <g fill="#1d4e8f" opacity="0.22">
+      <rect x="132" y="276" width="54" height="104" rx="27"/>
+      <rect x="230" y="238" width="54" height="142" rx="27"/>
+      <rect x="328" y="196" width="54" height="184" rx="27"/>
+    </g>
+    <path d="M 141 302 L 237 234 L 307 268 L 393 156" fill="none" stroke="#102c53"
+          stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="393" cy="156" r="29" fill="#2f7ad6"/>
+  </g>
+</svg>

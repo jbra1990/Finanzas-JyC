@@ -1,0 +1,32 @@
+{
+  "name": "Finanzas J & C",
+  "short_name": "Finanzas",
+  "description": "Control de ingresos, gastos de tarjetas de crédito, efectivo e inversiones.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#eaf3fd",
+  "theme_color": "#102c53",
+  "lang": "es-EC",
+  "icons": [
+    {
+      "src": "icono-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icono-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icono.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
