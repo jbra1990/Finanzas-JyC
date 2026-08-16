@@ -650,6 +650,20 @@ td.cero { color: var(--tinta-3); }
 .lista .monto.neg { color: var(--critico); }
 .lista .monto.pos { color: var(--ok-texto); }
 
+/*
+ * Filas con botones. En un teléfono, «Corregir» y «✕» a la derecha dejaban al
+ * detalle del gasto unos 90 px y todos los nombres salían cortados; como el
+ * detalle es justo lo que se compara con el Excel, los botones bajan a una
+ * segunda línea y el texto recupera el ancho completo.
+ */
+.lista li.con-acciones { flex-wrap: wrap; row-gap: 8px; }
+.lista li.con-acciones .monto { margin-left: auto; }
+.lista li.con-acciones .titulo { white-space: normal; }
+.lista li.con-acciones .acciones {
+  flex: 1 0 100%;
+  display: flex; justify-content: flex-end; gap: 8px;
+}
+
 .vacio {
   padding: 30px 12px;
   text-align: center;
@@ -2247,14 +2261,26 @@ function medidor(contenedor, { usado, total, etiqueta = '', sinPie = false }) {
     </div>`;
 }
 
-/** Repinta los gráficos cuando cambia el ancho (rotación del teléfono). */
+/**
+ * Repinta los gráficos cuando cambia el ancho (rotación del teléfono).
+ *
+ * Sólo sobrevive la última función registrada. Cada vista la llama al pintarse,
+ * así que guardar todas significaba que al girar el teléfono se repintaban
+ * también las vistas anteriores: sus contenedores ya no existen y cada una
+ * lanzaba un error. Con una sola, la que corresponde a lo que está en pantalla,
+ * el problema desaparece y de paso el listener se instala una única vez.
+ */
+let repintar = null;
+let temporizador;
+
 function alRedimensionar(fn) {
-  let t;
-  window.addEventListener('resize', () => {
-    clearTimeout(t);
-    t = setTimeout(fn, 180);
-  });
+  repintar = fn;
 }
+
+window.addEventListener('resize', () => {
+  clearTimeout(temporizador);
+  temporizador = setTimeout(() => { if (repintar) repintar(); }, 180);
+});
 
 return { MAX_SERIES, alRedimensionar, barrasHorizontales, colorSerie, columnas, columnasApiladas, dona, linea, medidor, plegarOtros };
 })();
@@ -5221,43 +5247,42 @@ function render(raiz) {
       <div id="seg-tarjeta"></div>
       <button class="btn primario pequeno" id="btn-nuevo">+ Gasto</button>
     </div>
+    <div class="barra-accion">
+      <select id="sel-mes" aria-label="Mes">${opciones(opcMes, mes)}</select>
+      <div id="seg-usuario"></div>
+    </div>
 
     <section class="panel">
-      <span class="etiqueta">Saldo pendiente · ${esc(t.nombre)}</span>
-      <span class="cifra">${money(est.utilizado)}</span>
-      <div id="cupo"></div>
+      <span class="etiqueta">A pagar en ${esc(nombreMes(mes))} · ${esc(t.nombre)}${
+  estado.usuario === 'ambos' ? '' : ` · solo ${esc(estado.usuario)}`}</span>
+      <span class="cifra">${money(pago)}</span>
       <div class="panel-datos">
-        <div><div class="etq">Cupo</div><div class="val">${money(est.cupo)}</div></div>
-        <div><div class="etq">Disponible</div><div class="val">${money(est.disponible)}</div></div>
-        ${Object.entries(est.porUsuario).map(([u, v]) => `
-          <div><div class="etq">Pendiente ${esc(u)}</div><div class="val">${money(v)}</div></div>
-        `).join('')}
+        <div><div class="etq">Corrientes</div>
+          <div class="val">${money(sumaPorTipo(t.id, mes, estado.usuario, 'Corriente'))}</div></div>
+        <div><div class="etq">Diferidos</div>
+          <div class="val">${money(sumaPorTipo(t.id, mes, estado.usuario, 'Diferido'))}</div></div>
+        <div><div class="etq">Recurrentes</div>
+          <div class="val">${money(sumaPorTipo(t.id, mes, estado.usuario, 'Recurrente'))}</div></div>
       </div>
+      <button class="btn pequeno" id="btn-pagar"${pagoTotal <= 0 ? ' disabled' : ''}>
+        Registrar pago de ${money(pagoTotal)}</button>
     </section>
 
     <section class="tarjeta">
-      <header>
-        <h2>Consumo de ${esc(nombreMes(mes))}</h2>
-        <div class="filtros" style="margin:0">
-          <select id="sel-mes" style="min-width:150px">${opciones(opcMes, mes)}</select>
-        </div>
-      </header>
-      <div class="filtros">
-        <div class="campo" style="flex:0 0 auto"><label>Usuario</label><div id="seg-usuario"></div></div>
-        <div class="campo" style="flex:0 0 auto;justify-content:flex-end">
-          <button class="btn pequeno" id="btn-pagar"${pagoTotal <= 0 ? ' disabled' : ''}>
-            Registrar pago de ${money(pagoTotal)}</button></div>
-      </div>
+      <header><h2>Cupo de ${esc(t.nombre)}</h2>
+        <span class="pista">Acumulado de todos los meses</span></header>
+      <div id="cupo"></div>
       <div class="rejilla kpis">
-        <div class="kpi"><div class="etq">A pagar</div>
-          <div class="valor">${money(pago)}</div>
-          <div class="delta">${estado.usuario === 'ambos' ? 'J y C' : `Solo ${esc(estado.usuario)}`}</div></div>
-        <div class="kpi"><div class="etq">Corrientes</div>
-          <div class="valor">${money(sumaPorTipo(t.id, mes, estado.usuario, 'Corriente'))}</div></div>
-        <div class="kpi"><div class="etq">Diferidos</div>
-          <div class="valor">${money(sumaPorTipo(t.id, mes, estado.usuario, 'Diferido'))}</div></div>
-        <div class="kpi"><div class="etq">Recurrentes</div>
-          <div class="valor">${money(sumaPorTipo(t.id, mes, estado.usuario, 'Recurrente'))}</div></div>
+        <div class="kpi"><div class="etq">Saldo pendiente</div>
+          <div class="valor">${money(est.utilizado)}</div>
+          <div class="delta">Suma de las cuotas por pagar</div></div>
+        <div class="kpi"><div class="etq">Cupo</div>
+          <div class="valor">${money(est.cupo)}</div></div>
+        <div class="kpi"><div class="etq">Disponible</div>
+          <div class="valor">${money(est.disponible)}</div></div>
+        ${Object.entries(est.porUsuario).map(([u, v]) => `
+          <div class="kpi"><div class="etq">Pendiente ${esc(u)}</div>
+            <div class="valor">${money(v)}</div></div>`).join('')}
       </div>
     </section>
 
@@ -5280,13 +5305,18 @@ function render(raiz) {
 
     <section class="tarjeta">
       <header><h2>Movimientos de ${esc(nombreMes(mes))}</h2>
-        <span class="pista">Toca un gasto para eliminarlo</span></header>
+        <span class="pista">Lo que compone los ${money(pago)}</span></header>
       <div id="movs"></div>
     </section>`;
 
   // Controles
   $('#seg-tarjeta', raiz).appendChild(segmentado(
-    lista.map((x) => ({ valor: x.id, texto: x.nombre.replace(/^TC /, '') })),
+    // Cabe poco en el segmentado del teléfono: «TC Pichincha Adicional» se
+    // queda en «Adicional», que ya la distingue de la principal.
+    lista.map((x) => ({
+      valor: x.id,
+      texto: /adicional/i.test(x.nombre) ? 'Adicional' : x.nombre.replace(/^TC /, ''),
+    })),
     estado.tarjeta, (v) => { estado.tarjeta = v; render(raiz); },
   ));
   $('#seg-usuario', raiz).appendChild(segmentado(
@@ -5381,11 +5411,15 @@ function listaMovimientos(tarjetaId, mes, usuario) {
 
   if (!filas.length) return '<p class="vacio">Sin movimientos en este mes.</p>';
 
+  // El total va al pie para que el detalle cuadre a la vista con la cifra
+  // grande del panel: es la comprobación que se hace contra el Excel.
+  const total = redondear(filas.reduce((s, x) => s + x.cuota.monto, 0));
+
   return `<ul class="lista">${filas.map(({ cuota, gasto }) => {
     const esCuota = gasto.cuotas > 1;
     const pendiente = cuotaPendiente(cuota);
     return `
-      <li>
+      <li class="con-acciones">
         <div class="principal">
           <div class="titulo">${esc(gasto.detalle)}
             <span class="chip ${esc(gasto.usuario.toLowerCase())}">${esc(gasto.usuario)}</span></div>
@@ -5394,10 +5428,15 @@ function listaMovimientos(tarjetaId, mes, usuario) {
             ${pendiente ? '' : ' · pagada'}</div>
         </div>
         <div class="monto">${money(cuota.monto)}</div>
-        <button class="btn pequeno" data-corregir="${esc(gasto.id)}">Corregir</button>
-        <button class="btn pequeno peligro" data-borrar="${esc(gasto.id)}" aria-label="Eliminar">✕</button>
+        <div class="acciones">
+          <button class="btn pequeno" data-corregir="${esc(gasto.id)}">Corregir</button>
+          <button class="btn pequeno peligro" data-borrar="${esc(gasto.id)}">Eliminar</button>
+        </div>
       </li>`;
-  }).join('')}</ul>`;
+  }).join('')}</ul>
+    <div class="aviso"><span class="icono">Σ</span>
+      <span>${filas.length} ${filas.length === 1 ? 'movimiento' : 'movimientos'} en el mes ·
+      total <strong>${money(total)}</strong>.</span></div>`;
 }
 
 return { render };
