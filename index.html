@@ -15,45 +15,52 @@
 /* =============================================================================
    Finanzas J & C
    -----------------------------------------------------------------------------
-   Un libro de cuentas compartido por dos personas. La idea visual: cada
-   pantalla abre con un PANEL con forma de tarjeta de crédito —oscuro en los dos
-   temas, porque es un objeto y no una superficie— con la cifra que importa y el
-   cupo cruzándolo; debajo, tarjetas claras y calladas.
+   Todo pasa sobre un fondo de seda azul. Encima, dos materiales y nada más:
+   el PANEL, un bloque azul marino con degradado —la tarjeta como objeto, con la
+   cifra que importa— y las TARJETAS, azules claras y calladas, que sostienen el
+   detalle. Esquinas muy redondeadas, cifras grandes, cero ruido.
 
-   Los neutros llevan un sesgo azul-pizarra a propósito: un gris puro se lee sin
-   decidir. Los colores de las series de los gráficos están validados aparte
-   (contraste y daltonismo) y no se tocan desde aquí.
+   La barra de abajo flota y lleva el botón de añadir en el centro, levantado
+   sobre ella.
+
+   Los colores de las series de los gráficos están validados aparte (contraste y
+   daltonismo) y no se tocan desde aquí.
    ========================================================================== */
 
 :root {
   color-scheme: light;
 
+  /* Fondo de seda: tres paradas de un mismo azul. */
+  --fondo-1: #eaf3fd;
+  --fondo-2: #cbe0f6;
+  --fondo-3: #a9c8e8;
+  --plano: var(--fondo-2);
+
   /* Superficies */
-  --plano: #eef1f6;
-  --superficie: #ffffff;
-  --superficie-2: #f2f5fa;
-  --superficie-3: #e6ebf3;
+  --superficie: #f2f8ff;
+  --superficie-2: #dfecfb;
+  --superficie-3: #c8dcf2;
 
   /* El panel es el mismo objeto en los dos temas. */
-  --panel: #101828;
-  --panel-2: #1b263c;
+  --panel: linear-gradient(148deg, #5f97cf 0%, #24568d 34%, #102c53 68%, #0b1f3d 100%);
+  --panel-plano: #102c53;
   --panel-tinta: #ffffff;
-  --panel-tinta-2: #9fb0cc;
+  --panel-tinta-2: #a7c3e2;
 
   /* Tinta */
-  --tinta: #0d1420;
-  --tinta-2: #4a5568;
-  --tinta-3: #8792a8;
+  --tinta: #0b2244;
+  --tinta-2: #37567e;
+  --tinta-3: #6e8cb2;
 
   /* Líneas */
-  --grid: #e3e8f0;
-  --baseline: #c7d0de;
-  --borde: rgba(13, 20, 32, 0.08);
-  --borde-fuerte: rgba(13, 20, 32, 0.14);
+  --grid: #d3e3f6;
+  --baseline: #a9c4e3;
+  --borde: rgba(16, 44, 83, 0.09);
+  --borde-fuerte: rgba(16, 44, 83, 0.16);
 
-  --sombra: 0 1px 2px rgba(13, 20, 32, 0.04), 0 6px 20px rgba(13, 20, 32, 0.06);
-  --sombra-panel: 0 10px 32px rgba(16, 24, 40, 0.24);
-  --sombra-nav: 0 4px 24px rgba(13, 20, 32, 0.12);
+  --sombra: 0 1px 2px rgba(16, 44, 83, 0.05), 0 10px 26px rgba(16, 44, 83, 0.08);
+  --sombra-panel: 0 18px 44px rgba(11, 31, 61, 0.32);
+  --sombra-nav: 0 10px 34px rgba(11, 31, 61, 0.18);
 
   /* Series de gráficos: paleta validada, no cambiar sin volver a validar. */
   --serie-1: #2a78d6;
@@ -72,43 +79,52 @@
   --grave: #ec835a;
   --critico: #d03b3b;
 
-  --acento: var(--serie-1);
-  --acento-suave: rgba(42, 120, 214, 0.1);
+  --acento: #1d4e8f;
+  --acento-suave: rgba(29, 78, 143, 0.12);
 
-  --radio-xl: 22px;
-  --radio: 16px;
-  --radio-s: 11px;
+  --radio-xl: 28px;
+  --radio: 22px;
+  --radio-s: 14px;
   --radio-pill: 999px;
 
   --fuente: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/*
+ * En oscuro el fondo de seda se hunde hasta el azul de medianoche y las
+ * tarjetas claras se vuelven bloques marinos: el panel sigue siendo el mismo
+ * objeto, así que no cambia.
+ */
 @media (prefers-color-scheme: dark) {
   :root:not([data-tema="claro"]) {
     color-scheme: dark;
-    --plano: #080b11;
-    --superficie: #151b25;
-    --superficie-2: #1c2431;
-    --superficie-3: #26303f;
+    --fondo-1: #0d2141;
+    --fondo-2: #091a33;
+    --fondo-3: #061224;
+    --plano: var(--fondo-2);
 
-    --panel: #101828;
-    --panel-2: #223049;
+    --superficie: #10294b;
+    --superficie-2: #17375f;
+    --superficie-3: #1f4674;
 
-    --tinta: #eef2f8;
-    --tinta-2: #a7b4c8;
-    --tinta-3: #74839b;
+    --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
+    --panel-plano: #0e2749;
 
-    --grid: #232c3a;
-    --baseline: #33404f;
+    --tinta: #eaf3ff;
+    --tinta-2: #a9c6e6;
+    --tinta-3: #7b9dc4;
+
+    --grid: #1c3f68;
+    --baseline: #2b567f;
     --borde: rgba(255, 255, 255, 0.09);
-    --borde-fuerte: rgba(255, 255, 255, 0.16);
+    --borde-fuerte: rgba(255, 255, 255, 0.17);
 
     /* En oscuro la profundidad la da el bloque de color, no la sombra. */
     --sombra: none;
     --sombra-panel: none;
-    --sombra-nav: 0 -1px 0 rgba(255, 255, 255, 0.06);
+    --sombra-nav: 0 8px 30px rgba(0, 0, 0, 0.5);
 
-    --serie-1: #3987e5;
+    --serie-1: #5aa2f0;
     --serie-2: #d95926;
     --serie-3: #199e70;
     --serie-4: #c98500;
@@ -116,30 +132,34 @@
     --serie-6: #008300;
     --serie-7: #9085e9;
     --serie-8: #e66767;
-    --ok-texto: #37c837;
-    --acento-suave: rgba(57, 135, 229, 0.16);
+    --ok-texto: #4ade80;
+    --acento: #6aa6e8;
+    --acento-suave: rgba(106, 166, 232, 0.18);
   }
 }
 
 :root[data-tema="oscuro"] {
   color-scheme: dark;
-  --plano: #080b11;
-  --superficie: #151b25;
-  --superficie-2: #1c2431;
-  --superficie-3: #26303f;
-  --panel: #101828;
-  --panel-2: #223049;
-  --tinta: #eef2f8;
-  --tinta-2: #a7b4c8;
-  --tinta-3: #74839b;
-  --grid: #232c3a;
-  --baseline: #33404f;
+  --fondo-1: #0d2141;
+  --fondo-2: #091a33;
+  --fondo-3: #061224;
+  --plano: var(--fondo-2);
+  --superficie: #10294b;
+  --superficie-2: #17375f;
+  --superficie-3: #1f4674;
+  --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
+  --panel-plano: #0e2749;
+  --tinta: #eaf3ff;
+  --tinta-2: #a9c6e6;
+  --tinta-3: #7b9dc4;
+  --grid: #1c3f68;
+  --baseline: #2b567f;
   --borde: rgba(255, 255, 255, 0.09);
-  --borde-fuerte: rgba(255, 255, 255, 0.16);
+  --borde-fuerte: rgba(255, 255, 255, 0.17);
   --sombra: none;
   --sombra-panel: none;
-  --sombra-nav: 0 -1px 0 rgba(255, 255, 255, 0.06);
-  --serie-1: #3987e5;
+  --sombra-nav: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --serie-1: #5aa2f0;
   --serie-2: #d95926;
   --serie-3: #199e70;
   --serie-4: #c98500;
@@ -147,16 +167,30 @@
   --serie-6: #008300;
   --serie-7: #9085e9;
   --serie-8: #e66767;
-  --ok-texto: #37c837;
-  --acento-suave: rgba(57, 135, 229, 0.16);
+  --ok-texto: #4ade80;
+  --acento: #6aa6e8;
+  --acento-suave: rgba(106, 166, 232, 0.18);
 }
 
 * { box-sizing: border-box; }
 
+/*
+ * El degradado va en <html> y no en <body>: así se estira con el documento
+ * entero sin recurrir a background-attachment:fixed, que en Safari de iPhone
+ * salta al hacer scroll.
+ */
+html {
+  min-height: 100%;
+  background-color: var(--fondo-3);
+  background-image: linear-gradient(180deg,
+    var(--fondo-1) 0, var(--fondo-2) 380px, var(--fondo-3) 860px);
+  background-repeat: no-repeat;
+  background-size: 100% 860px;
+}
+
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--plano);
   color: var(--tinta);
   font-family: var(--fuente);
   font-size: 15px;
@@ -165,7 +199,7 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-body { padding-bottom: env(safe-area-inset-bottom); }
+body { background: transparent; padding-bottom: env(safe-area-inset-bottom); }
 
 h1, h2, h3, h4 {
   margin: 0;
@@ -180,32 +214,33 @@ a { color: var(--acento); }
 .app {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 0 16px 104px;
+  padding: 0 16px 118px;
 }
 
 .cabecera {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 18px 0 14px;
+  gap: 11px;
+  padding: 16px 0 12px;
 }
 
 .cabecera h1 {
-  font-size: 21px;
-  letter-spacing: -0.025em;
+  font-size: 22px;
+  letter-spacing: -0.03em;
 }
 
 .cabecera .marca {
   display: grid;
   place-items: center;
-  width: 38px; height: 38px;
-  border-radius: 12px;
+  width: 42px; height: 42px;
+  border-radius: 14px;
   background: var(--panel);
   color: #fff;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 13.5px;
   letter-spacing: 0.02em;
   flex: none;
+  box-shadow: 0 6px 16px rgba(11, 31, 61, 0.22);
 }
 
 .cabecera .crece { flex: 1; min-width: 0; }
@@ -214,21 +249,55 @@ a { color: var(--acento); }
   font-size: 12.5px;
   color: var(--tinta-3);
   margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* --- Navegación ---------------------------------------------------------- */
+/* Los dos botones redondos de la esquina: avisos y menú. */
+.icono-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 42px; height: 42px;
+  padding: 0;
+  border: 1px solid var(--borde);
+  border-radius: 50%;
+  background: var(--superficie);
+  color: var(--tinta-2);
+  cursor: pointer;
+  box-shadow: var(--sombra);
+  transition: transform 0.1s, background 0.15s;
+}
+.icono-btn svg { width: 20px; height: 20px; }
+.icono-btn:active { transform: scale(0.93); }
+.icono-btn:hover { background: var(--superficie-2); }
+
+/* Punto rojo cuando hay algo que mirar en los avisos. */
+.icono-btn[data-avisos="si"] { position: relative; }
+.icono-btn[data-avisos="si"]::after {
+  content: "";
+  position: absolute;
+  top: 7px; right: 8px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--critico);
+  border: 2px solid var(--superficie);
+}
+
+/* --- Navegación: barra flotante con el «+» en medio ---------------------- */
 
 .nav {
   position: fixed;
   left: 12px; right: 12px;
-  bottom: calc(12px + env(safe-area-inset-bottom));
+  bottom: calc(14px + env(safe-area-inset-bottom));
   z-index: 40;
   display: flex;
-  justify-content: space-around;
-  gap: 2px;
-  padding: 6px;
-  background: color-mix(in srgb, var(--superficie) 92%, transparent);
-  backdrop-filter: saturate(180%) blur(20px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 1px;
+  padding: 8px 6px;
+  background: color-mix(in srgb, var(--superficie) 88%, transparent);
+  backdrop-filter: saturate(180%) blur(22px);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
   border: 1px solid var(--borde);
   border-radius: var(--radio-xl);
   box-shadow: var(--sombra-nav);
@@ -241,26 +310,53 @@ a { color: var(--acento); }
   align-items: center;
   gap: 3px;
   min-width: 0;
-  padding: 7px 2px;
+  padding: 6px 0;
   border: 0;
-  border-radius: 13px;
+  border-radius: 15px;
   background: transparent;
   color: var(--tinta-3);
   font: inherit;
-  font-size: 10px;
-  font-weight: 550;
-  letter-spacing: -0.005em;
+  font-size: 9px;
+  font-weight: 560;
+  letter-spacing: -0.02em;
   cursor: pointer;
   transition: color 0.15s, background 0.15s;
 }
 .nav button svg { width: 21px; height: 21px; }
-.nav button[aria-current="page"] {
-  color: var(--acento);
+.nav button[aria-current="page"] { color: var(--acento); }
+.nav button[aria-current="page"] svg {
   background: var(--acento-suave);
+  border-radius: 11px;
+  padding: 2px 8px;
+  width: 37px;
 }
 .nav button span {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
 }
+
+/*
+ * El «+» va en el centro exacto de la barra y levantado sobre ella: es el gesto
+ * que más se repite en la app, así que no comparte aspecto con las secciones.
+ */
+.nav .nav-mas {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 56px; height: 56px;
+  margin: -22px 5px 0;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--panel-plano);
+  background-image: linear-gradient(150deg, #4f8ac4 0%, #1d4a7e 45%, #0d2547 100%);
+  color: #fff;
+  line-height: 0;
+  box-shadow: 0 12px 26px rgba(11, 31, 61, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  border: 3px solid color-mix(in srgb, var(--superficie) 88%, transparent);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.nav .nav-mas svg { width: 26px; height: 26px; display: block; }
+.nav .nav-mas:active { transform: scale(0.92); }
+.nav .nav-mas:hover { box-shadow: 0 14px 30px rgba(11, 31, 61, 0.5); }
 
 @media (min-width: 860px) {
   .nav {
@@ -271,8 +367,12 @@ a { color: var(--acento); }
     justify-content: flex-start;
     flex-wrap: wrap;
     margin: 0 0 8px;
+    padding: 7px;
   }
   .nav button { flex: 0 0 auto; flex-direction: row; font-size: 13.5px; padding: 9px 15px; gap: 7px; }
+  .nav button[aria-current="page"] { background: var(--acento-suave); }
+  .nav button[aria-current="page"] svg { background: none; padding: 0; width: 21px; }
+  .nav .nav-mas { width: 44px; height: 44px; margin: 0 0 0 auto; }
   .app { padding-bottom: 48px; }
 }
 
@@ -282,20 +382,21 @@ a { color: var(--acento); }
   position: relative;
   overflow: hidden;
   margin: 14px 0;
-  padding: 20px;
+  padding: 22px;
   border-radius: var(--radio-xl);
-  background: var(--panel);
+  background: var(--panel-plano);
+  background-image: var(--panel);
   color: var(--panel-tinta);
   box-shadow: var(--sombra-panel);
 }
 
-/* Banda diagonal muy tenue: da materia a la superficie sin hacer ruido. */
+/* Brillo de seda en la esquina superior izquierda, como en la referencia. */
 .panel::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(115deg, rgba(255, 255, 255, 0.07) 0%,
-    rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, 0) 100%);
+  background: radial-gradient(120% 90% at 0% 0%,
+    rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 55%);
   pointer-events: none;
 }
 
@@ -312,13 +413,17 @@ a { color: var(--acento); }
 
 .panel .cifra {
   display: block;
-  margin: 6px 0 2px;
-  font-size: clamp(34px, 10vw, 44px);
+  margin: 8px 0 4px;
+  font-size: clamp(36px, 11vw, 48px);
   font-weight: 700;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.04em;
   line-height: 1.02;
 }
-.panel .cifra.neg { color: #ff8f8f; }
+.panel .cifra.neg { color: #ff9d9d; }
+
+/* Los centavos, apagados: la cifra se lee de un vistazo y el detalle no estorba. */
+.cifra .dec { color: var(--panel-tinta-2); font-weight: 640; }
+.heroe .dec { color: var(--tinta-3); font-weight: 640; }
 
 .panel .nota { font-size: 12.5px; color: var(--panel-tinta-2); }
 
@@ -392,7 +497,7 @@ a { color: var(--acento); }
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: var(--radio);
-  padding: 16px;
+  padding: 18px;
   margin: 12px 0;
   box-shadow: var(--sombra);
 }
@@ -418,12 +523,14 @@ a { color: var(--acento); }
 
 /* --- Indicadores --------------------------------------------------------- */
 
+/* Los indicadores son el azul claro de la referencia: bloques, no fichas. */
 .kpi {
-  background: var(--superficie);
-  border: 1px solid var(--borde);
+  background: var(--superficie-2);
+  border: 1px solid transparent;
   border-radius: var(--radio);
-  padding: 14px;
+  padding: 15px 16px;
 }
+.tarjeta .kpi { background: var(--superficie-2); }
 
 .kpi .etq {
   font-size: 10.5px;
@@ -711,10 +818,23 @@ td.cero { color: var(--tinta-3); }
 .viz-etq-directa {
   fill: var(--tinta-2); font-size: 11px; font-family: var(--fuente); font-weight: 620;
 }
-.viz-centro-etq { fill: var(--tinta-3); font-size: 10.5px; font-family: var(--fuente); }
+.viz-centro-etq {
+  fill: var(--tinta-3); font-size: 10.5px; font-family: var(--fuente);
+  font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+}
 .viz-centro-valor {
-  fill: var(--tinta); font-size: 19px; font-weight: 660;
-  font-family: var(--fuente); letter-spacing: -0.02em;
+  fill: var(--tinta); font-size: 34px; font-weight: 700;
+  font-family: var(--fuente); letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rótulo escrito sobre el propio segmento del anillo. */
+.viz-arco-etq {
+  font-family: var(--fuente);
+  font-size: 11.5px;
+  font-weight: 680;
+  letter-spacing: 0.005em;
+  pointer-events: none;
 }
 .viz-barra, .viz-arco { transition: opacity 0.15s; }
 .viz-barra:hover, .viz-arco:hover { opacity: 0.8; }
@@ -724,7 +844,7 @@ td.cero { color: var(--tinta-3); }
 .viz-vacio { padding: 30px 8px; text-align: center; color: var(--tinta-3); font-size: 13px; }
 
 .viz-dona { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
-.viz-dona-svg { width: 190px; height: 190px; flex: none; margin: 0 auto; }
+.viz-dona-svg { width: 230px; height: 230px; flex: none; margin: 0 auto; }
 
 .viz-leyenda { list-style: none; margin: 0; padding: 0; flex: 1 1 190px; min-width: 0; }
 .viz-leyenda li {
@@ -829,25 +949,6 @@ dialog .modal-pie {
   font-variant-numeric: tabular-nums; font-size: 11.5px;
 }
 
-/* --- Botón flotante ------------------------------------------------------ */
-
-.fab {
-  position: fixed;
-  right: 18px;
-  bottom: calc(88px + env(safe-area-inset-bottom));
-  z-index: 45;
-  width: 56px; height: 56px;
-  border: 0; border-radius: 50%;
-  background: var(--acento);
-  color: #fff;
-  font-size: 28px; line-height: 1;
-  box-shadow: 0 8px 24px rgba(42, 120, 214, 0.42);
-  cursor: pointer;
-  transition: transform 0.12s;
-}
-.fab:active { transform: scale(0.93); }
-@media (min-width: 860px) { .fab { bottom: 26px; } }
-
 /* --- Avisos -------------------------------------------------------------- */
 
 .aviso {
@@ -878,7 +979,7 @@ dialog .modal-pie {
 .brindis {
   position: fixed;
   left: 50%; transform: translateX(-50%);
-  bottom: calc(100px + env(safe-area-inset-bottom));
+  bottom: calc(118px + env(safe-area-inset-bottom));
   z-index: 95;
   padding: 12px 20px;
   border-radius: var(--radio-pill);
@@ -923,18 +1024,29 @@ dialog .modal-pie {
       <div class="marca" aria-hidden="true">JC</div>
       <div class="crece">
         <h1 id="titulo-vista">Resumen</h1>
-        <div class="sub">Control de ingresos, gastos e inversiones</div>
+        <div class="sub">Finanzas J &amp; C</div>
       </div>
       <span class="estado-sync" id="estado-sync" data-estado="ok" hidden
             role="status" aria-label="Estado de sincronización"></span>
+      <button class="icono-btn" id="btn-avisos" aria-label="Avisos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/>
+          <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+        </svg>
+      </button>
+      <button class="icono-btn" id="btn-menu" aria-label="Menú">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h10"/>
+        </svg>
+      </button>
     </header>
 
     <nav class="nav" id="nav" aria-label="Secciones"></nav>
 
     <main id="vista"></main>
   </div>
-
-  <button class="fab" id="fab" aria-label="Registrar movimiento">+</button>
 
   <noscript>
     <p style="padding:20px">Esta aplicación necesita JavaScript activado.</p>
@@ -1393,6 +1505,18 @@ function money(n) {
   return FORMATO.format(Number(n) || 0);
 }
 
+/**
+ * La misma cifra, con los centavos envueltos para poder apagarlos: en las
+ * cifras grandes lo que se lee de un vistazo son los dólares.
+ * Devuelve HTML, así que el llamador no debe volver a escaparlo.
+ */
+function moneyHTML(n) {
+  const texto = money(n);
+  const corte = texto.lastIndexOf(',');
+  if (corte < 0) return texto;
+  return `${texto.slice(0, corte)}<span class="dec">${texto.slice(corte)}</span>`;
+}
+
 /** Versión compacta para tarjetas KPI: $1,2 k */
 function moneyCorto(n) {
   const v = Number(n) || 0;
@@ -1798,7 +1922,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { acumuladoHistorico, añosDisponibles, calcularPoliza, claveMes, cuotaFrancesa, cuotaPendiente, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, nombreMes, pagoDelMes, patrimonioNeto, planificarCuotas, presupuestoVsReal, rangoMeses, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, totalAhorrado, totalInvertido, totalPorCategoria, totalPorUsuario };
+return { acumuladoHistorico, añosDisponibles, calcularPoliza, claveMes, cuotaFrancesa, cuotaPendiente, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDelMes, patrimonioNeto, planificarCuotas, presupuestoVsReal, rangoMeses, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, totalAhorrado, totalInvertido, totalPorCategoria, totalPorUsuario };
 })();
 
 M["charts"] = (function () {
@@ -1826,6 +1950,37 @@ const el = (nombre, attrs = {}) => {
 };
 
 const colorSerie = (i) => `var(--serie-${(i % SLOTS) + 1})`;
+
+/**
+ * El mismo color, ya resuelto a un valor concreto. Hace falta para decidir si
+ * un rótulo escrito ENCIMA del color debe ir en blanco o en tinta oscura:
+ * `var(--serie-n)` no se puede medir, el color que devuelve el navegador sí.
+ */
+function colorResuelto(i) {
+  const bruto = getComputedStyle(document.documentElement)
+    .getPropertyValue(`--serie-${(i % SLOTS) + 1}`).trim();
+  return bruto || '#2a78d6';
+}
+
+/** Luminancia relativa aproximada, suficiente para elegir blanco o negro. */
+function tintaSobre(color) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(color)
+    || /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i.exec(color);
+  let r; let g; let b;
+  if (!m) return '#ffffff';
+  if (m.length === 2) {
+    const n = parseInt(m[1], 16);
+    [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  } else {
+    [, r, g, b] = m.map(Number);
+  }
+  const lin = (c) => {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return L > 0.45 ? '#0b2244' : '#ffffff';
+}
 
 /**
  * Agrupa una lista {nombre, valor} dejando las MAX_SERIES mayores y sumando
@@ -1916,9 +2071,35 @@ function vacio(contenedor, mensaje = 'Sin datos para este filtro') {
 
 // --- Dona --------------------------------------------------------------------
 
+/** Punto del anillo a `grados` contados desde las 12 en punto, hacia la derecha. */
+function puntoAnillo(cx, cy, r, grados) {
+  const a = ((grados - 90) * Math.PI) / 180;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+}
+
+/**
+ * Camino de un arco. `invertido` lo recorre al revés, que es como se consigue
+ * que un rótulo pegado al arco se lea del derecho en la mitad de abajo.
+ */
+function caminoArco(cx, cy, r, desde, hasta, invertido = false) {
+  const [a, b] = invertido ? [hasta, desde] : [desde, hasta];
+  const [x0, y0] = puntoAnillo(cx, cy, r, a);
+  const [x1, y1] = puntoAnillo(cx, cy, r, b);
+  const grande = Math.abs(hasta - desde) > 180 ? 1 : 0;
+  return `M ${x0.toFixed(2)} ${y0.toFixed(2)} `
+    + `A ${r} ${r} 0 ${grande} ${invertido ? 0 : 1} ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+}
+
+let nDona = 0;
+
 /**
  * Dona de composición con leyenda. `datos` = [{nombre, valor}] ya ordenados.
- * El centro muestra el total (única cifra directa: el resto va en la leyenda).
+ *
+ * Los segmentos son gruesos, van separados y llevan las puntas redondeadas, y
+ * los que dan de sí llevan su nombre y su importe ESCRITOS SOBRE EL ARCO. Eso
+ * quita trabajo al color: el rótulo va en el propio segmento, así que el
+ * gráfico se sigue leyendo sin distinguir los tonos. El centro guarda el total
+ * y la leyenda de al lado recoge lo que no cupo en el anillo.
  */
 function dona(contenedor, datos, { titulo = 'Total' } = {}) {
   const serie = plegarOtros(datos.filter((d) => d.valor > 0));
@@ -1930,39 +2111,108 @@ function dona(contenedor, datos, { titulo = 'Total' } = {}) {
   envoltura.className = 'viz-dona';
   contenedor.appendChild(envoltura);
 
-  const lado = 210;
-  const svg = el('svg', { viewBox: `0 0 ${lado} ${lado}`, class: 'viz-svg viz-dona-svg' });
+  const lado = 240;
+  const svg = el('svg', {
+    viewBox: `0 0 ${lado} ${lado}`,
+    class: 'viz-svg viz-dona-svg',
+    role: 'img',
+    'aria-label': `${titulo}: ${money(total)}`,
+  });
   const cx = lado / 2;
   const cy = lado / 2;
-  const r = 82;
-  const grosor = 26;
-
-  // El hueco de 2px entre segmentos lo hace el dasharray sobre el trazo.
+  const r = 88;
+  const grosor = 32;
   const circ = 2 * Math.PI * r;
-  let offset = 0;
+
+  // Separación entre segmentos, en grados. Las puntas redondas se comen medio
+  // grosor por lado, así que el hueco tiene que ser algo mayor que eso.
+  const hueco = ((grosor * 0.44) / circ) * 360;
+  const idBase = `dona${(nDona += 1)}`;
+  const defs = svg.appendChild(el('defs'));
+
+  let ang = 0;
   serie.forEach((d, i) => {
     const frac = d.valor / total;
-    const largo = Math.max(circ * frac - 3, 0.6);
-    const arco = el('circle', {
-      cx, cy, r, fill: 'none',
-      stroke: colorSerie(i),
-      'stroke-width': grosor,
-      'stroke-dasharray': `${largo} ${circ - largo}`,
-      'stroke-dashoffset': -offset,
-      transform: `rotate(-90 ${cx} ${cy})`,
-      class: 'viz-arco',
-    });
-    conectar(arco, `<strong>${d.nombre}</strong><br>${money(d.valor)} · ${(frac * 100).toFixed(1)}%`);
+    const barrido = frac * 360;
+    const pista = barrido > hueco * 2 + 3;
+    const a0 = ang + (pista ? hueco : 0);
+    const a1 = ang + barrido - (pista ? hueco : 0);
+    const sugerencia = `<strong>${d.nombre}</strong><br>${money(d.valor)} · ${(frac * 100).toFixed(1)}%`;
+
+    let arco;
+    if (barrido >= 359.9) {
+      arco = el('circle', { cx, cy, r, fill: 'none' });
+    } else {
+      arco = el('path', { d: caminoArco(cx, cy, r, a0, a1), fill: 'none' });
+    }
+    arco.setAttribute('stroke', colorSerie(i));
+    arco.setAttribute('stroke-width', grosor);
+    arco.setAttribute('stroke-linecap', pista ? 'round' : 'butt');
+    arco.setAttribute('class', 'viz-arco');
+    conectar(arco, sugerencia);
     svg.appendChild(arco);
-    offset += circ * frac;
+
+    /*
+     * Rótulos sobre el arco, como en el diseño de referencia: el NOMBRE pegado
+     * al principio del segmento y el IMPORTE al final, cada uno curvado con la
+     * cinta. En la mitad de abajo el camino se recorre al revés para que el
+     * texto no salga cabeza abajo; por eso el principio y el final cambian de
+     * extremo y hay que compensarlo con el `startOffset`.
+     */
+    const medio = a0 + (a1 - a0) / 2;
+    const largoArco = ((a1 - a0) / 360) * circ;
+    const cabe = (txt) => txt.length * 6.1 < largoArco - 16;
+
+    if (largoArco > 44 && cabe(d.nombre)) {
+      const invertido = medio > 90 && medio < 270;
+      const id = `${idBase}-${i}`;
+      defs.appendChild(el('path', { id, d: caminoArco(cx, cy, r, a0, a1, invertido), fill: 'none' }));
+      const tinta = tintaSobre(colorResuelto(i));
+
+      const rotulo = (txt, alPrincipio) => {
+        const t = el('text', { class: 'viz-arco-etq', fill: tinta });
+        const aLaIzquierda = alPrincipio !== invertido;
+        const tp = el('textPath', {
+          startOffset: aLaIzquierda ? '7%' : '93%',
+          'text-anchor': aLaIzquierda ? 'start' : 'end',
+        });
+        tp.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${id}`);
+        tp.setAttribute('href', `#${id}`);
+        tp.textContent = txt;
+        t.appendChild(tp);
+        svg.appendChild(t);
+      };
+
+      const importe = etiquetaEje(d.valor);
+      // Los dos rótulos solo caben si el segmento es largo; si no, va el nombre.
+      if (cabe(`${d.nombre}${importe}`) && largoArco > 108) {
+        rotulo(d.nombre, true);
+        rotulo(importe, false);
+      } else {
+        rotulo(d.nombre, true);
+      }
+    }
+
+    ang += barrido;
   });
 
+  /*
+   * En el centro va solo el total, lo más grande que quepa: el «de qué» ya lo
+   * dice la cabecera de la tarjeta, repetirlo aquí sobraba. El tamaño se
+   * calcula en vez de fijarse porque «$637,55» y «$19.297,93» no ocupan lo
+   * mismo y el hueco del anillo es el que es.
+   */
+  const textoCentro = money(total);
+  const radioHueco = r - grosor / 2 - 7;
+  const anchoUtil = 2 * Math.sqrt(Math.max(1, radioHueco ** 2 - 15 ** 2));
+  const tam = Math.max(15, Math.min(34, Math.floor(anchoUtil / (textoCentro.length * 0.62))));
   svg.appendChild(el('text', {
-    x: cx, y: cy - 4, 'text-anchor': 'middle', class: 'viz-centro-etq',
-  })).textContent = titulo;
-  svg.appendChild(el('text', {
-    x: cx, y: cy + 20, 'text-anchor': 'middle', class: 'viz-centro-valor',
-  })).textContent = money(total);
+    x: cx,
+    y: cy + tam * 0.34,
+    'text-anchor': 'middle',
+    class: 'viz-centro-valor',
+    style: `font-size:${tam}px`,
+  })).textContent = textoCentro;
 
   envoltura.appendChild(svg);
 
@@ -2370,7 +2620,11 @@ function hoyISO() {
  * @param {(datos: object, form: HTMLFormElement) => boolean|void} opts.alEnviar
  *        devolver `false` mantiene el modal abierto (validación fallida)
  */
-function modal({ titulo, cuerpo, aceptar = 'Guardar', alAbrir, alEnviar }) {
+/**
+ * `soloCerrar` deja un único botón en el pie: en un panel que solo se lee,
+ * «Cancelar» y «Cerrar» uno al lado del otro hacen dudar sin motivo.
+ */
+function modal({ titulo, cuerpo, aceptar = 'Guardar', soloCerrar = false, alAbrir, alEnviar }) {
   const dlg = crear(`
     <dialog>
       <form method="dialog" class="modal-form">
@@ -2380,8 +2634,9 @@ function modal({ titulo, cuerpo, aceptar = 'Guardar', alAbrir, alEnviar }) {
         </div>
         <div class="modal-cuerpo">${cuerpo}</div>
         <div class="modal-pie">
-          <button type="button" class="btn" data-cancelar>Cancelar</button>
-          <button type="submit" class="btn primario">${esc(aceptar)}</button>
+          <button type="button" class="btn" data-cancelar
+            ${soloCerrar ? 'hidden' : ''}>Cancelar</button>
+          <button type="submit" class="btn ${soloCerrar ? '' : 'primario'}">${esc(aceptar)}</button>
         </div>
       </form>
     </dialog>`);
@@ -4634,7 +4889,7 @@ M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
 const {db, tarjetas} = M["store"];
-const {mesActual, nombreMes, money, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
 const {crear, esc, $, segmentado} = M["ui"];
 let usuarioFiltro = 'ambos';
@@ -4661,7 +4916,7 @@ function render(raiz, { irA }) {
       <div class="panel-cab">
         <div>
           <span class="etiqueta">Gasto de ${esc(nombreMes(mes))}</span>
-          <span class="cifra">${money(gastoMes)}</span>
+          <span class="cifra">${moneyHTML(gastoMes)}</span>
           <span class="nota">
             ${gastoPrevio > 0
     ? `${variacion >= 0 ? '▲' : '▼'} ${Math.abs(variacion).toFixed(1)} % frente a ${esc(nombreMes(mesPrevio, true))}`
@@ -5040,7 +5295,7 @@ M["views/anual"] = (function () {
 /** Vista «Año»: el cuadro visual del año completo, mes a mes. */
 
 const {tarjetas} = M["store"];
-const {nombreMes, money, matrizCategoriaMes, totalPorCategoria, serieMensual, añosDisponibles, redondear, totalPorUsuario} = M["calc"];
+const {nombreMes, money, moneyHTML, matrizCategoriaMes, totalPorCategoria, serieMensual, añosDisponibles, redondear, totalPorUsuario} = M["calc"];
 const {columnas, columnasApiladas, linea, dona, barrasHorizontales, plegarOtros, alRedimensionar} = M["charts"];
 const {esc, $, opciones, segmentado} = M["ui"];
 const estado = { año: null, usuario: 'ambos', tarjeta: 'todas' };
@@ -5077,7 +5332,7 @@ function render(raiz) {
       <header>
         <div>
           <span class="pista">Gasto total ${esc(estado.año)}</span>
-          <div class="heroe">${money(gastos)}</div>
+          <div class="heroe">${moneyHTML(gastos)}</div>
           <span class="pista">${mesesConGasto} ${mesesConGasto === 1 ? 'mes' : 'meses'} con movimiento ·
             promedio ${money(mesesConGasto ? gastos / mesesConGasto : 0)}</span>
         </div>
@@ -5217,7 +5472,7 @@ M["views/tarjetas"] = (function () {
 /** Vista «Tarjetas»: cupo, consumo del mes, diferidos vivos y movimientos. */
 
 const {db, tarjetas, eliminar} = M["store"];
-const {mesActual, nombreMes, money, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear} = M["calc"];
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, opciones} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta} = M["forms"];
@@ -5255,7 +5510,7 @@ function render(raiz) {
     <section class="panel">
       <span class="etiqueta">A pagar en ${esc(nombreMes(mes))} · ${esc(t.nombre)}${
   estado.usuario === 'ambos' ? '' : ` · solo ${esc(estado.usuario)}`}</span>
-      <span class="cifra">${money(pago)}</span>
+      <span class="cifra">${moneyHTML(pago)}</span>
       <div class="panel-datos">
         <div><div class="etq">Corrientes</div>
           <div class="val">${money(sumaPorTipo(t.id, mes, estado.usuario, 'Corriente'))}</div></div>
@@ -5446,7 +5701,7 @@ M["views/inversiones"] = (function () {
 /** Vista «Inversiones»: pólizas activas, calculadora y rendimientos. */
 
 const {db, eliminar, cuenta} = M["store"];
-const {money, calcularPoliza, sumarDias, diasEntre, redondear, nombreMes, claveMes, totalInvertido, rendimientoProyectado} = M["calc"];
+const {money, moneyHTML, calcularPoliza, sumarDias, diasEntre, redondear, nombreMes, claveMes, totalInvertido, rendimientoProyectado} = M["calc"];
 const {dona, barrasHorizontales, alRedimensionar} = M["charts"];
 const {aNumero, esc, $, $$, confirmar, hoyISO} = M["ui"];
 const {formInversion, liquidarInversion} = M["forms"];
@@ -5465,7 +5720,7 @@ function render(raiz) {
       <div class="panel-cab">
         <div>
           <span class="etiqueta">Capital invertido</span>
-          <span class="cifra">${money(capital)}</span>
+          <span class="cifra">${moneyHTML(capital)}</span>
           <span class="nota">${activas.length} ${activas.length === 1 ? 'póliza activa' : 'pólizas activas'}</span>
         </div>
         <button class="btn primario pequeno" id="btn-nueva">+ Inversión</button>
@@ -5633,7 +5888,7 @@ M["views/cuentas"] = (function () {
 /** Vista «Cuentas»: saldos reales de banco y efectivo, y sus movimientos. */
 
 const {db, cuentasBancarias, eliminar, upsert, cuenta} = M["store"];
-const {money, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes} = M["calc"];
+const {money, moneyHTML, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes} = M["calc"];
 const {dona, linea, alRedimensionar} = M["charts"];
 const {esc, $, $$, confirmar, modal, brindis} = M["ui"];
 const {formMovimiento, formIngreso, formGastoEfectivo} = M["forms"];
@@ -5646,7 +5901,7 @@ function render(raiz) {
       <div class="panel-cab">
         <div>
           <span class="etiqueta">Total ahorrado</span>
-          <span class="cifra">${money(ahorro)}</span>
+          <span class="cifra">${moneyHTML(ahorro)}</span>
           <span class="nota">Suma de bancos y efectivo</span>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
@@ -6448,10 +6703,11 @@ return { render };
 M["app"] = (function () {
 /** Arranque, navegación y botón de registro rápido. */
 
-const {db, cargar, alCambiar, almacenamiento, instantanea} = M["store"];
+const {db, cargar, alCambiar, almacenamiento, instantanea, guardar, tarjetas} = M["store"];
 const {iniciarSync, empujarDiferido, alCambiarSync, estadoSync, configurado} = M["sync"];
+const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta} = M["calc"];
 const archivoExcel = M["archivo"];
-const {$, crear, ICONOS, modal, brindis, descargar} = M["ui"];
+const {$, crear, esc, ICONOS, modal, brindis, descargar} = M["ui"];
 const {formGastoTarjeta, formGastoEfectivo, formIngreso, formInversion, formMovimiento} = M["forms"];
 const resumen = M["views/resumen"];
 const mensual = M["views/mensual"];
@@ -6460,15 +6716,27 @@ const vistaTarjetas = M["views/tarjetas"];
 const inversiones = M["views/inversiones"];
 const cuentas = M["views/cuentas"];
 const datos = M["views/datos"];
+/*
+ * `titulo` es el rótulo de la barra de abajo, donde cada ranura mide unos 48 px
+ * en un teléfono: si no cabe, se corta. `rotulo` es el título largo de la
+ * cabecera, que sí tiene sitio.
+ */
 const VISTAS = [
   { id: 'resumen', titulo: 'Inicio', rotulo: 'Resumen', modulo: resumen, icono: ICONOS.resumen },
-  { id: 'mensual', titulo: 'Mensual', modulo: mensual, icono: ICONOS.mensual },
+  { id: 'mensual', titulo: 'Mes', rotulo: 'Mensual', modulo: mensual, icono: ICONOS.mensual },
   { id: 'anual', titulo: 'Año', modulo: anual, icono: ICONOS.anual },
   { id: 'tarjetas', titulo: 'Tarjetas', modulo: vistaTarjetas, icono: ICONOS.tarjetas },
   { id: 'inversiones', titulo: 'Invertir', rotulo: 'Inversiones', modulo: inversiones, icono: ICONOS.inversiones },
   { id: 'cuentas', titulo: 'Cuentas', modulo: cuentas, icono: ICONOS.cuentas },
   { id: 'datos', titulo: 'Datos', modulo: datos, icono: ICONOS.datos },
 ];
+
+/*
+ * La barra de abajo lleva seis secciones repartidas a los lados del «+».
+ * «Datos» —importar, respaldos, sincronización— no es de uso diario, así que
+ * vive en el menú de la cabecera y deja sitio para que las demás respiren.
+ */
+const EN_BARRA = VISTAS.filter((v) => v.id !== 'datos');
 
 let vistaActual = 'resumen';
 
@@ -6499,14 +6767,123 @@ function pintarEstadoSync() {
 
 function pintarNav() {
   const nav = $('#nav');
-  nav.innerHTML = VISTAS.map((v) => `
+  const boton = (v) => `
     <button data-vista="${v.id}" ${v.id === vistaActual ? 'aria-current="page"' : ''}>
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${v.icono}</svg>
       <span>${v.titulo}</span>
-    </button>`).join('');
+    </button>`;
 
-  nav.querySelectorAll('button').forEach((b) => {
+  // El «+» va dibujado, no escrito: el carácter de texto se apoya en la línea
+  // base de la fuente y nunca queda centrado del todo dentro del círculo.
+  const mas = `
+    <button class="nav-mas" id="fab" aria-label="Registrar movimiento">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+           stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    </button>`;
+
+  const mitad = Math.ceil(EN_BARRA.length / 2);
+  nav.innerHTML = EN_BARRA.slice(0, mitad).map(boton).join('')
+    + mas
+    + EN_BARRA.slice(mitad).map(boton).join('');
+
+  nav.querySelectorAll('[data-vista]').forEach((b) => {
     b.addEventListener('click', () => irA(b.dataset.vista));
+  });
+  nav.querySelector('#fab').addEventListener('click', menuRegistro);
+}
+
+/** Lo que hay que mirar hoy: se pinta en la campana de la cabecera. */
+function avisosPendientes() {
+  const lista = [];
+
+  if (!almacenamiento.ok) {
+    lista.push({ nivel: 'critico', texto: 'Este navegador no está guardando los datos. Descarga un respaldo.' });
+  }
+  if (configurado() && estadoSync.error) {
+    lista.push({ nivel: 'critico', texto: `La sincronización falló: ${estadoSync.error}` });
+  }
+
+  const mes = mesActual();
+  tarjetas().forEach((t) => {
+    const pago = pagoDelMes(t.id, mes, 'ambos');
+    if (pago > 0) {
+      lista.push({ nivel: 'info', texto: `${t.nombre}: a pagar en ${nombreMes(mes)} ${money(pago)}.` });
+    }
+    const est = estadoTarjeta(t.id);
+    const uso = est.cupo ? (est.utilizado / est.cupo) * 100 : 0;
+    if (uso >= 80) {
+      lista.push({
+        nivel: uso >= 95 ? 'critico' : 'alerta',
+        texto: `${t.nombre} lleva usado el ${uso.toFixed(0)} % del cupo.`,
+      });
+    }
+  });
+
+  return lista;
+}
+
+function pintarAvisos() {
+  const btn = $('#btn-avisos');
+  if (!btn) return;
+  const hay = avisosPendientes().some((a) => a.nivel !== 'info');
+  btn.dataset.avisos = hay ? 'si' : 'no';
+}
+
+function panelAvisos() {
+  const lista = avisosPendientes();
+  modal({
+    titulo: 'Avisos',
+    cuerpo: lista.length
+      ? lista.map((a) => `
+          <div class="aviso ${a.nivel === 'info' ? '' : a.nivel}">
+            <span class="icono">${a.nivel === 'info' ? '•' : '⚠'}</span>
+            <span class="crece">${esc(a.texto)}</span>
+          </div>`).join('')
+      : '<p class="vacio">Todo en orden: nada pendiente de mirar.</p>',
+    aceptar: 'Cerrar',
+    soloCerrar: true,
+    alEnviar: () => {},
+  });
+}
+
+/** Menú de la cabecera: lo que no cabe en la barra de abajo. */
+function menuPrincipal() {
+  const temas = [['auto', 'Automático'], ['claro', 'Claro'], ['oscuro', 'Oscuro']];
+  const actual = db.config.tema || 'auto';
+  const dlg = modal({
+    titulo: 'Menú',
+    cuerpo: `
+      <div class="filtros" style="flex-direction:column;align-items:stretch">
+        <button type="button" class="btn" id="m-datos" style="justify-content:flex-start">
+          Datos, respaldos y sincronización</button>
+      </div>
+      <div class="campo" style="margin-top:14px">
+        <label>Tema</label>
+        <div class="segmentado" id="m-tema">
+          ${temas.map(([v, txt]) => `
+            <button type="button" data-tema="${v}" aria-pressed="${v === actual}">${txt}</button>
+          `).join('')}
+        </div>
+      </div>`,
+    aceptar: 'Cerrar',
+    soloCerrar: true,
+    alEnviar: () => {},
+  });
+
+  dlg.querySelector('#m-datos').addEventListener('click', () => {
+    dlg.close();
+    dlg.remove();
+    irA('datos');
+  });
+  dlg.querySelectorAll('[data-tema]').forEach((b) => {
+    b.addEventListener('click', () => {
+      db.config.tema = b.dataset.tema;
+      guardar();
+      aplicarTema();
+      dlg.querySelectorAll('[data-tema]').forEach((o) => {
+        o.setAttribute('aria-pressed', String(o === b));
+      });
+    });
   });
 }
 
@@ -6586,7 +6963,8 @@ async function iniciar() {
   aplicarTema();
 
   pintarNav();
-  $('#fab').addEventListener('click', menuRegistro);
+  $('#btn-menu').addEventListener('click', menuPrincipal);
+  $('#btn-avisos').addEventListener('click', panelAvisos);
 
   window.addEventListener('hashchange', () => {
     const id = location.hash.slice(1);
@@ -6608,13 +6986,15 @@ async function iniciar() {
   // Refresca la cabecera cuando cambian los datos y sube los cambios.
   alCambiar(() => {
     aplicarTema();
+    pintarAvisos();
     empujarDiferido();
     archivoExcel.guardarDiferido();
   });
 
   // Indicador de sincronización en la cabecera.
-  alCambiarSync(pintarEstadoSync);
+  alCambiarSync(() => { pintarEstadoSync(); pintarAvisos(); });
   pintarEstadoSync();
+  pintarAvisos();
   iniciarSync();
 
   // Archivo de Excel vinculado: se readopta y se queda atento a las
