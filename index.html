@@ -3205,6 +3205,9 @@ M["importar_libro"] = (function () {
 const {analizar, redondear} = M["libro_tarjetas"];
 const TOLERANCIA = 0.02;   // centavos de holgura al comparar cuotas
 
+/** Marca con la que se reconoce después lo que vino del libro. */
+const NOTA_IMPORTADO = 'Importado del libro de tarjetas';
+
 /** Hash corto y estable de un texto (FNV-1a) para construir identificadores. */
 function huella(texto) {
   let h = 0x811c9dc5;
@@ -3271,7 +3274,7 @@ function leerIngresos(libro, cuentaPorDefecto) {
       descuentos,
       neto: redondear(bruto - descuentos),
       cuenta: cuentaPorDefecto,
-      notas: 'Importado del libro de tarjetas',
+      notas: NOTA_IMPORTADO,
     });
   }
   return out;
@@ -3324,7 +3327,7 @@ function libroTarjetasAEntidades(libro, cuentas = []) {
       monto_total: redondear(mov.total),
       tasa_interes: 0,
       mes_inicio: suyas[0].mes,
-      notas: 'Importado del libro de tarjetas',
+      notas: NOTA_IMPORTADO,
     });
 
     suyas.forEach((r, i) => cuotas.push({
@@ -3375,7 +3378,7 @@ function esLibroDeTarjetas(libro) {
   ));
 }
 
-return { esLibroDeTarjetas, libroTarjetasAEntidades };
+return { NOTA_IMPORTADO, esLibroDeTarjetas, libroTarjetasAEntidades };
 })();
 
 M["archivo"] = (function () {
@@ -5571,7 +5574,7 @@ const {aNumero, esc, $, $$, brindis, modal, confirmar, descargar, pedirArchivo, 
 const {escribirLibro, leerLibro} = M["xlsx"];
 const {ESQUEMA, construirLibro, libroADatos} = M["esquema"];
 const archivoExcel = M["archivo"];
-const {libroTarjetasAEntidades, esLibroDeTarjetas} = M["importar_libro"];
+const {libroTarjetasAEntidades, esLibroDeTarjetas, NOTA_IMPORTADO as NOTA} = M["importar_libro"];
 const {estadoSync, configurado, sincronizar, probarConexion, iniciarSync, SQL_TABLA,} = M["sync"];
 // --- Excel -------------------------------------------------------------------
 
@@ -5671,12 +5674,13 @@ function revisarImportacion(conv, nombreArchivo, alTerminar) {
       <div class="campo ancho" style="margin-top:10px">
         <label for="imp-modo">Qué hacer con lo que ya hay</label>
         <select id="imp-modo" name="modo">
-          <option value="anadir">Añadir (conserva lo registrado en la app)</option>
-          <option value="reemplazar">Reemplazar todos los gastos de tarjeta</option>
+          <option value="reemplazar">Recargar: sustituye lo importado antes (recomendado)</option>
+          <option value="anadir">Añadir sin quitar nada</option>
         </select>
       </div>
-      <p class="pista">Si vuelves a importar el mismo archivo no se duplica nada:
-        cada consumo se reconoce por su contenido.</p>`,
+      <p class="pista">«Recargar» deja la app igual que el Excel: quita lo que trajo
+        una importación anterior y vuelve a meterlo, conservando los gastos que
+        hayas escrito a mano en la app.</p>`,
     aceptar: 'Importar',
     alEnviar(d) {
       aplicarImportacion(conv, d.modo);
@@ -5686,12 +5690,25 @@ function revisarImportacion(conv, nombreArchivo, alTerminar) {
   });
 }
 
+/** Marca con la que se reconoce lo que vino del libro de tarjetas. */
 /** Vuelca las entidades convertidas en la base. */
 function aplicarImportacion(conv, modo) {
   if (modo === 'reemplazar') {
-    const ids = new Set(db.gastosTarjeta.map((g) => g.id));
-    db.gastosTarjeta = [];
-    db.cuotas = db.cuotas.filter((c) => !ids.has(c.gasto_id));
+    // Solo se retira lo que vino de una importación anterior: los gastos
+    // escritos a mano en la app se conservan.
+    const fuera = new Set(db.gastosTarjeta
+      .filter((g) => g.notas === NOTA)
+      .map((g) => g.id));
+    const ahora = Date.now();
+    db.gastosTarjeta
+      .filter((g) => fuera.has(g.id))
+      .forEach((g) => db.borrados.push({ c: 'gastosTarjeta', k: g.id, t: ahora }));
+    db.cuotas
+      .filter((c) => fuera.has(c.gasto_id))
+      .forEach((c) => db.borrados.push({ c: 'cuotas', k: `${c.gasto_id}#${c.n_cuota}`, t: ahora }));
+
+    db.gastosTarjeta = db.gastosTarjeta.filter((g) => !fuera.has(g.id));
+    db.cuotas = db.cuotas.filter((c) => !fuera.has(c.gasto_id));
   }
 
   const fusionar = (coleccion, filas) => {
