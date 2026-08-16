@@ -2899,6 +2899,485 @@ function libroADatos(libro, configBase = {}) {
 return { ESQUEMA, construirLibro, esBaseDeLaApp, libroADatos };
 })();
 
+M["libro_tarjetas"] = (function () {
+/**
+ * Lector del libro `Cuentas_tarjetas.xlsx` tal como lo mantiene el usuario:
+ * una hoja por tarjeta, con las columnas de mes desplegadas a lo ancho.
+ *
+ * No modifica nada del archivo. Devuelve una tabla plana de hechos
+ * (una fila por mes con valor) que es lo que consumen los gráficos.
+ */
+
+const MESES_LARGO = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const MESES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+  'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+/** Meses que se asumen si el libro no trae la hoja `Tabla` con fechas reales. */
+const MES_INICIO_POR_DEFECTO = '2025-05';
+
+const nombreMes = (mes, corto = false) => {
+  const [y, m] = String(mes).split('-').map(Number);
+  const lista = corto ? MESES_CORTO : MESES_LARGO;
+  return corto ? `${lista[m - 1]} ${String(y).slice(2)}` : `${lista[m - 1]} ${y}`;
+};
+
+const redondear = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+const FORMATO = new Intl.NumberFormat('es-EC', {
+  style: 'currency', currency: 'USD', minimumFractionDigits: 2,
+});
+const money = (n) => FORMATO.format(Number(n) || 0);
+
+function sumarMeses(mes, n) {
+  const [y, m] = mes.split('-').map(Number);
+  const t = y * 12 + (m - 1) + n;
+  return `${String(Math.floor(t / 12)).padStart(4, '0')}-${String((t % 12) + 1).padStart(2, '0')}`;
+}
+
+const texto = (v) => (v === null || v === undefined ? '' : String(v).trim());
+const numero = (v) => {
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+};
+
+/** Serie de fecha de Excel → 'YYYY-MM'. */
+function serialAMes(n) {
+  const d = new Date(Math.round((Number(n) - 25569) * 86400000));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function textoAMes(v) {
+  const s = texto(v);
+  const iso = /^(\d{4})-(\d{2})/.exec(s);
+  if (iso) return `${iso[1]}-${iso[2]}`;
+  const d = new Date(s);
+  if (!Number.isNaN(d.getTime())) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+  return null;
+}
+
+/**
+ * Los encabezados de mes de las hojas de tarjeta son etiquetas sueltas
+ * ("Mayo", "Junio", … "Diciembre2"). La hoja `Tabla` sí trae las fechas
+ * reales de esos mismos 20 meses, así que de ahí salen las claves.
+ */
+function mesesDelLibro(libro, cuantos) {
+  const tabla = libro.Tabla;
+  if (tabla) {
+    for (const fila of tabla.slice(0, 8)) {
+      const encontrados = [];
+      for (const celda of fila) {
+        const mes = typeof celda === 'number' && celda > 20000
+          ? serialAMes(celda)
+          : textoAMes(celda);
+        if (mes) encontrados.push(mes);
+      }
+      if (encontrados.length >= cuantos) return encontrados.slice(0, cuantos);
+    }
+  }
+  // Sin `Tabla` usable: se numeran corridos desde el mes por defecto.
+  return Array.from({ length: cuantos }, (_, i) => sumarMeses(MES_INICIO_POR_DEFECTO, i));
+}
+
+/** Localiza la fila de encabezados de una hoja de tarjeta. */
+function localizarCabecera(filas) {
+  for (let i = 0; i < Math.min(filas.length, 10); i += 1) {
+    const fila = filas[i].map((c) => texto(c).toLowerCase());
+    const cargo = fila.indexOf('cargo');
+    if (cargo >= 0 && fila.includes('fecha') && fila.includes('cuenta')) {
+      return { indice: i, columnas: fila, cargo };
+    }
+  }
+  return null;
+}
+
+/** Nombre visible de la tarjeta: el rótulo que va sobre la tabla. */
+function nombreTarjeta(filas, cabecera, hoja) {
+  for (let i = Math.max(0, cabecera - 3); i < cabecera; i += 1) {
+    const rotulo = (filas[i] || []).map(texto).find((c) => /banco/i.test(c));
+    if (rotulo) return rotulo;
+  }
+  return hoja;
+}
+
+/**
+ * Convierte el libro completo en la tabla de hechos.
+ *
+ * @param {Record<string, Array<Array<string|number>>>} libro  salida de leerLibro()
+ * @returns {{meses: string[], registros: object[], tarjetas: object[],
+ *            categorias: string[], usuarios: string[], movimientos: object[],
+ *            total: number, avisos: string[]}}
+ */
+function analizar(libro) {
+  const avisos = [];
+  const registros = [];
+  const movimientos = [];
+  const tarjetas = [];
+  let meses = null;
+
+  for (const [hoja, filas] of Object.entries(libro)) {
+    if (!Array.isArray(filas) || filas.length < 5) continue;
+    const cab = localizarCabecera(filas);
+    if (!cab) continue;
+
+    const { indice, columnas, cargo } = cab;
+    const colFecha = columnas.indexOf('fecha');
+    const colDetalle = columnas.indexOf('detalle');
+    const colProposito = columnas.indexOf('proposito');
+    const colCuenta = columnas.indexOf('cuenta');
+
+    // Los meses van desde la columna siguiente a "Cuenta" hasta el primer
+    // encabezado de totales.
+    const inicioMes = colCuenta + 1;
+    let finMes = columnas.length;
+    for (let c = inicioMes; c < columnas.length; c += 1) {
+      if (/^(total|totales|monto)/.test(columnas[c])) { finMes = c; break; }
+    }
+    const nColumnasMes = finMes - inicioMes;
+    if (nColumnasMes < 1) continue;
+
+    if (!meses) meses = mesesDelLibro(libro, nColumnasMes);
+    const mesesHoja = meses.slice(0, nColumnasMes);
+
+    const id = hoja.replace(/\s+/g, '-').toUpperCase();
+    const nombre = nombreTarjeta(filas, indice, hoja);
+    let totalHoja = 0;
+    let filasHoja = 0;
+
+    for (let f = indice + 1; f < filas.length; f += 1) {
+      const fila = filas[f];
+      if (!fila) continue;
+      const usuario = texto(fila[cargo]).toUpperCase();
+      const detalle = texto(fila[colDetalle]);
+      // Las filas de cierre llevan "TOTAL ACUMULADO …" en la columna de fecha.
+      if (!['J', 'C'].includes(usuario) || !detalle) continue;
+      if (/total/i.test(texto(fila[colFecha]))) continue;
+
+      const categoria = texto(fila[colCuenta]) || 'Sin categoría';
+      const proposito = colProposito >= 0 ? texto(fila[colProposito]) : '';
+      const fecha = texto(fila[colFecha]);
+
+      const cuotas = [];
+      for (let c = 0; c < nColumnasMes; c += 1) {
+        const monto = redondear(numero(fila[inicioMes + c]));
+        if (Math.abs(monto) < 0.005) continue;
+        cuotas.push({ mes: mesesHoja[c], monto });
+        registros.push({
+          tarjeta: id,
+          tarjetaNombre: nombre,
+          usuario,
+          categoria,
+          detalle,
+          proposito,
+          fecha,
+          mes: mesesHoja[c],
+          monto,
+        });
+        totalHoja += monto;
+      }
+      if (!cuotas.length) continue;
+      filasHoja += 1;
+      movimientos.push({
+        tarjeta: id,
+        tarjetaNombre: nombre,
+        hoja,
+        // Fila dentro de la hoja: distingue dos compras por lo demás idénticas.
+        fila: f,
+        usuario,
+        categoria,
+        detalle,
+        proposito,
+        fecha,
+        cuotas: cuotas.length,
+        mesInicio: cuotas[0].mes,
+        // Cronograma real de la fila. Sin él habría que volver a emparejar los
+        // registros por sus campos, y dos compras iguales el mismo día se
+        // llevarían las cuotas de ambas.
+        plan: cuotas,
+        total: redondear(cuotas.reduce((s, c) => s + c.monto, 0)),
+      });
+    }
+
+    if (filasHoja) {
+      tarjetas.push({ id, nombre, hoja, total: redondear(totalHoja), movimientos: filasHoja });
+    }
+  }
+
+  if (!tarjetas.length) {
+    avisos.push('No se encontró ninguna hoja con las columnas Cargo / Fecha / Cuenta. '
+      + '¿Es el archivo correcto?');
+  }
+  if (!libro.Tabla) {
+    avisos.push(`El libro no trae la hoja «Tabla», así que los meses se cuentan `
+      + `desde ${nombreMes(MES_INICIO_POR_DEFECTO)}.`);
+  }
+
+  const mesesConDato = [...new Set(registros.map((r) => r.mes))].sort();
+
+  return {
+    meses: mesesConDato,
+    mesesLibro: meses || [],
+    registros,
+    movimientos,
+    tarjetas: tarjetas.sort((a, b) => b.total - a.total),
+    categorias: [...new Set(registros.map((r) => r.categoria))].sort((a, b) => a.localeCompare(b, 'es')),
+    usuarios: [...new Set(registros.map((r) => r.usuario))].sort(),
+    total: redondear(registros.reduce((s, r) => s + r.monto, 0)),
+    avisos,
+  };
+}
+
+// --- Agregaciones ------------------------------------------------------------
+
+/** Filtra la tabla de hechos por los segmentadores activos. */
+function filtrar(datos, { usuario, tarjeta, desde, hasta, categoria }) {
+  return datos.registros.filter((r) => {
+    if (usuario && usuario !== 'todos' && r.usuario !== usuario) return false;
+    if (tarjeta && tarjeta !== 'todas' && r.tarjeta !== tarjeta) return false;
+    if (categoria && categoria !== 'todas' && r.categoria !== categoria) return false;
+    if (desde && r.mes < desde) return false;
+    if (hasta && r.mes > hasta) return false;
+    return true;
+  });
+}
+
+/** Suma por mes de una dimensión: 'tarjeta' | 'usuario' | 'categoria'. */
+function porMes(registros, meses, dimension) {
+  const claves = [...new Set(registros.map((r) => r[dimension]))];
+  const mapa = new Map(claves.map((k) => [k, Object.fromEntries(meses.map((m) => [m, 0]))]));
+  for (const r of registros) {
+    const fila = mapa.get(r[dimension]);
+    if (fila && fila[r.mes] !== undefined) fila[r.mes] += r.monto;
+  }
+  return [...mapa.entries()]
+    .map(([nombre, fila]) => ({
+      nombre,
+      valores: meses.map((m) => redondear(fila[m])),
+      total: redondear(meses.reduce((s, m) => s + fila[m], 0)),
+    }))
+    .filter((s) => s.total !== 0)
+    .sort((a, b) => b.total - a.total);
+}
+
+/** Convierte una serie mensual en su acumulado corrido. */
+function acumular(valores) {
+  let acc = 0;
+  return valores.map((v) => { acc = redondear(acc + v); return acc; });
+}
+
+/** Total por una dimensión, de mayor a menor. */
+function totalPor(registros, dimension) {
+  const m = new Map();
+  for (const r of registros) m.set(r[dimension], (m.get(r[dimension]) || 0) + r.monto);
+  return [...m.entries()]
+    .map(([nombre, valor]) => ({ nombre, valor: redondear(valor) }))
+    .filter((x) => x.valor !== 0)
+    .sort((a, b) => b.valor - a.valor);
+}
+
+/** Lista de meses entre dos claves, inclusive. */
+function rangoMeses(desde, hasta) {
+  const out = [];
+  let m = desde;
+  let guarda = 0;
+  while (m <= hasta && guarda < 240) { out.push(m); m = sumarMeses(m, 1); guarda += 1; }
+  return out;
+}
+
+return { acumular, analizar, filtrar, money, nombreMes, porMes, rangoMeses, redondear, sumarMeses, totalPor };
+})();
+
+M["importar_libro"] = (function () {
+/**
+ * Importa el libro de tarjetas original —el que se mantiene a mano, con una
+ * hoja por tarjeta y las columnas de mes desplegadas a lo ancho— y lo convierte
+ * en los gastos, cuotas e ingresos de la app.
+ *
+ * Es la misma conversión que hace `tools/migrar_excel.py`, pero dentro del
+ * navegador para que se pueda hacer desde el celular.
+ *
+ * Los identificadores se derivan del contenido de cada fila, así que volver a
+ * importar el mismo archivo actualiza lo que ya estaba en vez de duplicarlo.
+ */
+
+const {analizar, redondear} = M["libro_tarjetas"];
+const TOLERANCIA = 0.02;   // centavos de holgura al comparar cuotas
+
+/** Hash corto y estable de un texto (FNV-1a) para construir identificadores. */
+function huella(texto) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < texto.length; i += 1) {
+    h ^= texto.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36).toUpperCase().padStart(7, '0');
+}
+
+/** Nombre de la hoja -> identificador de cuenta de la app. */
+function idTarjeta(nombreHoja, cuentas) {
+  const limpio = String(nombreHoja).toLowerCase();
+  const porBanco = cuentas.find((c) => c.tipo === 'Tarjeta'
+    && limpio.includes(String(c.banco || '').toLowerCase())
+    && (limpio.includes(' a') === /adicional/i.test(c.nombre)));
+  if (porBanco) return porBanco.id;
+  const porNombre = cuentas.find((c) => c.tipo === 'Tarjeta'
+    && limpio.includes(String(c.banco || '').toLowerCase()));
+  return porNombre ? porNombre.id : `TC-${limpio.replace(/[^a-z0-9]+/g, '-').toUpperCase()}`;
+}
+
+/**
+ * Deduce cómo se pagó un consumo a partir de en qué meses aparece:
+ * un solo mes es corriente; meses seguidos con el mismo valor, diferido;
+ * cualquier otra cosa (suscripciones, cargos variables) es recurrente.
+ */
+function deducirTipo(cuotas, meses) {
+  if (cuotas.length === 1) return 'Corriente';
+  const indices = cuotas.map((c) => meses.indexOf(c.mes));
+  const seguidos = indices.every((v, i) => i === 0 || v === indices[i - 1] + 1);
+  const montos = cuotas.map((c) => c.monto);
+  const iguales = Math.max(...montos) - Math.min(...montos) <= TOLERANCIA;
+  return seguidos && iguales ? 'Diferido' : 'Recurrente';
+}
+
+/** Ingresos de la hoja «Ingreso», si el libro la trae. */
+function leerIngresos(libro, cuentaPorDefecto) {
+  const filas = libro.Ingreso;
+  if (!Array.isArray(filas)) return [];
+
+  const out = [];
+  for (const fila of filas) {
+    if (!Array.isArray(fila)) continue;
+    // Columnas: B fecha · C bruto · D descuentos
+    const cruda = fila[1];
+    const fecha = typeof cruda === 'number' && cruda > 20000
+      ? new Date(Math.round((cruda - 25569) * 86400000)).toISOString().slice(0, 10)
+      : (/^\d{4}-\d{2}-\d{2}/.exec(String(cruda || ''))?.[0] || null);
+    if (!fecha) continue;
+
+    const bruto = redondear(Number(fila[2]) || 0);
+    const descuentos = redondear(Number(fila[3]) || 0);
+    if (!bruto && !descuentos) continue;
+
+    out.push({
+      id: `I-${huella(`${fecha}|${bruto}|${descuentos}`)}`,
+      fecha,
+      mes: fecha.slice(0, 7),
+      usuario: 'J',
+      concepto: 'Sueldo',
+      categoria: 'Sueldo',
+      bruto,
+      descuentos,
+      neto: redondear(bruto - descuentos),
+      cuenta: cuentaPorDefecto,
+      notas: 'Importado del libro de tarjetas',
+    });
+  }
+  return out;
+}
+
+/**
+ * Convierte el libro en entidades de la app.
+ *
+ * @param {object} libro     salida de `leerLibro()`
+ * @param {object[]} cuentas cuentas de la app, para emparejar las tarjetas
+ * @returns {{gastosTarjeta: object[], cuotas: object[], ingresos: object[],
+ *            categorias: string[], resumen: object, avisos: string[]}}
+ */
+function libroTarjetasAEntidades(libro, cuentas = []) {
+  const datos = analizar(libro);
+  if (!datos.registros.length) {
+    throw new Error('No se encontró ninguna hoja de tarjeta con las columnas '
+      + 'Cargo, Fecha, Detalle, Propósito y Cuenta. ¿Es el archivo correcto?');
+  }
+
+  const gastosTarjeta = [];
+  const cuotas = [];
+  const porTarjeta = {};
+
+  for (const mov of datos.movimientos) {
+    const tarjeta = idTarjeta(mov.tarjetaNombre || mov.tarjeta, cuentas);
+
+    // El cronograma viene de la propia fila del Excel.
+    const suyas = mov.plan;
+    if (!suyas?.length) continue;
+
+    const tipo = deducirTipo(suyas, datos.mesesLibro);
+    const fecha = mov.fecha || `${suyas[0].mes}-01`;
+    // La hoja y el número de fila entran en la huella para que dos compras
+    // idénticas el mismo día sigan siendo dos, y para que reimportar el mismo
+    // archivo dé exactamente los mismos identificadores.
+    const id = `G-${huella([mov.hoja, mov.fila, tarjeta, mov.usuario, mov.detalle,
+      mov.categoria, fecha, mov.total].join('|'))}`;
+
+    gastosTarjeta.push({
+      id,
+      fecha,
+      tarjeta,
+      usuario: mov.usuario,
+      detalle: mov.detalle,
+      proposito: mov.proposito || '',
+      categoria: mov.categoria,
+      tipo,
+      cuotas: suyas.length,
+      monto_total: redondear(mov.total),
+      tasa_interes: 0,
+      mes_inicio: suyas[0].mes,
+      notas: 'Importado del libro de tarjetas',
+    });
+
+    suyas.forEach((r, i) => cuotas.push({
+      gasto_id: id,
+      n_cuota: i + 1,
+      mes: r.mes,
+      monto: redondear(r.monto),
+      tarjeta,
+      usuario: mov.usuario,
+      categoria: mov.categoria,
+      pagado: '',
+    }));
+
+    porTarjeta[tarjeta] = redondear((porTarjeta[tarjeta] || 0) + mov.total);
+  }
+
+  const bancoPorDefecto = cuentas.find((c) => c.tipo === 'Banco')?.id || 'BCO-PICH';
+  const ingresos = leerIngresos(libro, bancoPorDefecto);
+
+  return {
+    gastosTarjeta,
+    cuotas,
+    ingresos,
+    categorias: datos.categorias,
+    avisos: datos.avisos,
+    resumen: {
+      gastos: gastosTarjeta.length,
+      cuotas: cuotas.length,
+      ingresos: ingresos.length,
+      total: redondear(cuotas.reduce((s, c) => s + c.monto, 0)),
+      porTarjeta,
+      meses: datos.meses,
+      usuarios: datos.usuarios,
+      porUsuario: Object.fromEntries(datos.usuarios.map((u) => [u, redondear(
+        datos.registros.filter((r) => r.usuario === u).reduce((s, r) => s + r.monto, 0))])),
+    },
+  };
+}
+
+/** ¿Este libro tiene pinta de ser el de las tarjetas? */
+function esLibroDeTarjetas(libro) {
+  return Object.values(libro || {}).some((filas) => (
+    Array.isArray(filas) && filas.slice(0, 10).some((f) => {
+      if (!Array.isArray(f)) return false;
+      const c = f.map((x) => String(x ?? '').trim().toLowerCase());
+      return c.includes('cargo') && c.includes('fecha') && c.includes('cuenta');
+    })
+  ));
+}
+
+return { esLibroDeTarjetas, libroTarjetasAEntidades };
+})();
+
 M["archivo"] = (function () {
 /**
  * Vínculo de la app con un archivo de Excel guardado en el computador.
@@ -5086,12 +5565,13 @@ M["views/datos"] = (function () {
  * y ajustes generales.
  */
 
-const {db, guardar, reemplazar, limpiarTodo, instantanea,} = M["store"];
-const {money, redondear} = M["calc"];
+const {db, guardar, reemplazar, limpiarTodo, instantanea, tocar, CLAVES,} = M["store"];
+const {money, redondear, nombreMes} = M["calc"];
 const {aNumero, esc, $, $$, brindis, modal, confirmar, descargar, pedirArchivo, opciones,} = M["ui"];
 const {escribirLibro, leerLibro} = M["xlsx"];
 const {ESQUEMA, construirLibro, libroADatos} = M["esquema"];
 const archivoExcel = M["archivo"];
+const {libroTarjetasAEntidades, esLibroDeTarjetas} = M["importar_libro"];
 const {estadoSync, configurado, sincronizar, probarConexion, iniciarSync, SQL_TABLA,} = M["sync"];
 // --- Excel -------------------------------------------------------------------
 
@@ -5102,26 +5582,146 @@ function exportarExcel() {
   brindis('Excel generado');
 }
 
+/**
+ * Importa un .xlsx. Acepta dos formatos:
+ *  - la base de la app (hojas Cuentas, Gastos_Tarjeta, Cuotas…), que reemplaza;
+ *  - el libro de tarjetas original, que se convierte y se puede añadir.
+ */
 async function importarExcel(alTerminar) {
-  const archivo = await pedirArchivo('.xlsx');
+  const archivo = await pedirArchivo('.xlsx,.xlsm');
   if (!archivo) return;
+
+  let libro;
   try {
-    const libro = await leerLibro(await archivo.arrayBuffer());
+    libro = await leerLibro(await archivo.arrayBuffer());
+  } catch (err) {
+    return avisoError('No se pudo abrir el archivo', err.message);
+  }
+
+  // Primero la base propia; si no lo es, se intenta como libro de tarjetas.
+  try {
     const { datos, resumen } = libroADatos(libro, db.config);
-    confirmar(
+    return confirmar(
       `Se importarán → ${resumen.join(' · ')}. Esto reemplaza los datos actuales de la app.`,
       () => { reemplazar(datos); brindis('Datos importados'); alTerminar?.(); },
       { aceptar: 'Importar y reemplazar' },
     );
-  } catch (err) {
-    console.error(err);
-    modal({
-      titulo: 'No se pudo leer el archivo',
-      cuerpo: `<p>${esc(err.message)}</p>`,
-      aceptar: 'Entendido',
-      alEnviar: () => {},
-    });
+  } catch {
+    // No era la base de la app: se sigue con el otro formato.
   }
+
+  if (!esLibroDeTarjetas(libro)) {
+    return avisoError('Formato no reconocido',
+      'El archivo no es ni la base de la app ni el libro de tarjetas. '
+      + 'Debe tener hojas con las columnas Cargo, Fecha, Detalle, Propósito y Cuenta.');
+  }
+
+  let conv;
+  try {
+    conv = libroTarjetasAEntidades(libro, db.cuentas);
+  } catch (err) {
+    return avisoError('No se pudo interpretar el libro', err.message);
+  }
+  return revisarImportacion(conv, archivo.name, alTerminar);
+}
+
+function avisoError(titulo, texto) {
+  modal({
+    titulo,
+    cuerpo: `<p>${esc(texto)}</p>`,
+    aceptar: 'Entendido',
+    alEnviar: () => {},
+  });
+}
+
+/** Muestra qué se encontró y deja elegir entre añadir o reemplazar. */
+function revisarImportacion(conv, nombreArchivo, alTerminar) {
+  const r = conv.resumen;
+  const nombreTarjeta = (id) => db.cuentas.find((c) => c.id === id)?.nombre || id;
+  const nuevas = conv.categorias.filter(
+    (c) => !db.categorias.some((x) => x.nombre === c));
+
+  modal({
+    titulo: 'Importar gastos de tarjeta',
+    cuerpo: `
+      <p class="pista" style="margin-top:0">De <strong>${esc(nombreArchivo)}</strong></p>
+      <div class="rejilla kpis">
+        <div class="kpi"><div class="etq">Consumos</div>
+          <div class="valor">${r.gastos}</div>
+          <div class="delta">${r.cuotas} cuotas en total</div></div>
+        <div class="kpi"><div class="etq">Suma de las cuotas</div>
+          <div class="valor">${money(r.total)}</div></div>
+        <div class="kpi"><div class="etq">Periodo</div>
+          <div class="valor" style="font-size:15px">
+            ${r.meses.length ? `${esc(nombreMes(r.meses[0], true))} → ${esc(nombreMes(r.meses[r.meses.length - 1], true))}` : '—'}</div>
+          <div class="delta">${r.meses.length} meses</div></div>
+      </div>
+      <div class="previsualizacion">
+        <div><strong>Por tarjeta</strong></div>
+        ${Object.entries(r.porTarjeta).map(([id, v]) => `
+          <div>${esc(nombreTarjeta(id))}: <strong>${money(v)}</strong></div>`).join('')}
+        <div style="margin-top:6px"><strong>Por usuario</strong></div>
+        ${Object.entries(r.porUsuario).map(([u, v]) => `
+          <div>${esc(u)}: <strong>${money(v)}</strong></div>`).join('')}
+        ${r.ingresos ? `<div style="margin-top:6px">También trae
+          <strong>${r.ingresos} ingresos</strong> de la hoja «Ingreso».</div>` : ''}
+        ${nuevas.length ? `<div style="margin-top:6px">Se crearán
+          ${nuevas.length} categorías nuevas: ${esc(nuevas.join(', '))}.</div>` : ''}
+      </div>
+      <div class="campo ancho" style="margin-top:10px">
+        <label for="imp-modo">Qué hacer con lo que ya hay</label>
+        <select id="imp-modo" name="modo">
+          <option value="anadir">Añadir (conserva lo registrado en la app)</option>
+          <option value="reemplazar">Reemplazar todos los gastos de tarjeta</option>
+        </select>
+      </div>
+      <p class="pista">Si vuelves a importar el mismo archivo no se duplica nada:
+        cada consumo se reconoce por su contenido.</p>`,
+    aceptar: 'Importar',
+    alEnviar(d) {
+      aplicarImportacion(conv, d.modo);
+      brindis(`Importados ${r.gastos} consumos · ${money(r.total)}`);
+      alTerminar?.();
+    },
+  });
+}
+
+/** Vuelca las entidades convertidas en la base. */
+function aplicarImportacion(conv, modo) {
+  if (modo === 'reemplazar') {
+    const ids = new Set(db.gastosTarjeta.map((g) => g.id));
+    db.gastosTarjeta = [];
+    db.cuotas = db.cuotas.filter((c) => !ids.has(c.gasto_id));
+  }
+
+  const fusionar = (coleccion, filas) => {
+    const clave = CLAVES[coleccion];
+    const indice = new Map(db[coleccion].map((f) => [clave(f), f]));
+    for (const fila of filas) {
+      const k = clave(fila);
+      const previo = indice.get(k);
+      if (previo) Object.assign(previo, fila, { _ts: Date.now() });
+      else {
+        const nueva = tocar({ ...fila });
+        db[coleccion].push(nueva);
+        indice.set(k, nueva);
+      }
+    }
+  };
+
+  fusionar('gastosTarjeta', conv.gastosTarjeta);
+  fusionar('cuotas', conv.cuotas);
+  if (conv.ingresos.length) fusionar('ingresos', conv.ingresos);
+
+  // Categorías que el libro trae y la app todavía no conoce.
+  for (const nombre of conv.categorias) {
+    if (!db.categorias.some((c) => c.nombre === nombre)) {
+      db.categorias.push({
+        nombre, grupo: 'Otros', tipo: 'Gasto', presupuesto: 0, activa: 'Si',
+      });
+    }
+  }
+  guardar();
 }
 
 // --- Respaldo JSON -----------------------------------------------------------
@@ -5251,16 +5851,19 @@ function render(raiz) {
     <section class="tarjeta">
       <header><h2>Excel</h2><span class="pista">Importar y exportar la base</span></header>
       <p class="pista" style="margin:0 0 10px">
-        La app guarda todo en este dispositivo. El Excel sirve para cargar datos
-        y para llevarte un respaldo o un reporte cuando quieras.
+        Puedes cargar tu <strong>libro de tarjetas de siempre</strong> —el de las
+        hojas por banco con las columnas de mes— y la app lo convierte en gastos
+        y cuotas. También acepta su propia base exportada.
       </p>
       <div class="filtros">
         <button class="btn primario" id="btn-exp-xlsx">⬇ Exportar a Excel</button>
         <button class="btn" id="btn-imp-xlsx">⬆ Importar desde Excel</button>
       </div>
       <div class="aviso"><span class="icono">ℹ</span>
-        <span>Al importar se reemplazan los datos de la app. Las hojas deben mantener
-        los nombres y encabezados de <code>Finanzas_DB.xlsx</code>.</span></div>
+        <span>Antes de aplicar nada verás cuántos consumos trae y por cuánto,
+        y podrás elegir entre añadirlos o reemplazar lo que ya hay. Volver a
+        importar el mismo archivo no duplica: cada consumo se reconoce por su
+        contenido.</span></div>
     </section>
 
     <section class="tarjeta">
