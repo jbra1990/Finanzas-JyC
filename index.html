@@ -800,6 +800,35 @@ td.cero { color: var(--tinta-3); }
   letter-spacing: -0.02em;
   white-space: nowrap;
 }
+.lista .monto .pie {
+  display: block;
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: 0;
+  color: var(--tinta-3);
+  text-align: right;
+}
+
+/* Filas de tres líneas: el detalle se envuelve en vez de cortarse con puntos
+   suspensivos, que es justo donde estaban la categoría y el número de cuota. */
+.lista li.detallada .titulo,
+.lista li.detallada .meta { white-space: normal; }
+
+/* Cifras con rótulo dentro de una fila: «Cuota $28,90 · Total $346,80». */
+.lista .cifras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 14px;
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--tinta-3);
+}
+.lista .cifras strong {
+  color: var(--tinta);
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
 .lista .monto.neg { color: var(--critico); }
 .lista .monto.pos { color: var(--ok-texto); }
 
@@ -5705,21 +5734,32 @@ function sumaPorTipo(tarjetaId, mes, usuario, tipo) {
 function listaDiferidos(tarjetaId, usuario) {
   const filas = diferidosVigentes()
     .filter((d) => d.gasto.tarjeta === tarjetaId)
-    .filter((d) => usuario === 'ambos' || d.gasto.usuario === usuario);
+    .filter((d) => usuario === 'ambos' || d.gasto.usuario === usuario)
+    // De la compra más reciente a la más antigua. `diferidosVigentes` los
+    // devuelve ordenados por lo que falta por pagar, que sirve para otras
+    // cosas pero aquí no dice nada: lo que se busca es «qué compré último».
+    .sort((a, b) => String(b.gasto.fecha).localeCompare(String(a.gasto.fecha)));
 
   if (!filas.length) return '<p class="vacio">No hay diferidos con cuotas pendientes.</p>';
 
-  return `<ul class="lista">${filas.map((d) => `
-    <li>
+  return `<ul class="lista">${filas.map((d) => {
+    const pagadas = d.gasto.cuotas - d.cuotasRestantes;
+    return `
+    <li class="detallada">
       <div class="principal">
         <div class="titulo">${esc(d.gasto.detalle)}
           <span class="chip ${esc(d.gasto.usuario.toLowerCase())}">${esc(d.gasto.usuario)}</span></div>
-        <div class="meta">${esc(d.gasto.categoria)} ·
-          ${d.cuotasRestantes} de ${d.gasto.cuotas} cuotas ·
-          próxima ${esc(nombreMes(d.proxima.mes, true))} de ${money(d.proxima.monto)}</div>
+        <div class="meta">${esc(d.gasto.fecha)} · ${esc(d.gasto.categoria)} ·
+          cuota ${pagadas + 1} de ${d.gasto.cuotas}</div>
+        <div class="cifras">
+          <span>Cuota <strong>${money(d.proxima.monto)}</strong></span>
+          <span>Total <strong>${money(d.gasto.monto_total)}</strong></span>
+          <span>Próxima <strong>${esc(nombreMes(d.proxima.mes, true))}</strong></span>
+        </div>
       </div>
-      <div class="monto neg">${money(d.restante)}</div>
-    </li>`).join('')}</ul>
+      <div class="monto neg">${money(d.restante)}<span class="pie">por pagar</span></div>
+    </li>`;
+  }).join('')}</ul>
     <div class="aviso"><span class="icono">Σ</span>
       <span>Falta por pagar <strong>${money(filas.reduce((s, d) => s + d.restante, 0))}</strong>
       en ${filas.length} ${filas.length === 1 ? 'compra diferida' : 'compras diferidas'}.</span></div>`;
