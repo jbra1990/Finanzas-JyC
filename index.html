@@ -1079,6 +1079,16 @@ dialog .modal-pie {
 .estado-sync[data-estado="error"] { background: var(--critico); }
 @keyframes latir { 50% { opacity: 0.3; } }
 
+/*
+ * `hidden` tiene que ganar siempre. Su regla por defecto es `display:none`,
+ * pero cualquier clase que fije un `display` la pisa por especificidad: los
+ * campos de formulario son `.campo { display:flex }`, así que ocultarlos con
+ * `hidden` no hacía nada. Se veía en el gasto con tarjeta: al elegir
+ * «Corriente» seguía a la vista el número de cuotas, que exige un mínimo de 2
+ * y dejaba el formulario sin poder enviarse.
+ */
+[hidden] { display: none !important; }
+
 .oculto { display: none !important; }
 .solo-lectura { color: var(--tinta-3); }
 .pista { color: var(--tinta-3); font-size: 12.5px; }
@@ -1129,7 +1139,7 @@ dialog .modal-pie {
 
 <script>
 const M = {};
-window.__SEMILLA__ = {"version":2,"config":{"version_esquema":"2","moneda":"USD","mes_inicio_historico":"2025-05","usuarios":"J,C","interes_diferido_por_defecto":"0","base_anual_polizas":"360","retencion_fuente_polizas":"0.02"},"categorias":[{"nombre":"Aperitivos","grupo":"Hogar","tipo":"Gasto","presupuesto":16.0,"activa":"Si"},{"nombre":"Auto","grupo":"Transporte","tipo":"Gasto","presupuesto":25.0,"activa":"Si"},{"nombre":"Casa","grupo":"Hogar","tipo":"Gasto","presupuesto":6.0,"activa":"Si"},{"nombre":"Combustible","grupo":"Transporte","tipo":"Gasto","presupuesto":76.0,"activa":"Si"},{"nombre":"Digital","grupo":"Ocio","tipo":"Gasto","presupuesto":2.0,"activa":"Si"},{"nombre":"Electrodomesticos","grupo":"Hogar","tipo":"Gasto","presupuesto":17.0,"activa":"Si"},{"nombre":"Entretenimineto","grupo":"Ocio","tipo":"Gasto","presupuesto":7.0,"activa":"Si"},{"nombre":"Farmacia","grupo":"Salud","tipo":"Gasto","presupuesto":52.0,"activa":"Si"},{"nombre":"Gimnasio","grupo":"Salud","tipo":"Gasto","presupuesto":3.0,"activa":"Si"},{"nombre":"Higiene y cuidado","grupo":"Hogar","tipo":"Gasto","presupuesto":33.0,"activa":"Si"},{"nombre":"Intereses bancarios","grupo":"Financiero","tipo":"Gasto","presupuesto":15.0,"activa":"Si"},{"nombre":"Juguetes","grupo":"Ocio","tipo":"Gasto","presupuesto":2.0,"activa":"Si"},{"nombre":"Mantenimiento","grupo":"Transporte","tipo":"Gasto","presupuesto":109.0,"activa":"Si"},{"nombre":"Mascotas","grupo":"Mascotas","tipo":"Gasto","presupuesto":19.0,"activa":"Si"},{"nombre":"Regalos","grupo":"Ocio","tipo":"Gasto","presupuesto":16.0,"activa":"Si"},{"nombre":"Repuestos","grupo":"Transporte","tipo":"Gasto","presupuesto":37.0,"activa":"Si"},{"nombre":"Restaurantes","grupo":"Hogar","tipo":"Gasto","presupuesto":104.0,"activa":"Si"},{"nombre":"Ropa","grupo":"Ocio","tipo":"Gasto","presupuesto":43.0,"activa":"Si"},{"nombre":"Salud","grupo":"Salud","tipo":"Gasto","presupuesto":12.0,"activa":"Si"},{"nombre":"Seguro Tarjeta","grupo":"Financiero","tipo":"Gasto","presupuesto":3.0,"activa":"Si"},{"nombre":"Streaming","grupo":"Ocio","tipo":"Gasto","presupuesto":34.0,"activa":"Si"},{"nombre":"Suplementos","grupo":"Salud","tipo":"Gasto","presupuesto":2.0,"activa":"Si"},{"nombre":"Tramites entidades","grupo":"Financiero","tipo":"Gasto","presupuesto":7.0,"activa":"Si"},{"nombre":"Veterinario","grupo":"Mascotas","tipo":"Gasto","presupuesto":0.0,"activa":"Si"},{"nombre":"Viajes","grupo":"Ocio","tipo":"Gasto","presupuesto":123.0,"activa":"Si"},{"nombre":"Viveres","grupo":"Hogar","tipo":"Gasto","presupuesto":380.0,"activa":"Si"},{"nombre":"→ Ingresa tu presupuesto en la columna azul \"Presupuesto mensual\". El promedio usa los meses transcurridos desde may-25.","grupo":"Otros","tipo":"Gasto","presupuesto":0.0,"activa":"Si"},{"nombre":"Sueldo","grupo":"Ingresos","tipo":"Ingreso","presupuesto":0.0,"activa":"Si"},{"nombre":"Otros ingresos","grupo":"Ingresos","tipo":"Ingreso","presupuesto":0.0,"activa":"Si"},{"nombre":"Rendimientos","grupo":"Ingresos","tipo":"Ingreso","presupuesto":0.0,"activa":"Si"}],"cuentas":[{"id":"PACIFICO-1","nombre":"Banco del Pacífico 1","tipo":"Banco","banco":"Pacífico","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si"},{"id":"PACIFICO-2","nombre":"Banco del Pacífico 2","tipo":"Banco","banco":"Pacífico","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si"},{"id":"BCO-PICH","nombre":"Banco Pichincha","tipo":"Banco","banco":"Pichincha","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si"},{"id":"EFECTIVO","nombre":"Efectivo","tipo":"Efectivo","banco":"","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si"},{"id":"TC-PICH","nombre":"TC Pichincha","tipo":"Tarjeta","banco":"Pichincha","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"3","dia_pago":"","activa":"Si"},{"id":"TC-BOLI","nombre":"TC Bolivariano","tipo":"Tarjeta","banco":"Bolivariano","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"fin","dia_pago":"","activa":"Si"},{"id":"TC-PICH-A","nombre":"TC Pichincha Adicional","tipo":"Tarjeta","banco":"Pichincha","saldo_inicial":0,"cupo":0,"usuarios":"J","dia_corte":"3","dia_pago":"","activa":"Si"}],"ingresos":[],"gastosTarjeta":[],"cuotas":[],"gastosEfectivo":[],"inversiones":[],"movimientos":[],"vehiculoGastos":[],"vehiculoRecorrido":[]};
+window.__SEMILLA__ = {"version":2,"config":{"version_esquema":"2","moneda":"USD","mes_inicio_historico":"2025-05","usuarios":"J,C","interes_diferido_por_defecto":"0","base_anual_polizas":"360","retencion_fuente_polizas":"0.02"},"categorias":[{"nombre":"Aperitivos","grupo":"Hogar","tipo":"Gasto","presupuesto":16.0,"activa":"Si"},{"nombre":"Auto","grupo":"Transporte","tipo":"Gasto","presupuesto":25.0,"activa":"Si"},{"nombre":"Casa","grupo":"Hogar","tipo":"Gasto","presupuesto":6.0,"activa":"Si"},{"nombre":"Combustible","grupo":"Transporte","tipo":"Gasto","presupuesto":76.0,"activa":"Si"},{"nombre":"Digital","grupo":"Ocio","tipo":"Gasto","presupuesto":2.0,"activa":"Si"},{"nombre":"Electrodomesticos","grupo":"Hogar","tipo":"Gasto","presupuesto":17.0,"activa":"Si"},{"nombre":"Entretenimineto","grupo":"Ocio","tipo":"Gasto","presupuesto":7.0,"activa":"Si"},{"nombre":"Farmacia","grupo":"Salud","tipo":"Gasto","presupuesto":52.0,"activa":"Si"},{"nombre":"Gimnasio","grupo":"Salud","tipo":"Gasto","presupuesto":3.0,"activa":"Si"},{"nombre":"Higiene y cuidado","grupo":"Hogar","tipo":"Gasto","presupuesto":33.0,"activa":"Si"},{"nombre":"Intereses bancarios","grupo":"Financiero","tipo":"Gasto","presupuesto":15.0,"activa":"Si"},{"nombre":"Juguetes","grupo":"Ocio","tipo":"Gasto","presupuesto":2.0,"activa":"Si"},{"nombre":"Mantenimiento","grupo":"Transporte","tipo":"Gasto","presupuesto":109.0,"activa":"Si"},{"nombre":"Mascotas","grupo":"Mascotas","tipo":"Gasto","presupuesto":19.0,"activa":"Si"},{"nombre":"Regalos","grupo":"Ocio","tipo":"Gasto","presupuesto":16.0,"activa":"Si"},{"nombre":"Repuestos","grupo":"Transporte","tipo":"Gasto","presupuesto":37.0,"activa":"Si"},{"nombre":"Restaurantes","grupo":"Hogar","tipo":"Gasto","presupuesto":104.0,"activa":"Si"},{"nombre":"Ropa","grupo":"Ocio","tipo":"Gasto","presupuesto":43.0,"activa":"Si"},{"nombre":"Salud","grupo":"Salud","tipo":"Gasto","presupuesto":12.0,"activa":"Si"},{"nombre":"Seguro Tarjeta","grupo":"Financiero","tipo":"Gasto","presupuesto":3.0,"activa":"Si"},{"nombre":"Streaming","grupo":"Ocio","tipo":"Gasto","presupuesto":34.0,"activa":"Si"},{"nombre":"Suplementos","grupo":"Salud","tipo":"Gasto","presupuesto":2.0,"activa":"Si"},{"nombre":"Tramites entidades","grupo":"Financiero","tipo":"Gasto","presupuesto":7.0,"activa":"Si"},{"nombre":"Veterinario","grupo":"Mascotas","tipo":"Gasto","presupuesto":0.0,"activa":"Si"},{"nombre":"Viajes","grupo":"Ocio","tipo":"Gasto","presupuesto":123.0,"activa":"Si"},{"nombre":"Viveres","grupo":"Hogar","tipo":"Gasto","presupuesto":380.0,"activa":"Si"},{"nombre":"Sueldo","grupo":"Ingresos","tipo":"Ingreso","presupuesto":0.0,"activa":"Si"},{"nombre":"Otros ingresos","grupo":"Ingresos","tipo":"Ingreso","presupuesto":0.0,"activa":"Si"},{"nombre":"Rendimientos","grupo":"Ingresos","tipo":"Ingreso","presupuesto":0.0,"activa":"Si"}],"cuentas":[{"id":"PACIFICO-1","nombre":"Banco del Pacífico 1","tipo":"Banco","banco":"Pacífico","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si"},{"id":"PACIFICO-2","nombre":"Banco del Pacífico 2","tipo":"Banco","banco":"Pacífico","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si"},{"id":"BCO-PICH","nombre":"Banco Pichincha","tipo":"Banco","banco":"Pichincha","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si"},{"id":"EFECTIVO","nombre":"Efectivo","tipo":"Efectivo","banco":"","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si"},{"id":"TC-PICH","nombre":"TC Pichincha","tipo":"Tarjeta","banco":"Pichincha","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"3","dia_pago":"","activa":"Si"},{"id":"TC-BOLI","nombre":"TC Bolivariano","tipo":"Tarjeta","banco":"Bolivariano","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"fin","dia_pago":"","activa":"Si"},{"id":"TC-PICH-A","nombre":"TC Pichincha Adicional","tipo":"Tarjeta","banco":"Pichincha","saldo_inicial":0,"cupo":0,"usuarios":"J","dia_corte":"3","dia_pago":"","activa":"Si"}],"ingresos":[],"gastosTarjeta":[],"cuotas":[],"gastosEfectivo":[],"inversiones":[],"movimientos":[],"vehiculoGastos":[],"vehiculoRecorrido":[]};
 const __fetchOriginal = window.fetch;
 window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
@@ -1316,6 +1326,7 @@ function adoptar(datos) {
  * cada carga y es idempotente.
  */
 function migrarEsquema() {
+  limpiarCategorias();
   if (Number(db.config.version_esquema) >= 2) return;
 
   // v1 → v2: las cuentas de banco pasan a ser Pacífico 1, Pacífico 2 y
@@ -1346,6 +1357,27 @@ function migrarEsquema() {
 
   db.config.version_esquema = '2';
   db.version = 2;
+}
+
+/**
+ * La hoja de presupuesto del Excel termina con una línea de instrucciones
+ * («→ Ingresa tu presupuesto en la columna azul…») que se coló en el catálogo
+ * como si fuera una categoría más y aparecía en todos los desplegables. Se
+ * quita aquí, y no solo en el importador, porque ya está en bases guardadas.
+ * Solo se descarta si nadie la usa: una categoría con gastos detrás se
+ * respeta, por rara que parezca.
+ */
+function limpiarCategorias() {
+  const basura = (n) => !n || n.startsWith('→') || n.length > 44;
+  const enUso = new Set([
+    ...db.gastosTarjeta.map((g) => g.categoria),
+    ...db.gastosEfectivo.map((g) => g.categoria),
+    ...db.ingresos.map((i) => i.categoria),
+  ]);
+  // Sin `guardar()`: esto corre durante la carga, y escribir ahí dispararía el
+  // sync antes de tiempo. Al filtrarse en cada arranque, basta con dejarlo
+  // hecho en memoria; el primer cambio real lo persiste.
+  db.categorias = db.categorias.filter((c) => !basura(c.nombre) || enUso.has(c.nombre));
 }
 
 /**
@@ -4426,6 +4458,56 @@ function mesesSeleccionables() {
 const paraEditar = (n) => (n === undefined || n === null || n === ''
   ? '' : String(redondear(n)).replace('.', ','));
 
+// --- Categoría al vuelo ------------------------------------------------------
+
+/*
+ * La categoría que hace falta casi nunca está en la lista justo cuando se está
+ * apuntando el gasto, y salir a «Datos» a crearla obliga a abandonar lo que se
+ * estaba escribiendo. Con esto se crea desde el propio formulario.
+ */
+const NUEVA_CAT = '__nueva__';
+
+function campoCategoria(id, lista, valor) {
+  // Una categoría de un registro antiguo puede haberse borrado del catálogo:
+  // se añade a la lista para no cambiársela sin querer al corregirlo.
+  const items = valor && !lista.includes(valor) ? [valor, ...lista] : lista;
+  return `
+    <div class="campo"><label for="${id}">Categoría</label>
+      <select id="${id}" name="categoria" required>
+        ${opciones(items, valor)}
+        <option value="${NUEVA_CAT}">+ Nueva categoría…</option>
+      </select>
+      <input id="${id}-nueva" name="categoria_nueva" placeholder="Nombre de la nueva categoría"
+             maxlength="40" autocomplete="off" hidden disabled></div>`;
+}
+
+function conectarCategoria(form, id) {
+  const sel = $(`#${id}`, form);
+  const txt = $(`#${id}-nueva`, form);
+  const sincronizar = ({ enfocar } = {}) => {
+    const nueva = sel.value === NUEVA_CAT;
+    txt.hidden = !nueva;
+    txt.disabled = !nueva;
+    txt.required = nueva;
+    if (nueva && enfocar) txt.focus();
+  };
+  sel.addEventListener('change', () => sincronizar({ enfocar: true }));
+  sincronizar();
+}
+
+/** Nombre de categoría a guardar; la da de alta si es nueva. */
+function categoriaElegida(d, tipo = 'Gasto') {
+  if (d.categoria !== NUEVA_CAT) return d.categoria;
+  const nombre = (d.categoria_nueva || '').trim();
+  if (!nombre) return d.categoria;
+  if (!db.categorias.some((c) => c.nombre.toLowerCase() === nombre.toLowerCase())) {
+    db.categorias.push({
+      nombre, grupo: 'Otros', tipo, presupuesto: 0, activa: 'Si',
+    });
+  }
+  return nombre;
+}
+
 // --- Gasto con tarjeta -------------------------------------------------------
 
 function formGastoTarjeta(alTerminar, existente = null) {
@@ -4453,10 +4535,7 @@ function formGastoTarjeta(alTerminar, existente = null) {
       <div class="campo"><label for="f-proposito">Propósito</label>
         <input id="f-proposito" name="proposito" placeholder="VIVERES"
                value="${esc(g?.proposito || '')}"></div>
-      <div class="campo"><label for="f-categoria">Categoría</label>
-        <select id="f-categoria" name="categoria" required>
-          ${opciones(categoriasGasto(), g?.categoria || 'Viveres')}
-        </select></div>
+      ${campoCategoria('f-categoria', categoriasGasto(), g?.categoria || 'Viveres')}
     </div>
     <div class="filtros">
       <div class="campo"><label for="f-tipo">Tipo de pago</label>
@@ -4514,6 +4593,15 @@ function formGastoTarjeta(alTerminar, existente = null) {
         const enCuotas = tipo.value !== 'Corriente';
         cajaCuotas.hidden = !enCuotas;
         cajaTasa.hidden = tipo.value !== 'Diferido';
+        /*
+         * Además de ocultarlos hay que desactivarlos. Un campo oculto sigue
+         * validándose: si quedaba un «1» en las cuotas y se pasaba a
+         * «Corriente», el mínimo de 2 daba el formulario por inválido y el
+         * botón de guardar no hacía nada, sin decir por qué. Desactivado, ni
+         * se valida ni se envía, y `alEnviar` ya pone 1 cuota para Corriente.
+         */
+        $('#f-cuotas', form).disabled = !enCuotas;
+        $('#f-tasa', form).disabled = tipo.value !== 'Diferido';
         ajustarMes();
 
         const monto = val(form, '#f-monto');
@@ -4537,10 +4625,12 @@ function formGastoTarjeta(alTerminar, existente = null) {
           <div class="cuotas-lista">${chips}</div>`;
       };
 
+      conectarCategoria(form, 'f-categoria');
       ['change', 'input'].forEach((ev) => form.addEventListener(ev, refrescar));
       refrescar();
     },
     alEnviar(d) {
+      const categoria = categoriaElegida(d);
       const enCuotas = d.tipo !== 'Corriente';
       const n = enCuotas ? Math.max(2, Number(d.cuotas) || 2) : 1;
       const tasa = d.tipo === 'Diferido' ? aNumero(d.tasa_interes) : 0;
@@ -4557,7 +4647,7 @@ function formGastoTarjeta(alTerminar, existente = null) {
         usuario: d.usuario,
         detalle: d.detalle.trim(),
         proposito: (d.proposito || '').trim(),
-        categoria: d.categoria,
+        categoria,
         tipo: d.tipo,
         cuotas: n,
         monto_total: redondear(aNumero(d.monto_total)),
@@ -4584,7 +4674,7 @@ function formGastoTarjeta(alTerminar, existente = null) {
         monto: c.monto,
         tarjeta: d.tarjeta,
         usuario: d.usuario,
-        categoria: d.categoria,
+        categoria,
         pagado: pagados.has(c.mes) ? 'Si' : '',
       })));
       guardar();
@@ -4623,15 +4713,14 @@ function formGastoEfectivo(alTerminar, existente = null) {
     <div class="filtros">
       <div class="campo"><label for="e-proposito">Propósito</label>
         <input id="e-proposito" name="proposito" value="${esc(g?.proposito || '')}"></div>
-      <div class="campo"><label for="e-categoria">Categoría</label>
-        <select id="e-categoria" name="categoria" required>
-          ${opciones(categoriasGasto(), g?.categoria)}</select></div>
+      ${campoCategoria('e-categoria', categoriasGasto(), g?.categoria)}
     </div>`;
 
   modal({
     titulo: g ? 'Corregir gasto en efectivo' : 'Gasto en efectivo / débito',
     cuerpo,
     aceptar: g ? 'Guardar cambios' : 'Registrar gasto',
+    alAbrir(form) { conectarCategoria(form, 'e-categoria'); },
     alEnviar(d) {
       upsert('gastosEfectivo', {
         id: g?.id || nuevoId('gastosEfectivo'),
@@ -4639,7 +4728,7 @@ function formGastoEfectivo(alTerminar, existente = null) {
         usuario: d.usuario,
         detalle: d.detalle.trim(),
         proposito: (d.proposito || '').trim(),
-        categoria: d.categoria,
+        categoria: categoriaElegida(d),
         monto: redondear(aNumero(d.monto)),
         cuenta: d.cuenta,
         notas: g?.notas || '',
@@ -4665,9 +4754,7 @@ function formIngreso(alTerminar, existente = null) {
     <div class="filtros">
       <div class="campo"><label for="i-concepto">Concepto</label>
         <input id="i-concepto" name="concepto" required value="${esc(g?.concepto || 'Sueldo')}"></div>
-      <div class="campo"><label for="i-categoria">Categoría</label>
-        <select id="i-categoria" name="categoria">
-          ${opciones(categoriasIngreso(), g?.categoria || 'Sueldo')}</select></div>
+      ${campoCategoria('i-categoria', categoriasIngreso(), g?.categoria || 'Sueldo')}
     </div>
     <div class="filtros">
       ${campoMonto('i-bruto', 'bruto', {
@@ -4693,6 +4780,7 @@ function formIngreso(alTerminar, existente = null) {
         const neto = redondear(val(form, '#i-bruto') - val(form, '#i-desc'));
         preview.innerHTML = `Neto que entra a la cuenta: <strong>${money(neto)}</strong>`;
       };
+      conectarCategoria(form, 'i-categoria');
       form.addEventListener('input', refrescar);
       refrescar();
     },
@@ -4704,7 +4792,7 @@ function formIngreso(alTerminar, existente = null) {
         mes: claveMes(d.fecha),
         usuario: d.usuario,
         concepto: d.concepto.trim(),
-        categoria: d.categoria,
+        categoria: categoriaElegida(d, 'Ingreso'),
         bruto: redondear(aNumero(d.bruto)),
         descuentos: redondear(aNumero(d.descuentos)),
         neto,
