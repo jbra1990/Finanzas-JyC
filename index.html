@@ -4681,7 +4681,10 @@ function formGastoTarjeta(alTerminar, existente = null) {
       brindis(g
         ? `Gasto corregido · ${money(plan.totalPagado)}`
         : `Gasto registrado · ${money(plan.totalPagado)} en ${n} ${n === 1 ? 'pago' : 'cuotas'}`);
-      alTerminar?.();
+      // Se devuelve el gasto guardado para que la vista pueda ir a buscarlo:
+      // con el corte de la tarjeta, una compra de hoy puede caer en el estado
+      // del mes siguiente y quedaría fuera de lo que se está mirando.
+      alTerminar?.(fila);
     },
   });
 }
@@ -5664,6 +5667,29 @@ const {esc, $, $$, segmentado, confirmar, opciones} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta} = M["forms"];
 const estado = { tarjeta: null, usuario: 'ambos', mes: null };
 
+/**
+ * Deja la vista puesta donde se pueda ver el gasto que se acaba de guardar.
+ *
+ * Hace falta por el corte de la tarjeta: Pichincha corta el día 3, así que una
+ * compra de hoy entra en el estado del mes siguiente. Sin esto, se registraba
+ * el gasto, la pantalla seguía en el mes en curso y parecía que no se había
+ * guardado. También se ajusta la tarjeta y se quita el filtro de usuario si
+ * dejaría el gasto fuera.
+ */
+function enfocarGasto(gasto) {
+  irAlGasto(gasto);
+}
+
+function irAlGasto(gasto) {
+  if (!gasto) return;
+  const cuota = db.cuotas
+    .filter((c) => c.gasto_id === gasto.id)
+    .sort((a, b) => String(a.mes).localeCompare(String(b.mes)))[0];
+  estado.tarjeta = gasto.tarjeta;
+  estado.mes = cuota?.mes || gasto.mes_inicio || estado.mes;
+  if (estado.usuario !== 'ambos' && estado.usuario !== gasto.usuario) estado.usuario = 'ambos';
+}
+
 function render(raiz) {
   const lista = tarjetas();
   if (!lista.length) {
@@ -5765,7 +5791,10 @@ function render(raiz) {
     estado.usuario, (v) => { estado.usuario = v; render(raiz); },
   ));
   $('#sel-mes', raiz).addEventListener('change', (e) => { estado.mes = e.target.value; render(raiz); });
-  $('#btn-nuevo', raiz).addEventListener('click', () => formGastoTarjeta(() => render(raiz)));
+  $('#btn-nuevo', raiz).addEventListener('click', () => formGastoTarjeta((nuevo) => {
+    irAlGasto(nuevo);
+    render(raiz);
+  }));
   $('#btn-pagar', raiz).addEventListener('click', () => {
     formPagoTarjeta(t.id, mes, pagoTotal, () => render(raiz));
   });
@@ -5796,7 +5825,9 @@ function render(raiz) {
   $$('[data-corregir]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => {
       const gasto = db.gastosTarjeta.find((g) => g.id === btn.dataset.corregir);
-      if (gasto) formGastoTarjeta(() => render(raiz), gasto);
+      if (gasto) {
+        formGastoTarjeta((editado) => { irAlGasto(editado); render(raiz); }, gasto);
+      }
     });
   });
 
@@ -5859,7 +5890,15 @@ function listaMovimientos(tarjetaId, mes, usuario) {
     .filter((c) => usuario === 'ambos' || c.usuario === usuario)
     .map((c) => ({ cuota: c, gasto: db.gastosTarjeta.find((g) => g.id === c.gasto_id) }))
     .filter((x) => x.gasto)
-    .sort((a, b) => String(b.gasto.fecha).localeCompare(String(a.gasto.fecha)));
+    /*
+     * Del más reciente al más antiguo por fecha de compra y, a igualdad de
+     * fecha, lo último apuntado primero. El desempate importa: casi todo lo
+     * que se registra es del mismo día, y sin él un gasto recién guardado
+     * aparecía enterrado entre los que ya estaban en esa fecha.
+     */
+    .sort((a, b) => String(b.gasto.fecha).localeCompare(String(a.gasto.fecha))
+      || (b.gasto._ts || 0) - (a.gasto._ts || 0)
+      || String(b.gasto.id).localeCompare(String(a.gasto.id)));
 
   if (!filas.length) return '<p class="vacio">Sin movimientos en este mes.</p>';
 
@@ -5891,7 +5930,7 @@ function listaMovimientos(tarjetaId, mes, usuario) {
       total <strong>${money(total)}</strong>.</span></div>`;
 }
 
-return { render };
+return { enfocarGasto, render };
 })();
 
 M["views/inversiones"] = (function () {
@@ -7127,10 +7166,20 @@ function irA(id) {
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
-/** Menú del botón flotante: qué quiero registrar. */
+/**
+ * Menú del botón flotante: qué quiero registrar.
+ *
+ * El gasto con tarjeta lleva a la vista de Tarjetas, colocada en la tarjeta y
+ * el mes donde acaba de caer. Por el corte —Pichincha corta el día 3— una
+ * compra de hoy entra en el estado del mes siguiente, así que quedarse donde
+ * se estaba daba la sensación de que no se había guardado nada.
+ */
 function menuRegistro() {
   const acciones = [
-    ['Gasto con tarjeta', formGastoTarjeta],
+    ['Gasto con tarjeta', formGastoTarjeta, (nuevo) => {
+      vistaTarjetas.enfocarGasto(nuevo);
+      irA('tarjetas');
+    }],
     ['Gasto en efectivo', formGastoEfectivo],
     ['Ingreso', formIngreso],
     ['Inversión / póliza', formInversion],
@@ -7150,7 +7199,11 @@ function menuRegistro() {
     b.addEventListener('click', () => {
       dlg.close();
       dlg.remove();
-      acciones[Number(b.dataset.accion)][1](() => irA(vistaActual));
+      const [, abrir, alGuardar] = acciones[Number(b.dataset.accion)];
+      abrir((guardado) => {
+        if (alGuardar) alGuardar(guardado);
+        else irA(vistaActual);
+      });
     });
   });
 }
