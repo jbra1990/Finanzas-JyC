@@ -809,6 +809,20 @@ td.cero { color: var(--tinta-3); }
   text-align: right;
 }
 
+/* Casilla de comprobación contra el estado de cuenta. Grande a propósito: se
+   usa con el papel del banco al lado, tachando uno por uno con el pulgar. */
+.lista .check {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px; height: 34px;
+  margin: -4px 0;
+  cursor: pointer;
+}
+.lista .check input { width: 22px; height: 22px; accent-color: var(--acento); }
+.lista li.comprobable:has(input:checked) { opacity: 0.55; }
+.lista li.comprobable:has(input:checked) .titulo { text-decoration: line-through; }
+
 /* Filas de tres líneas: el detalle se envuelve en vez de cortarse con puntos
    suspensivos, que es justo donde estaban la categoría y el número de cuota. */
 .lista li.detallada .titulo,
@@ -1895,6 +1909,43 @@ function pagoDelMes(tarjetaId, mes, usuario = 'ambos') {
   return redondear(total);
 }
 
+// --- Comprobación contra el estado de cuenta ---------------------------------
+
+/*
+ * Marcar un consumo como comprobado es distinto de marcarlo como pagado: lo
+ * primero dice «esto también sale en el estado de cuenta del banco, y por el
+ * mismo valor»; lo segundo, «ya lo pagué». Por eso viven en campos separados.
+ */
+
+/** Clave de configuración donde se guarda el total del estado de cuenta. */
+const claveEstadoCuenta = (tarjetaId, mes) => `estado_${tarjetaId}_${mes}`;
+
+/** Resumen de la comprobación de un mes: cuántas cuadran y cuánto falta. */
+function comprobacionDelMes(tarjetaId, mes, usuario = 'ambos') {
+  const cuotas = db.cuotas.filter((c) => c.tarjeta === tarjetaId && c.mes === mes
+    && (usuario === 'ambos' || c.usuario === usuario));
+  const marcadas = cuotas.filter((c) => c.conciliado === 'Si');
+  const total = redondear(cuotas.reduce((s, c) => s + c.monto, 0));
+  const comprobado = redondear(marcadas.reduce((s, c) => s + c.monto, 0));
+
+  const guardado = db.config[claveEstadoCuenta(tarjetaId, mes)];
+  const declarado = guardado === undefined || guardado === '' ? null : Number(guardado);
+
+  return {
+    cuotas: cuotas.length,
+    marcadas: marcadas.length,
+    total,
+    comprobado,
+    pendiente: redondear(total - comprobado),
+    declarado,
+    // Lo que el banco dice menos lo que tiene la app. Positivo = falta algo
+    // por registrar; negativo = hay algo de más.
+    diferencia: declarado === null ? null : redondear(declarado - total),
+    cuadra: declarado !== null && Math.abs(redondear(declarado - total)) < 0.005,
+    completa: cuotas.length > 0 && marcadas.length === cuotas.length,
+  };
+}
+
 /** Cuotas de diferidos que siguen vivas, agrupadas por gasto. */
 function diferidosVigentes(mesRef = mesActual()) {
   const porGasto = new Map();
@@ -2111,7 +2162,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { acumuladoHistorico, añosDisponibles, calcularPoliza, claveMes, cuotaFrancesa, cuotaPendiente, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDelMes, patrimonioNeto, planificarCuotas, presupuestoVsReal, rangoMeses, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, totalAhorrado, totalInvertido, totalPorCategoria, totalPorUsuario };
+return { acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDelMes, patrimonioNeto, planificarCuotas, presupuestoVsReal, rangoMeses, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, totalAhorrado, totalInvertido, totalPorCategoria, totalPorUsuario };
 })();
 
 M["charts"] = (function () {
@@ -3588,7 +3639,7 @@ const ESQUEMA = [
     ['Gasto ID', 'gasto_id', 't'], ['N° cuota', 'n_cuota', 'n'],
     ['Mes', 'mes', 't'], ['Monto', 'monto', 'n'], ['Tarjeta', 'tarjeta', 't'],
     ['Usuario', 'usuario', 't'], ['Categoría', 'categoria', 't'],
-    ['Pagado', 'pagado', 't'],
+    ['Pagado', 'pagado', 't'], ['Comprobado', 'conciliado', 't'],
   ]],
   ['Gastos_Efectivo', 'gastosEfectivo', [
     ['ID', 'id', 't'], ['Fecha', 'fecha', 'f'], ['Usuario', 'usuario', 't'],
@@ -4522,7 +4573,7 @@ M["forms"] = (function () {
  */
 
 const {db, guardar, nuevoId, upsert, tocar, cuentasBancarias, tarjetas, categoriasGasto, categoriasIngreso, usuarios} = M["store"];
-const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha} = M["calc"];
+const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta} = M["calc"];
 const {modal, opciones, brindis, hoyISO, esc, $, aNumero, campoMonto} = M["ui"];
 const selUsuarios = (sel) => opciones(usuarios(), sel);
 const val = (form, sel) => aNumero($(sel, form).value);
@@ -5112,15 +5163,36 @@ function formPagoTarjeta(tarjetaId, mes, monto, alTerminar) {
       <select id="pt-cuenta" name="cuenta_origen" required>
         ${opciones(cuentas.map((c) => ({ valor: c.id, texto: c.nombre })))}
       </select></div>
-    <div class="previsualizacion">
-      Al confirmar, las cuotas de ${esc(nombreMes(mes))} quedan marcadas como pagadas
-      y ese monto se libera del cupo disponible.
-    </div>`;
+    <div class="previsualizacion" id="pt-preview"></div>`;
 
   modal({
     titulo: 'Registrar pago de tarjeta',
     cuerpo,
     aceptar: 'Confirmar pago',
+    alAbrir(form) {
+      /*
+       * El pago es una transferencia: el dinero sale de la cuenta y entra a la
+       * tarjeta. Se enseña el saldo antes y después para no tener que ir a
+       * mirarlo a otra pantalla antes de confirmar.
+       */
+      const preview = $('#pt-preview', form);
+      const refrescar = () => {
+        const id = $('#pt-cuenta', form).value;
+        const cuenta = cuentas.find((c) => c.id === id);
+        const monto = val(form, '#pt-monto');
+        const antes = saldoCuenta(id);
+        preview.innerHTML = `
+          <div>Sale de <strong>${esc(cuenta?.nombre || id)}</strong>
+            y entra a <strong>${esc(tarjeta?.nombre || tarjetaId)}</strong>,
+            como una transferencia.</div>
+          <div style="margin-top:6px">Saldo de la cuenta:
+            <strong>${money(antes)}</strong> → <strong>${money(redondear(antes - monto))}</strong></div>
+          <div style="margin-top:6px">Las cuotas de ${esc(nombreMes(mes))} quedan marcadas
+            como pagadas y ese monto se libera del cupo.</div>`;
+      };
+      ['change', 'input'].forEach((ev) => form.addEventListener(ev, refrescar));
+      refrescar();
+    },
     alEnviar(d) {
       db.cuotas.forEach((c) => {
         if (c.tarjeta === tarjetaId && c.mes === mes) tocar(Object.assign(c, { pagado: 'Si' }));
@@ -5751,12 +5823,53 @@ return { render };
 M["views/tarjetas"] = (function () {
 /** Vista «Tarjetas»: cupo, consumo del mes, diferidos vivos y movimientos. */
 
-const {db, tarjetas, eliminar} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha} = M["calc"];
+const {db, tarjetas, eliminar, guardar} = M["store"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta} = M["calc"];
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
-const {esc, $, $$, segmentado, confirmar, opciones} = M["ui"];
+const {esc, $, $$, segmentado, confirmar, opciones, aNumero} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta} = M["forms"];
-const estado = { tarjeta: null, usuario: 'ambos', mes: null };
+const estado = { tarjeta: null, usuario: 'ambos', mes: null, comprobando: false };
+
+/**
+ * Panel de comprobación contra el estado de cuenta del banco.
+ *
+ * La idea es tener el papel del banco al lado e ir tachando: cada consumo que
+ * también aparece ahí, y por el mismo valor, se marca. Al final tienen que
+ * cuadrar dos cosas —que no quede ninguno sin marcar y que el total de la app
+ * sea el mismo que el del estado— y solo entonces tiene sentido pagar.
+ */
+function bloqueComprobacion(t, mes, comp) {
+  const dif = comp.diferencia;
+  const estadoTexto = dif === null
+    ? 'Escribe el total que trae el estado de cuenta para compararlo.'
+    : comp.cuadra
+      ? `Cuadra: el estado de cuenta y la app dicen lo mismo, ${money(comp.total)}.`
+      : dif > 0
+        ? `Faltan ${money(dif)} por registrar en la app.`
+        : `Sobran ${money(-dif)} en la app: hay algo que el banco no cobró.`;
+
+  const clase = dif === null ? '' : comp.cuadra ? ' ok' : ' alerta';
+
+  return `
+    <div class="filtros" style="margin:0 0 10px">
+      <div class="campo"><label for="ec-total">Total del estado de cuenta</label>
+        <input id="ec-total" type="text" inputmode="decimal" placeholder="0,00"
+               value="${comp.declarado === null ? '' : String(comp.declarado).replace('.', ',')}"></div>
+      <div class="campo" style="flex:0 0 auto;justify-content:flex-end">
+        <button class="btn pequeno" id="btn-marcar-todo">
+          ${comp.completa ? 'Quitar marcas' : 'Marcar todos'}</button></div>
+    </div>
+    <div class="rejilla kpis">
+      <div class="kpi"><div class="etq">Comprobado</div>
+        <div class="valor" id="ec-comprobado">${money(comp.comprobado)}</div>
+        <div class="delta" id="ec-marcadas">${comp.marcadas} de ${comp.cuotas} movimientos</div></div>
+      <div class="kpi"><div class="etq">Sin comprobar</div>
+        <div class="valor" id="ec-pendiente">${money(comp.pendiente)}</div>
+        <div class="delta">Total del mes ${money(comp.total)}</div></div>
+    </div>
+    <div class="aviso${clase}" id="ec-estado"><span class="icono">${comp.cuadra ? '✓' : 'Σ'}</span>
+      <span class="crece">${esc(estadoTexto)}</span></div>`;
+}
 
 /**
  * Deja la vista puesta donde se pueda ver el gasto que se acaba de guardar:
@@ -5795,6 +5908,7 @@ function render(raiz) {
   const pagoTotal = pagoDelMes(t.id, mes, 'ambos');
   // El consumo del mes no se paga ese mes: vence con el corte de la tarjeta.
   const vence = fechaPagoMes(mes, t.id);
+  const comp = comprobacionDelMes(t.id, mes, estado.usuario);
 
   const opcMes = rangoMeses(sumarMeses(mesActual(), -18), sumarMeses(mesActual(), 12))
     .map((m) => ({ valor: m, texto: nombreMes(m) }));
@@ -5863,7 +5977,10 @@ function render(raiz) {
 
     <section class="tarjeta">
       <header><h2>Movimientos de ${esc(nombreMes(mes))}</h2>
-        <span class="pista">Lo que compone los ${money(pago)}</span></header>
+        <button class="btn pequeno${estado.comprobando ? ' primario' : ''}" id="btn-comprobar">
+          ${estado.comprobando ? 'Terminar' : '✓ Comprobar'}</button></header>
+      ${estado.comprobando ? bloqueComprobacion(t, mes, comp) : `
+        <p class="pista" style="margin:-4px 0 10px">Lo que compone los ${money(pago)}.</p>`}
       <div id="movs"></div>
     </section>`;
 
@@ -5889,6 +6006,43 @@ function render(raiz) {
   $('#btn-pagar', raiz).addEventListener('click', () => {
     formPagoTarjeta(t.id, mes, pagoTotal, () => render(raiz));
   });
+  $('#btn-comprobar', raiz).addEventListener('click', () => {
+    estado.comprobando = !estado.comprobando;
+    render(raiz);
+  });
+
+  /** Repinta las cifras del bloque de comprobación sin rehacer la vista. */
+  const refrescarResumen = () => {
+    if (!estado.comprobando) return;
+    const n = comprobacionDelMes(t.id, mes, estado.usuario);
+    $('#ec-comprobado', raiz).textContent = money(n.comprobado);
+    $('#ec-marcadas', raiz).textContent = `${n.marcadas} de ${n.cuotas} movimientos`;
+    $('#ec-pendiente', raiz).textContent = money(n.pendiente);
+    $('#btn-marcar-todo', raiz).textContent = n.completa ? 'Quitar marcas' : 'Marcar todos';
+  };
+
+  if (estado.comprobando) {
+    const cuotasDelMes = () => db.cuotas.filter((c) => c.tarjeta === t.id && c.mes === mes
+      && (estado.usuario === 'ambos' || c.usuario === estado.usuario));
+
+    // El total del estado se guarda al salir del campo, no en cada tecla: si
+    // no, cada dígito repintaría la pantalla y perdería el foco.
+    const campoTotal = $('#ec-total', raiz);
+    campoTotal.addEventListener('change', () => {
+      const texto = campoTotal.value.trim();
+      db.config[claveEstadoCuenta(t.id, mes)] = texto === '' ? '' : String(aNumero(texto));
+      guardar();
+      render(raiz);
+    });
+
+    $('#btn-marcar-todo', raiz).addEventListener('click', () => {
+      const marca = comp.completa ? '' : 'Si';
+      cuotasDelMes().forEach((c) => { c.conciliado = marca; c._ts = Date.now(); });
+      guardar();
+      render(raiz);
+    });
+
+  }
 
   // En el panel las cifras ya están debajo: la barra va sola.
   medidor($('#cupo', raiz), { usado: est.utilizado, total: est.cupo, sinPie: true });
@@ -5911,7 +6065,26 @@ function render(raiz) {
   alRedimensionar(pintar);
 
   $('#diferidos', raiz).innerHTML = listaDiferidos(t.id, estado.usuario);
-  $('#movs', raiz).innerHTML = listaMovimientos(t.id, mes, estado.usuario);
+  $('#movs', raiz).innerHTML = listaMovimientos(t.id, mes, estado.usuario, estado.comprobando);
+
+  /*
+   * Las casillas se enganchan AQUÍ y no arriba con el resto de controles: la
+   * lista de movimientos se pinta unas líneas más abajo, así que allí todavía
+   * no existían y los clics no llegaban a guardarse.
+   */
+  $$('[data-comprobar]', raiz).forEach((caja) => {
+    caja.addEventListener('change', () => {
+      const [gastoId, n] = caja.dataset.comprobar.split(':');
+      const cuota = db.cuotas.find((c) => c.gasto_id === gastoId && String(c.n_cuota) === n);
+      if (!cuota) return;
+      cuota.conciliado = caja.checked ? 'Si' : '';
+      cuota._ts = Date.now();
+      guardar();
+      // Se refresca solo el resumen: repintar la vista entera con cada clic
+      // haría saltar el scroll a lo alto en mitad de la comprobación.
+      refrescarResumen();
+    });
+  });
 
   $$('[data-corregir]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -5975,7 +6148,7 @@ function listaDiferidos(tarjetaId, usuario) {
       en ${filas.length} ${filas.length === 1 ? 'compra diferida' : 'compras diferidas'}.</span></div>`;
 }
 
-function listaMovimientos(tarjetaId, mes, usuario) {
+function listaMovimientos(tarjetaId, mes, usuario, marcable = false) {
   const filas = db.cuotas
     .filter((c) => c.tarjeta === tarjetaId && c.mes === mes)
     .filter((c) => usuario === 'ambos' || c.usuario === usuario)
@@ -6013,7 +6186,12 @@ function listaMovimientos(tarjetaId, mes, usuario) {
     const pendiente = cuotaPendiente(cuota);
     const vence = venceFila(fila);
     return `
-      <li class="con-acciones">
+      <li class="con-acciones${marcable ? ' comprobable' : ''}">
+        ${marcable ? `
+          <label class="check" title="Aparece igual en el estado de cuenta">
+            <input type="checkbox" data-comprobar="${esc(gasto.id)}:${cuota.n_cuota}"
+                   ${cuota.conciliado === 'Si' ? 'checked' : ''}>
+          </label>` : ''}
         <div class="principal">
           <div class="titulo">${esc(gasto.detalle)}
             <span class="chip ${esc(gasto.usuario.toLowerCase())}">${esc(gasto.usuario)}</span></div>
