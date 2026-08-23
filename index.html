@@ -2376,15 +2376,23 @@ function dona(contenedor, datos, { titulo = 'Total' } = {}) {
   const cx = lado / 2;
   const cy = lado / 2;
 
-  // Pocas porciones: banda fina y aire, como una tarta. Muchas: banda ancha y
-  // juntas, como un aro macizo repartido.
-  const pocas = serie.length <= 3;
-  const r = pocas ? 96 : 90;
-  const grosor = pocas ? 28 : 40;
-  const redondas = pocas;
+  /*
+   * Un solo anillo para todos los gráficos: banda fina sobre radio grande,
+   * puntas redondeadas y aire entre porciones. Antes había dos versiones —una
+   * con pocas porciones y otra apretada para muchas— y se notaba el salto de
+   * una pantalla a otra.
+   *
+   * Lo que se ajusta es el hueco, en proporción a lo que hay: con dos
+   * porciones el aire generoso luce, y repetido siete veces se comería el
+   * anillo. El resto de la forma no cambia.
+   */
+  const r = 96;
+  const grosor = 28;
+  const redondas = true;
   const circ = 2 * Math.PI * r;
 
-  const hueco = ((pocas ? grosor * 0.8 : 2.5) / circ) * 360;
+  const aire = serie.length <= 3 ? 0.8 : serie.length <= 5 ? 0.6 : 0.45;
+  const hueco = ((grosor * aire) / circ) * 360;
   const idBase = `dona${(nDona += 1)}`;
   const defs = svg.appendChild(el('defs'));
 
