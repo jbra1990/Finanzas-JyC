@@ -69,10 +69,12 @@
    * subida —el color de abajo se ve más vivo a través del vidrio— y sobre todo
    * el filo de luz del borde superior, que es donde rebota el reflejo.
    */
-  --vidrio: rgba(255, 255, 255, 0.62);
-  --vidrio-borde: rgba(255, 255, 255, 0.75);
-  --vidrio-brillo: rgba(255, 255, 255, 0.85);
-  --vidrio-sombra: rgba(11, 31, 61, 0.1);
+  --vidrio: rgba(19, 47, 86, 0.82);
+  --vidrio-borde: rgba(255, 255, 255, 0.16);
+  --vidrio-brillo: rgba(255, 255, 255, 0.22);
+  --vidrio-sombra: rgba(11, 31, 61, 0.34);
+  --vidrio-tinta: #b7cfe9;
+  --vidrio-tinta-viva: #ffffff;
 
   /* Series de gráficos: paleta validada, no cambiar sin volver a validar. */
   --serie-1: #2a78d6;
@@ -137,10 +139,12 @@
     --sombra-nav: 0 8px 30px rgba(0, 0, 0, 0.5);
 
     /* En oscuro el vidrio tiñe de azul en vez de blanquear. */
-    --vidrio: rgba(24, 58, 102, 0.58);
-    --vidrio-borde: rgba(255, 255, 255, 0.16);
-    --vidrio-brillo: rgba(255, 255, 255, 0.3);
-    --vidrio-sombra: rgba(0, 0, 0, 0.45);
+    --vidrio: rgba(16, 41, 75, 0.8);
+    --vidrio-borde: rgba(255, 255, 255, 0.14);
+    --vidrio-brillo: rgba(255, 255, 255, 0.22);
+    --vidrio-sombra: rgba(0, 0, 0, 0.5);
+    --vidrio-tinta: #9fbcda;
+    --vidrio-tinta-viva: #ffffff;
 
     --serie-1: #5aa2f0;
     --serie-2: #d95926;
@@ -177,10 +181,12 @@
   --sombra: none;
   --sombra-panel: none;
   --sombra-nav: 0 8px 30px rgba(0, 0, 0, 0.5);
-  --vidrio: rgba(24, 58, 102, 0.58);
-  --vidrio-borde: rgba(255, 255, 255, 0.16);
-  --vidrio-brillo: rgba(255, 255, 255, 0.3);
-  --vidrio-sombra: rgba(0, 0, 0, 0.45);
+  --vidrio: rgba(16, 41, 75, 0.8);
+  --vidrio-borde: rgba(255, 255, 255, 0.14);
+  --vidrio-brillo: rgba(255, 255, 255, 0.22);
+  --vidrio-sombra: rgba(0, 0, 0, 0.5);
+  --vidrio-tinta: #9fbcda;
+  --vidrio-tinta-viva: #ffffff;
   --serie-1: #5aa2f0;
   --serie-2: #d95926;
   --serie-3: #199e70;
@@ -342,7 +348,7 @@ a { color: var(--acento); }
  * efecto a perder los rótulos.
  */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .nav { background: var(--superficie); }
+  .nav { background: var(--panel-plano); }
 }
 
 .nav button {
@@ -356,9 +362,8 @@ a { color: var(--acento); }
   border: 0;
   border-radius: 15px;
   background: transparent;
-  /* Sobre vidrio el rótulo compite con lo que se transparenta: por eso va en
-     la tinta media y no en la clara que usan las pistas del resto de la app. */
-  color: var(--tinta-2);
+  /* El vidrio es marino, así que la tinta va clara. */
+  color: var(--vidrio-tinta);
   font: inherit;
   font-size: 9px;
   font-weight: 560;
@@ -367,9 +372,9 @@ a { color: var(--acento); }
   transition: color 0.15s, background 0.15s;
 }
 .nav button svg { width: 21px; height: 21px; }
-.nav button[aria-current="page"] { color: var(--acento); }
+.nav button[aria-current="page"] { color: var(--vidrio-tinta-viva); }
 .nav button[aria-current="page"] svg {
-  background: var(--acento-suave);
+  background: rgba(255, 255, 255, 0.16);
   border-radius: 11px;
   padding: 2px 8px;
   width: 37px;
@@ -397,7 +402,7 @@ a { color: var(--acento); }
   box-shadow: 0 12px 26px rgba(11, 31, 61, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28);
   /* El aro que lo separa de la barra es del mismo vidrio, no un blanco sólido:
      así el botón se ve incrustado en el cristal y no pegado encima. */
-  border: 3px solid var(--vidrio-borde);
+  border: 3px solid rgba(255, 255, 255, 0.22);
   transition: transform 0.12s, box-shadow 0.12s;
 }
 .nav .nav-mas svg { width: 26px; height: 26px; display: block; }
@@ -528,6 +533,58 @@ a { color: var(--acento); }
   color: #101828;
   box-shadow: none;
 }
+/*
+ * Píldoras de variación bajo la cifra grande, como los «+4.73%» y
+ * «+$1,286 - Today» de la referencia: dos datos sueltos que acompañan al
+ * número sin competir con él.
+ */
+.panel .chips-panel { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.panel .chip-panel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: var(--radio-pill);
+  background: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  font-size: 12.5px;
+  font-weight: 570;
+  color: var(--panel-tinta);
+  font-variant-numeric: tabular-nums;
+}
+.panel .chip-panel.bien { color: #57e08f; }
+.panel .chip-panel.mal { color: #ff9d9d; }
+
+/*
+ * Accesos rápidos dentro del panel: icono arriba, rótulo debajo, tres en fila.
+ * Son las tres cosas que se hacen a diario, al alcance sin salir de Inicio.
+ */
+.acciones-panel {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 18px;
+}
+.acciones-panel button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 14px 6px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--panel-tinta);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 560;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.06s;
+}
+.acciones-panel button:hover { background: rgba(255, 255, 255, 0.19); }
+.acciones-panel button:active { transform: scale(0.97); }
+.acciones-panel svg { width: 19px; height: 19px; }
+
 .panel .medidor { margin: 14px 0 0; }
 .panel .btn {
   background: rgba(255, 255, 255, 0.12);
@@ -922,6 +979,81 @@ tr.detalle > td {
   display: flex; justify-content: flex-end; gap: 8px;
 }
 
+/*
+ * Insignia circular con las iniciales, como el «CG» / «MS» de la referencia.
+ * Le da un ancla visual a cada fila sin necesidad de iconos inventados.
+ */
+.lista .insignia {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: var(--superficie-2);
+  color: var(--acento);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.lista .delta-mini {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 560;
+  letter-spacing: 0;
+  text-align: right;
+  color: var(--tinta-3);
+}
+.lista .delta-mini.bien { color: var(--ok-texto); }
+.lista .delta-mini.mal { color: var(--critico); }
+
+/*
+ * Ficha con cabecera y pie, como las tarjetas de movimiento de la referencia:
+ * arriba el tipo y la fecha, en medio de qué se trata, y abajo una franja con
+ * las dos cifras que resumen el asunto.
+ */
+.ficha {
+  background: var(--superficie-2);
+  border-radius: var(--radio);
+  overflow: hidden;
+  margin: 0 0 10px;
+}
+.ficha:last-child { margin-bottom: 0; }
+.ficha-cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 15px 6px;
+  font-size: 12px;
+  color: var(--tinta-3);
+}
+.ficha-cab .rotulo {
+  font-weight: 640;
+  color: var(--tinta);
+  letter-spacing: -0.01em;
+}
+.ficha-cuerpo { padding: 2px 15px 12px; }
+.ficha-cuerpo h3 {
+  font-size: 16px;
+  font-weight: 660;
+  letter-spacing: -0.025em;
+}
+.ficha-pie {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 14px;
+  padding: 10px 15px;
+  border-top: 1px solid var(--borde);
+  font-size: 12.5px;
+  color: var(--tinta-3);
+}
+.ficha-pie strong {
+  color: var(--tinta);
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+}
+
 .vacio {
   padding: 30px 12px;
   text-align: center;
@@ -961,6 +1093,9 @@ tr.detalle > td {
 
 .viz-svg { display: block; overflow: visible; }
 .viz-grid { stroke: var(--grid); stroke-width: 1; }
+/* Rejilla de trazos, como en la referencia: marca el nivel sin dibujar una
+   línea que compita con las barras. */
+.viz-grid.punteada { stroke-dasharray: 3 5; }
 .viz-baseline { stroke: var(--baseline); stroke-width: 1; }
 .viz-tick {
   fill: var(--tinta-3); font-size: 10.5px; font-family: var(--fuente);
@@ -2641,7 +2776,10 @@ function columnas(contenedor, etiquetas, series, { alto = 240, leyenda = true } 
   contenedor.appendChild(caja);
 
   const { svg, ancho } = lienzo(caja, alto);
-  const m = { t: 14, r: 10, b: 26, l: 44 };
+  // Escala a la DERECHA, como en el diseño de referencia: la columna de cifras
+  // deja de partir la lectura por la mitad izquierda y las barras arrancan
+  // pegadas al borde.
+  const m = { t: 14, r: 44, b: 26, l: 6 };
   const w = ancho - m.l - m.r;
   const h = alto - m.t - m.b;
 
@@ -2653,10 +2791,10 @@ function columnas(contenedor, etiquetas, series, { alto = 240, leyenda = true } 
   ticks.forEach((t) => {
     svg.appendChild(el('line', {
       x1: m.l, x2: m.l + w, y1: y(t), y2: y(t),
-      class: t === 0 ? 'viz-baseline' : 'viz-grid',
+      class: t === 0 ? 'viz-baseline' : 'viz-grid punteada',
     }));
     svg.appendChild(el('text', {
-      x: m.l - 6, y: y(t) + 4, 'text-anchor': 'end', class: 'viz-tick',
+      x: m.l + w + 7, y: y(t) + 4, 'text-anchor': 'start', class: 'viz-tick',
     })).textContent = etiquetaEje(t);
   });
 
@@ -2706,7 +2844,8 @@ function columnasApiladas(contenedor, etiquetas, series, { alto = 260 } = {}) {
   contenedor.appendChild(caja);
 
   const { svg, ancho } = lienzo(caja, alto);
-  const m = { t: 14, r: 10, b: 26, l: 44 };
+  // Misma escala a la derecha y rejilla punteada que en las agrupadas.
+  const m = { t: 14, r: 44, b: 26, l: 6 };
   const w = ancho - m.l - m.r;
   const h = alto - m.t - m.b;
 
@@ -2718,10 +2857,10 @@ function columnasApiladas(contenedor, etiquetas, series, { alto = 260 } = {}) {
   ticks.forEach((t) => {
     svg.appendChild(el('line', {
       x1: m.l, x2: m.l + w, y1: y(t), y2: y(t),
-      class: t === 0 ? 'viz-baseline' : 'viz-grid',
+      class: t === 0 ? 'viz-baseline' : 'viz-grid punteada',
     }));
     svg.appendChild(el('text', {
-      x: m.l - 6, y: y(t) + 4, 'text-anchor': 'end', class: 'viz-tick',
+      x: m.l + w + 7, y: y(t) + 4, 'text-anchor': 'start', class: 'viz-tick',
     })).textContent = etiquetaEje(t);
   });
 
@@ -5344,9 +5483,10 @@ M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
 const {db, tarjetas} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
 const {crear, esc, $, segmentado} = M["ui"];
+const {formGastoTarjeta, formIngreso} = M["forms"];
 let usuarioFiltro = 'ambos';
 
 function render(raiz, { irA }) {
@@ -5372,13 +5512,32 @@ function render(raiz, { irA }) {
         <div>
           <span class="etiqueta">Gasto de ${esc(nombreMes(mes))}</span>
           <span class="cifra">${moneyHTML(gastoMes)}</span>
-          <span class="nota">
-            ${gastoPrevio > 0
-    ? `${variacion >= 0 ? '▲' : '▼'} ${Math.abs(variacion).toFixed(1)} % frente a ${esc(nombreMes(mesPrevio, true))}`
-    : 'Sin mes anterior para comparar'}
-          </span>
         </div>
         <div id="seg-usuario"></div>
+      </div>
+      <div class="chips-panel">
+        ${gastoPrevio > 0 ? `
+          <span class="chip-panel ${variacion <= 0 ? 'bien' : 'mal'}">
+            ${variacion >= 0 ? '↗' : '↘'} ${Math.abs(variacion).toFixed(1)} %
+          </span>` : ''}
+        <span class="chip-panel">${money(gastoMes - gastoPrevio)} vs. ${esc(nombreMes(mesPrevio, true))}</span>
+      </div>
+      <div class="acciones-panel">
+        <button type="button" data-accion="gasto">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+               stroke-linecap="round" aria-hidden="true">
+            <path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Zm0 3h18"/>
+          </svg>Gasto</button>
+        <button type="button" data-accion="ingreso">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 19V5M6 11l6-6 6 6"/>
+          </svg>Ingreso</button>
+        <button type="button" data-accion="pagar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 4v10m-5-4 5 5 5-5M5 20h14"/>
+          </svg>Pagar</button>
       </div>
       <div class="panel-datos">
         <div><div class="etq">Ingresos</div><div class="val">${money(ingreso)}</div></div>
@@ -5445,22 +5604,37 @@ function render(raiz, { irA }) {
     (v) => { usuarioFiltro = v; render(raiz, { irA }); },
   ));
 
-  // Cupos
+  /*
+   * Cupos, con la forma de la lista de la referencia: insignia con las
+   * iniciales, nombre y banco a la izquierda, saldo pendiente a la derecha con
+   * el disponible debajo, y la barra de cupo cruzando la fila.
+   */
   const cupos = $('#cupos', raiz);
+  const lista = crear('<ul class="lista"></ul>');
   tarjetas().forEach((t) => {
     const est = estadoTarjeta(t.id);
-    const caja = crear('<div style="margin-bottom:12px"></div>');
-    const detalle = Object.entries(est.porUsuario)
-      .map(([u, v]) => `<span class="chip ${u.toLowerCase()}">${esc(u)}: ${money(v)}</span>`)
-      .join(' ');
-    caja.innerHTML = `<div style="font-size:13px;font-weight:600;margin-bottom:2px">${esc(t.nombre)}</div>
-      <div class="medidor-host"></div>
-      <div class="chips" style="margin-top:5px">${detalle || '<span class="chip">Sin saldo pendiente</span>'}</div>`;
-    medidor(caja.querySelector('.medidor-host'), {
-      usado: est.utilizado, total: est.cupo, etiqueta: 'Disponible ' + money(est.disponible),
+    const holgado = est.cupo > 0 && est.uso < 80;
+    const fila = crear(`
+      <li class="con-acciones">
+        <span class="insignia">${esc(iniciales(t.nombre))}</span>
+        <div class="principal">
+          <div class="titulo">${esc(t.nombre.replace(/^TC /, ''))}</div>
+          <div class="meta">Disponible ${money(est.disponible)}${
+  t.dia_pago ? ` · paga el día ${esc(t.dia_pago)}` : ''}</div>
+        </div>
+        <div class="monto">${money(est.utilizado)}
+          <span class="delta-mini ${holgado ? 'bien' : 'mal'}">
+            ${est.cupo > 0 ? `${est.uso.toFixed(0)} % del cupo` : 'sin cupo definido'}</span></div>
+        <div class="acciones" style="justify-content:stretch"><div class="medidor-host" style="flex:1"></div></div>
+      </li>`);
+    // Sin pie: el importe y el porcentaje ya están en la propia fila, y
+    // repetirlos debajo solo alargaba la tarjeta.
+    medidor(fila.querySelector('.medidor-host'), {
+      usado: est.utilizado, total: est.cupo, sinPie: true,
     });
-    cupos.appendChild(caja);
+    lista.appendChild(fila);
   });
+  cupos.appendChild(lista);
 
   const pintarGraficos = () => {
     dona($('#g-dona', raiz), totalPorCategoria([mes], filtros), { titulo: 'Gasto del mes' });
@@ -5479,6 +5653,14 @@ function render(raiz, { irA }) {
   raiz.querySelectorAll('[data-ir]').forEach((b) => {
     b.addEventListener('click', () => irA(b.dataset.ir));
   });
+
+  // Los tres accesos del panel: lo que se hace a diario, sin salir de Inicio.
+  const recargar = () => render(raiz, { irA });
+  $('[data-accion="gasto"]', raiz).addEventListener('click',
+    () => formGastoTarjeta(recargar));
+  $('[data-accion="ingreso"]', raiz).addEventListener('click',
+    () => formIngreso(recargar));
+  $('[data-accion="pagar"]', raiz).addEventListener('click', () => irA('tarjetas'));
 }
 
 function seccionProximos(mes) {
@@ -5487,9 +5669,12 @@ function seccionProximos(mes) {
   tarjetas().forEach((t) => {
     const monto = pagoDelMes(t.id, mes, 'ambos');
     if (monto > 0) {
+      const vence = fechaPagoMes(mes, t.id);
       filas.push({
-        titulo: `Pago ${t.nombre}`,
-        meta: `${nombreMes(mes)}${t.dia_pago ? ` · vence el día ${t.dia_pago}` : ''}`,
+        tipo: 'Pago de tarjeta',
+        cuando: vence ? textoFecha(vence) : nombreMes(mes),
+        titulo: t.nombre,
+        pieEtq: `Consumo de ${nombreMes(mes)}`,
         monto: -monto,
       });
     }
@@ -5503,8 +5688,10 @@ function seccionProximos(mes) {
     .forEach((p) => {
       const dias = diasEntre(hoy, p.fecha_vencimiento);
       filas.push({
-        titulo: `Vence póliza ${p.institucion}`,
-        meta: `${p.fecha_vencimiento} · ${dias >= 0 ? `en ${dias} días` : `venció hace ${-dias} días`}`,
+        tipo: 'Vence póliza',
+        cuando: p.fecha_vencimiento,
+        titulo: p.institucion,
+        pieEtq: dias >= 0 ? `En ${dias} días · regresa a la cuenta` : `Venció hace ${-dias} días`,
         monto: Number(p.valor_final) || 0,
       });
     });
@@ -5512,15 +5699,29 @@ function seccionProximos(mes) {
   if (!filas.length) {
     return '<header><h2>Próximos movimientos</h2></header><p class="vacio">Nada pendiente por ahora.</p>';
   }
+  // Cada uno en su ficha: el tipo y la fecha en la cabecera, de qué se trata en
+  // medio y las dos cifras que lo resumen en la franja de abajo.
   return `<header><h2>Próximos movimientos</h2></header>
-    <ul class="lista">${filas.map((f) => `
-      <li>
-        <div class="principal">
-          <div class="titulo">${esc(f.titulo)}</div>
-          <div class="meta">${esc(f.meta)}</div>
+    ${filas.map((f) => `
+      <div class="ficha">
+        <div class="ficha-cab">
+          <span class="rotulo">${esc(f.tipo)}</span>
+          <span>${esc(f.cuando)}</span>
         </div>
-        <div class="monto ${f.monto < 0 ? 'neg' : 'pos'}">${money(Math.abs(f.monto))}</div>
-      </li>`).join('')}</ul>`;
+        <div class="ficha-cuerpo"><h3>${esc(f.titulo)}</h3></div>
+        <div class="ficha-pie">
+          <span>${esc(f.pieEtq)}</span>
+          <span><strong class="${f.monto < 0 ? 'monto neg' : 'monto pos'}">
+            ${money(Math.abs(f.monto))}</strong></span>
+        </div>
+      </div>`).join('')}`;
+}
+
+/** «TC Pichincha» → «PI»; «Banco Bolivariano» → «BB». */
+function iniciales(nombre) {
+  const palabras = String(nombre).replace(/^TC /, '').split(/\s+/).filter(Boolean);
+  if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
+  return String(palabras[0] || '?').slice(0, 2).toUpperCase();
 }
 
 return { render };
