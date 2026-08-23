@@ -772,6 +772,68 @@ tfoot td {
 }
 td.cero { color: var(--tinta-3); }
 
+/* --- Categorías que se abren --------------------------------------------- */
+
+tr.desplegable { cursor: pointer; }
+tr.desplegable:hover td, tr.desplegable:hover td:first-child {
+  background: var(--superficie-2);
+}
+tr.desplegable .flecha {
+  display: inline-block;
+  width: 14px;
+  margin-right: 2px;
+  color: var(--tinta-3);
+  transition: transform 0.15s;
+}
+tr.desplegable[aria-expanded="true"] .flecha {
+  transform: rotate(90deg);
+  color: var(--acento);
+}
+tr.desplegable[aria-expanded="true"] td,
+tr.desplegable[aria-expanded="true"] td:first-child {
+  background: var(--superficie-2);
+  font-weight: 620;
+}
+
+/*
+ * El desglose ocupa una fila entera de la tabla. La celda no lleva el `sticky`
+ * de la primera columna a propósito: si lo llevara, al desplazar la tabla de
+ * lado el detalle se quedaría clavado encima de los meses.
+ */
+tr.detalle > td {
+  position: static;
+  padding: 0;
+  white-space: normal;
+  text-align: left;
+  background: var(--superficie-2);
+}
+/* Pegada al borde izquierdo del contenedor con scroll: el ancho se lo pone
+   la vista, midiendo lo que de verdad se ve. */
+.caja-desglose { position: sticky; left: 0; padding: 2px 0 10px; }
+
+.desglose { list-style: none; margin: 0; padding: 2px 12px; }
+.desglose li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--grid);
+  font-size: 13px;
+}
+.desglose li:last-child { border-bottom: 0; }
+.desglose .principal { flex: 1; min-width: 0; }
+.desglose .titulo { font-weight: 570; display: flex; align-items: center; gap: 7px; }
+.desglose .meta { font-size: 11.5px; color: var(--tinta-3); margin-top: 1px; }
+.desglose .monto {
+  font-weight: 640; white-space: nowrap;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+.pie-desglose {
+  padding: 8px 12px 2px;
+  font-size: 12px;
+  color: var(--tinta-3);
+  border-top: 1px solid var(--baseline);
+}
+.pie-desglose strong { color: var(--tinta); font-variant-numeric: tabular-nums; }
+
 /* --- Listas -------------------------------------------------------------- */
 
 .lista { list-style: none; margin: 0; padding: 0; }
@@ -2063,6 +2125,39 @@ function gastosEnMeses(meses, filtros = {}) {
   return out;
 }
 
+/**
+ * Los movimientos que hay detrás de una fila de la tabla mensual: en qué se
+ * fue el dinero de esa categoría, del más reciente al más antiguo.
+ *
+ * Reutiliza `gastosEnMeses` para que el desglose no pueda discrepar del total
+ * que enseña la tabla, y le añade lo que hace falta para leerlo —fecha, dónde
+ * se compró y, si venía a plazos, qué cuota es.
+ */
+function detalleDeCategoria(meses, categoria, filtros = {}) {
+  const nombreCuenta = (id) => db.cuentas.find((c) => c.id === id)?.nombre || id;
+
+  return gastosEnMeses(meses, { ...filtros, categorias: [categoria] })
+    .map((x) => {
+      const esTarjeta = x.tipo === 'Tarjeta';
+      const g = esTarjeta
+        ? db.gastosTarjeta.find((y) => y.id === x.ref)
+        : db.gastosEfectivo.find((y) => y.id === x.ref);
+      const cuota = esTarjeta
+        ? db.cuotas.find((c) => c.gasto_id === x.ref && c.mes === x.mes)
+        : null;
+      return {
+        fecha: g?.fecha || `${x.mes}-01`,
+        detalle: g?.detalle || x.ref,
+        usuario: x.usuario,
+        monto: x.monto,
+        mes: x.mes,
+        origen: nombreCuenta(x.origen),
+        cuota: g && g.cuotas > 1 && cuota ? `cuota ${cuota.n_cuota}/${g.cuotas}` : '',
+      };
+    })
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+}
+
 /** Matriz categorías × meses lista para pintar la tabla mensual. */
 function matrizCategoriaMes(meses, filtros = {}) {
   const filas = gastosEnMeses(meses, filtros);
@@ -2162,7 +2257,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDelMes, patrimonioNeto, planificarCuotas, presupuestoVsReal, rangoMeses, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, totalAhorrado, totalInvertido, totalPorCategoria, totalPorUsuario };
+return { acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDelMes, patrimonioNeto, planificarCuotas, presupuestoVsReal, rangoMeses, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, totalAhorrado, totalInvertido, totalPorCategoria, totalPorUsuario };
 })();
 
 M["charts"] = (function () {
@@ -5439,9 +5534,9 @@ M["views/mensual"] = (function () {
  */
 
 const {tarjetas, categoriasGasto} = M["store"];
-const {mesActual, nombreMes, money, sumarMeses, rangoMeses, mesesConDatos, matrizCategoriaMes, totalPorCategoria, totalPorUsuario, serieMensual, presupuestoVsReal} = M["calc"];
+const {mesActual, nombreMes, money, sumarMeses, rangoMeses, mesesConDatos, matrizCategoriaMes, totalPorCategoria, totalPorUsuario, serieMensual, presupuestoVsReal, detalleDeCategoria} = M["calc"];
 const {dona, barrasHorizontales, columnas, alRedimensionar} = M["charts"];
-const {esc, $, opciones, segmentado} = M["ui"];
+const {esc, $, $$, opciones, segmentado} = M["ui"];
 const estado = {
   usuario: 'ambos',
   tarjeta: 'todas',
@@ -5582,6 +5677,36 @@ function render(raiz) {
 
   $('#btn-csv', raiz).addEventListener('click', () => exportarCSV(matriz));
 
+  // Desplegar una categoría para ver en qué se fue el dinero.
+  $$('.desplegable', raiz).forEach((fila) => {
+    const abrir = () => {
+      const cat = fila.dataset.categoria;
+      const det = $(`[data-detalle="${CSS.escape(cat)}"]`, raiz);
+      const abierta = fila.getAttribute('aria-expanded') === 'true';
+      if (!abierta && !det.dataset.pintado) {
+        det.firstElementChild.innerHTML =
+          `<div class="caja-desglose">${detalleHTML(meses, cat, filtros)}</div>`;
+        det.dataset.pintado = 'si';
+      }
+      /*
+       * La celda del detalle abarca toda la tabla, que con varios meses es más
+       * ancha que la pantalla: sin acotarla, el importe de cada movimiento
+       * quedaba fuera de la vista. Se mide el ancho visible del contenedor con
+       * scroll y se fija ahí, y la caja va pegada al borde izquierdo, así que
+       * el desglose se lee entero aunque la tabla esté desplazada de lado.
+       */
+      const caja = det.querySelector('.caja-desglose');
+      const scroll = raiz.querySelector('.tabla-scroll');
+      if (caja && scroll) caja.style.width = `${Math.max(240, scroll.clientWidth - 32)}px`;
+      det.hidden = abierta;
+      fila.setAttribute('aria-expanded', String(!abierta));
+    };
+    fila.addEventListener('click', abrir);
+    fila.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); }
+    });
+  });
+
   // --- Gráficos ---
   const pintar = () => {
     dona($('#g-dona', raiz), totalPorCategoria(meses, filtros), { titulo: 'Periodo' });
@@ -5615,12 +5740,24 @@ function render(raiz) {
 function tablaHTML(matriz) {
   if (!matriz.filas.length) return '<p class="vacio">Sin gastos en el periodo seleccionado.</p>';
   const cab = matriz.meses.map((m) => `<th>${esc(nombreMes(m, true))}</th>`).join('');
+  const columnas = matriz.meses.length + 2;
+
+  /*
+   * Cada categoría se abre para enseñar en qué se fue el dinero. La fila de
+   * detalle se crea vacía y se rellena la primera vez que se abre: con catorce
+   * categorías, montar todos los desgloses de entrada era pintar cientos de
+   * movimientos que casi nunca se miran.
+   */
   const cuerpo = matriz.filas.map((f) => `
-    <tr>
-      <td>${esc(f.categoria)}</td>
+    <tr class="desplegable" data-categoria="${esc(f.categoria)}" aria-expanded="false" tabindex="0">
+      <td><span class="flecha" aria-hidden="true">›</span>${esc(f.categoria)}</td>
       ${f.valores.map((v) => `<td class="${v ? '' : 'cero'}">${v ? money(v) : '—'}</td>`).join('')}
       <td><strong>${money(f.total)}</strong></td>
+    </tr>
+    <tr class="detalle" data-detalle="${esc(f.categoria)}" hidden>
+      <td colspan="${columnas}"></td>
     </tr>`).join('');
+
   const pie = matriz.totales.map((v) => `<td>${money(v)}</td>`).join('');
   return `
     <table>
@@ -5628,6 +5765,26 @@ function tablaHTML(matriz) {
       <tbody>${cuerpo}</tbody>
       <tfoot><tr><td>TOTAL</td>${pie}<td>${money(matriz.granTotal)}</td></tr></tfoot>
     </table>`;
+}
+
+/** Contenido del desglose de una categoría. */
+function detalleHTML(meses, categoria, filtros) {
+  const filas = detalleDeCategoria(meses, categoria, filtros);
+  if (!filas.length) return '<p class="vacio">Sin movimientos.</p>';
+
+  return `<ul class="desglose">${filas.map((x) => `
+    <li>
+      <div class="principal">
+        <div class="titulo">${esc(x.detalle)}
+          <span class="chip ${esc(String(x.usuario).toLowerCase())}">${esc(x.usuario)}</span></div>
+        <div class="meta">${esc(x.fecha)} · ${esc(x.origen)}${x.cuota ? ` · ${esc(x.cuota)}` : ''}</div>
+      </div>
+      <div class="monto">${money(x.monto)}</div>
+    </li>`).join('')}
+    </ul>
+    <div class="pie-desglose">${filas.length}
+      ${filas.length === 1 ? 'movimiento' : 'movimientos'} ·
+      <strong>${money(filas.reduce((s, x) => s + x.monto, 0))}</strong></div>`;
 }
 
 function exportarCSV(matriz) {
