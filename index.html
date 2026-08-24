@@ -3253,6 +3253,7 @@ const ICONOS = {
   tarjetas: '<path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm0 3h18" fill="none" stroke="currentColor" stroke-width="1.8"/>',
   inversiones: '<path d="M4 18 9.5 11l4 3.5L20 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 6h5v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   cuentas: '<path d="M3 10 12 4l9 6M5 10v9h14v-9M9 19v-5h6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+  plan: '<path d="M4 19V9m5 10V5m5 14v-6m5 6V8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M2 19h20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="2 3"/>',
   datos: '<path d="M12 7c4.4 0 8-1.1 8-2.5S16.4 2 12 2 4 3.1 4 4.5 7.6 7 12 7Zm8-2.5v15c0 1.4-3.6 2.5-8 2.5s-8-1.1-8-2.5v-15" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M20 12c0 1.4-3.6 2.5-8 2.5S4 13.4 4 12" fill="none" stroke="currentColor" stroke-width="1.8"/>',
 };
 
@@ -4068,6 +4069,44 @@ const numero = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+/**
+ * Fecha de una celda del libro, en ISO.
+ *
+ * Excel guarda las fechas como número de días desde 1900, así que sin
+ * convertirlas se colaban tal cual —«45653»— y quedaban guardadas como si
+ * fueran texto: las listas se ordenaban por una cadena sin sentido y no había
+ * forma de calcular cuántos días pasan entre una compra y la siguiente. En el
+ * libro también hay fechas escritas a mano, con barras o con dos puntos.
+ */
+function fechaDeCelda(v) {
+  const esSerie = (n) => Number.isFinite(n) && n > 20000 && n < 80000;
+  const aISO = (n) => new Date(Math.round((n - 25569) * 86400000))
+    .toISOString().slice(0, 10);
+
+  if (typeof v === 'number') return esSerie(v) ? aISO(v) : '';
+  const s = texto(v);
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+
+  const dmy = /^(\d{1,2})[/\-.:](\d{1,2})[/\-.:](\d{2}|\d{4})$/.exec(s);
+  if (dmy) {
+    const [, d, m, y] = dmy;
+    // El año va de dos o cuatro cifras y nada más: en el libro hay un «205»
+    // escrito a mano que si se acepta tal cual produce una fecha imposible,
+    // y a partir de ahí todo lo que reste días revienta.
+    const iso = `${y.length === 2 ? `20${y}` : y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    return valida(iso) ? iso : '';
+  }
+  const n = Number(s.replace(',', '.'));
+  return esSerie(n) ? aISO(n) : '';
+}
+
+/** Comprueba que la fecha existe de verdad (no «2025-02-31» ni «205-06-21»). */
+function valida(iso) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso;
+}
+
 /** Serie de fecha de Excel → 'YYYY-MM'. */
 function serialAMes(n) {
   const d = new Date(Math.round((Number(n) - 25569) * 86400000));
@@ -4184,7 +4223,7 @@ function analizar(libro) {
 
       const categoria = texto(fila[colCuenta]) || 'Sin categoría';
       const proposito = colProposito >= 0 ? texto(fila[colProposito]) : '';
-      const fecha = texto(fila[colFecha]);
+      const fecha = fechaDeCelda(fila[colFecha]);
 
       const cuotas = [];
       for (let c = 0; c < nColumnasMes; c += 1) {
@@ -4814,6 +4853,275 @@ function textoEstado() {
 }
 
 return { alCambiarArchivo, archivo, crearYVincular, desvincular, detener, enMarcoAjeno, escribir, guardarDiferido, reconectar, restaurar, soportado, textoEstado, vigilar, vincularExistente };
+})();
+
+M["plan"] = (function () {
+/**
+ * Detección de gastos que se repiten y proyección del presupuesto.
+ *
+ * La idea: mirar el historial, ver qué se repite y cada cuánto, y con eso
+ * rellenar los meses que aún no han pasado. Así el mes que viene no aparece
+ * casi vacío —solo con las cuotas ya comprometidas— sino con lo que de verdad
+ * se va a gastar.
+ *
+ * Tres cifras por mes, que no se pisan:
+ *
+ *   COMPROMETIDO  lo que ya está registrado y cae en ese mes: cuotas de
+ *                 tarjeta (incluidas las futuras de un diferido) y efectivo.
+ *   PREVISTO      lo que la app supone que se repetirá y todavía no está
+ *                 apuntado.
+ *   SIMULADO      la suma de los dos, que es el presupuesto del mes.
+ *
+ * Ninguna función de este módulo toca el DOM ni persiste nada.
+ */
+
+const {db} = M["store"];
+const {claveMes, mesActual, redondear, sumarDias, diasEntre, sumarMeses} = M["calc"];
+/** Con menos de tres apariciones no hay periodicidad, hay casualidad. */
+const MIN_OCURRENCIAS = 3;
+
+/** Días medios de un mes: para pasar de «cada 9 días» a «tanto al mes». */
+const DIAS_MES = 30.44;
+
+/**
+ * Por debajo de este umbral el gasto cae varias veces al mes y no tiene
+ * sentido señalar el día: se presupuesta como un importe mensual.
+ */
+const UMBRAL_MENSUAL = 20;
+
+const CADENCIAS = [
+  { dias: 7, nombre: 'Cada semana' },
+  { dias: 15, nombre: 'Cada quincena' },
+  { dias: 30, nombre: 'Cada mes' },
+  { dias: 60, nombre: 'Cada 2 meses' },
+  { dias: 90, nombre: 'Cada 3 meses' },
+  { dias: 120, nombre: 'Cada 4 meses' },
+  { dias: 182, nombre: 'Cada 6 meses' },
+  { dias: 365, nombre: 'Una vez al año' },
+];
+
+/** Nombre humano de una cadencia, si cae cerca de una conocida. */
+function nombreCadencia(dias) {
+  const cerca = CADENCIAS.find((c) => Math.abs(dias - c.dias) <= c.dias * 0.22);
+  if (cerca) return cerca.nombre;
+  if (dias < 30) return `Cada ${Math.round(dias)} días`;
+  return `Cada ${(dias / DIAS_MES).toFixed(1)} meses`;
+}
+
+/**
+ * Clave con la que se agrupan las apariciones de un mismo gasto. Se normaliza
+ * el detalle —mayúsculas, sin acentos, sin espacios de más— porque el mismo
+ * sitio se escribe de diez maneras a lo largo de dos años.
+ */
+function claveGasto(detalle) {
+  return String(detalle || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const mediana = (xs) => {
+  if (!xs.length) return 0;
+  const o = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(o.length / 2);
+  return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2;
+};
+
+/** Clave de configuración donde se recuerda una recurrencia descartada. */
+const claveExcluida = (clave) => `plan_no_${clave}`;
+
+const estaExcluida = (clave) => db.config[claveExcluida(clave)] === 'Si';
+
+/**
+ * Gastos que se repiten, con su periodicidad y su importe típico.
+ *
+ * Solo entran los pagos de una vez: un diferido y un recurrente ya tienen sus
+ * cuotas futuras metidas en la base, así que proyectarlos los contaría dos
+ * veces.
+ *
+ * Se usa la MEDIANA tanto para el intervalo como para el importe: con la media,
+ * una compra grande suelta o un mes que se saltó desplazan la estimación
+ * entera.
+ */
+function recurrencias() {
+  const grupos = new Map();
+  const anota = (detalle, fecha, monto, categoria, origen) => {
+    const clave = claveGasto(detalle);
+    // Una fecha con mala pinta se descarta aquí y no más adelante: todo lo que
+    // sigue resta días, y una sola fecha imposible tumbaba el módulo entero.
+    const iso = String(fecha ?? '').slice(0, 10);
+    if (!clave || !(monto > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    if (!grupos.has(clave)) {
+      grupos.set(clave, { clave, detalle, origen, fechas: [], montos: [], categorias: [] });
+    }
+    const g = grupos.get(clave);
+    g.fechas.push(iso);
+    g.montos.push(monto);
+    if (categoria) g.categorias.push(categoria);
+  };
+
+  // La categoría del grupo es la que más se repite, no la del último apunte:
+  // un solo gasto mal clasificado cambiaba la etiqueta de todo el conjunto.
+  const categoriaDominante = (lista) => {
+    const cuenta = new Map();
+    lista.forEach((c) => cuenta.set(c, (cuenta.get(c) || 0) + 1));
+    return [...cuenta.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'Sin categoría';
+  };
+
+  db.gastosTarjeta.forEach((g) => {
+    if (g.tipo !== 'Corriente') return;
+    anota(g.detalle, g.fecha, Number(g.monto_total) || 0, g.categoria, g.tarjeta);
+  });
+  db.gastosEfectivo.forEach((g) => {
+    anota(g.detalle, g.fecha, Number(g.monto) || 0, g.categoria, g.cuenta);
+  });
+
+  const hoy = new Date().toISOString().slice(0, 10);
+
+  return [...grupos.values()]
+    .filter((g) => g.fechas.length >= MIN_OCURRENCIAS)
+    .map((g) => {
+      const fechas = [...new Set(g.fechas)].sort();
+      if (fechas.length < MIN_OCURRENCIAS) return null;
+
+      const huecos = fechas.slice(1).map((f, i) => diasEntre(fechas[i], f)).filter((d) => d > 0);
+      if (!huecos.length) return null;
+
+      const cadencia = mediana(huecos);
+      // Cuánto se desvían los intervalos de su propia mediana. Alto = el sitio
+      // se visita cuando toca, no cada tanto: no se puede predecir.
+      const dispersion = cadencia > 0
+        ? mediana(huecos.map((h) => Math.abs(h - cadencia))) / cadencia : 1;
+
+      const ultima = fechas[fechas.length - 1];
+      const monto = redondear(mediana(g.montos));
+      const porMes = cadencia > 0 ? redondear(monto * (DIAS_MES / cadencia)) : 0;
+
+      /*
+       * Caducidad. Un gasto «semanal» que no aparece desde hace ocho meses ya
+       * no es semanal: se acabó. Sin esta regla la previsión se llenaba de
+       * suscripciones dadas de baja y de sitios a los que se dejó de ir.
+       */
+      const margen = Math.max(cadencia * 2.5, 45);
+      const diasDesde = diasEntre(ultima, hoy);
+
+      return {
+        clave: g.clave,
+        detalle: g.detalle,
+        categoria: categoriaDominante(g.categorias),
+        origen: g.origen,
+        veces: fechas.length,
+        fechas,
+        mesesConRegistro: new Set(fechas.map(claveMes)),
+        cadencia: Math.round(cadencia),
+        cadenciaTexto: nombreCadencia(cadencia),
+        dispersion,
+        // Con los intervalos muy desiguales no se proyecta: se lista para que
+        // se vea, pero no entra en el presupuesto por su cuenta.
+        fiable: dispersion <= 0.6,
+        mensual: cadencia <= UMBRAL_MENSUAL,
+        monto,
+        porMes,
+        ultima,
+        diasDesde,
+        vigente: diasDesde <= margen,
+        proxima: sumarDias(ultima, Math.round(cadencia)),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.porMes - a.porMes);
+}
+
+/** Último día de un mes 'YYYY-MM', en ISO. */
+function finDeMes(mes) {
+  const [y, m] = mes.split('-').map(Number);
+  return `${mes}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Presupuesto simulado mes a mes.
+ *
+ * Regla que evita contar dos veces: un gasto previsto NO se añade a un mes que
+ * ya tenga un registro suyo. Si «MI COMISARIATO» ya está apuntado en
+ * septiembre, septiembre se queda con lo real; la previsión solo rellena los
+ * meses donde todavía no hay nada de ese gasto.
+ */
+function proyeccion(meses, { excluidas = null } = {}) {
+  const fuera = excluidas || new Set(recurrencias()
+    .filter((r) => estaExcluida(r.clave)).map((r) => r.clave));
+
+  const ahora = mesActual();
+  const porMes = new Map(meses.map((m) => [m, {
+    mes: m, comprometido: 0, previsto: 0, lineas: [],
+  }]));
+
+  for (const c of db.cuotas) {
+    const m = porMes.get(c.mes);
+    if (m) m.comprometido += Number(c.monto) || 0;
+  }
+  for (const g of db.gastosEfectivo) {
+    const m = porMes.get(claveMes(g.fecha));
+    if (m) m.comprometido += Number(g.monto) || 0;
+  }
+
+  const usadas = [];
+  for (const r of recurrencias()) {
+    if (!r.fiable || !r.vigente || fuera.has(r.clave)) continue;
+    let aporta = false;
+
+    const sumar = (mes, monto, cuando) => {
+      const casilla = porMes.get(mes);
+      if (!casilla || mes < ahora || r.mesesConRegistro.has(mes)) return;
+      casilla.previsto += monto;
+      casilla.lineas.push({ clave: r.clave, detalle: r.detalle, monto, cuando });
+      aporta = true;
+    };
+
+    if (r.mensual) {
+      // Varias veces al mes: se presupuesta el importe mensual completo.
+      meses.forEach((m) => sumar(m, r.porMes, `~${(DIAS_MES / r.cadencia).toFixed(1)} al mes`));
+    } else {
+      const tope = finDeMes(meses[meses.length - 1]);
+      let f = r.ultima;
+      // Cadencias largas: se avanza en el calendario desde la última vez.
+      for (let i = 0; i < 400; i += 1) {
+        f = sumarDias(f, r.cadencia);
+        if (f > tope) break;
+        sumar(claveMes(f), r.monto, f);
+      }
+    }
+    if (aporta) usadas.push(r);
+  }
+
+  const filas = meses.map((m) => {
+    const x = porMes.get(m);
+    x.comprometido = redondear(x.comprometido);
+    x.previsto = redondear(x.previsto);
+    x.simulado = redondear(x.comprometido + x.previsto);
+    x.lineas.sort((a, b) => b.monto - a.monto);
+    return x;
+  });
+
+  return {
+    filas,
+    usadas,
+    totales: {
+      comprometido: redondear(filas.reduce((s, x) => s + x.comprometido, 0)),
+      previsto: redondear(filas.reduce((s, x) => s + x.previsto, 0)),
+      simulado: redondear(filas.reduce((s, x) => s + x.simulado, 0)),
+    },
+  };
+}
+
+/** Rango por defecto del módulo: el mes en curso y los cinco siguientes. */
+function mesesProyectados(n = 6) {
+  const base = mesActual();
+  return Array.from({ length: n }, (_, i) => sumarMeses(base, i));
+}
+
+return { claveExcluida, claveGasto, estaExcluida, mesesProyectados, proyeccion, recurrencias };
 })();
 
 M["forms"] = (function () {
@@ -7615,6 +7923,237 @@ function formCategoria(nombre, alTerminar) {
 return { render };
 })();
 
+M["views/plan"] = (function () {
+/**
+ * Vista «Plan»: el presupuesto que la app arma sola.
+ *
+ * Mira el historial, saca qué gastos se repiten y cada cuánto, y con eso
+ * rellena los meses que no han pasado. Lo que se ve por mes es lo real ya
+ * comprometido más lo previsto, y la suma de los dos es el presupuesto.
+ */
+
+const {db, guardar} = M["store"];
+const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha} = M["calc"];
+const {columnasApiladas, alRedimensionar} = M["charts"];
+const {esc, $, $$, segmentado} = M["ui"];
+const {recurrencias, proyeccion, mesesProyectados, claveExcluida, estaExcluida} = M["plan"];
+const estado = { horizonte: 6, mesAbierto: null };
+
+function render(raiz) {
+  const meses = mesesProyectados(estado.horizonte);
+  const plan = proyeccion(meses);
+  const todas = recurrencias();
+  const mes = mesActual();
+  const primero = plan.filas[0];
+
+  // Con qué comparar: lo que de verdad se gastó en los meses ya cerrados.
+  const previos = rangoMeses(sumarMeses(mes, -3), sumarMeses(mes, -1));
+  const realPrevio = serieMensual(previos, {});
+  const promedio = realPrevio.length
+    ? redondear(realPrevio.reduce((s, x) => s + x.gasto, 0) / realPrevio.length) : 0;
+
+  if (!todas.length) {
+    raiz.innerHTML = `
+      <section class="panel">
+        <span class="etiqueta">Presupuesto automático</span>
+        <span class="cifra">${moneyHTML(0)}</span>
+        <span class="nota">Todavía no hay historial suficiente.</span>
+      </section>
+      <p class="vacio">Para reconocer un gasto que se repite hacen falta al menos
+        tres apariciones suyas. Sigue registrando y esta pantalla se irá llenando sola.</p>`;
+    return;
+  }
+
+  const fiables = todas.filter((r) => r.fiable && r.vigente && !estaExcluida(r.clave));
+  const descartadas = todas.filter((r) => r.fiable && r.vigente && estaExcluida(r.clave));
+  const caducadas = todas.filter((r) => r.fiable && !r.vigente);
+  const irregulares = todas.filter((r) => !r.fiable);
+
+  raiz.innerHTML = `
+    <section class="panel">
+      <span class="etiqueta">Presupuesto de ${esc(nombreMes(primero.mes))}</span>
+      <span class="cifra">${moneyHTML(primero.simulado)}</span>
+      <span class="nota">Lo ya comprometido más lo que suele repetirse</span>
+      <div class="chips-panel">
+        <span class="chip-panel">Comprometido ${money(primero.comprometido)}</span>
+        <span class="chip-panel">Previsto ${money(primero.previsto)}</span>
+        ${promedio > 0 ? `
+          <span class="chip-panel ${primero.simulado <= promedio ? 'bien' : 'mal'}">
+            ${primero.simulado <= promedio ? '↘' : '↗'}
+            ${Math.abs(((primero.simulado - promedio) / promedio) * 100).toFixed(0)} %
+            vs. promedio</span>` : ''}
+      </div>
+      <div class="panel-datos">
+        <div><div class="etq">${meses.length} meses</div>
+          <div class="val">${money(plan.totales.simulado)}</div></div>
+        <div><div class="etq">Promedio simulado</div>
+          <div class="val">${money(redondear(plan.totales.simulado / meses.length))}</div></div>
+        <div><div class="etq">Promedio real previo</div>
+          <div class="val">${money(promedio)}</div></div>
+      </div>
+    </section>
+
+    <div class="barra-accion">
+      <div id="seg-horizonte"></div>
+      <span class="pista" style="white-space:nowrap">${fiables.length} periódicos</span>
+    </div>
+
+    <section class="tarjeta">
+      <header><h2>Simulación mes a mes</h2>
+        <span class="pista">Comprometido + previsto</span></header>
+      <div class="aviso"><span class="icono">i</span>
+        <span class="crece">Solo se proyecta lo que se repite con un ritmo
+        reconocible. Lo que se compra una vez y no vuelve no entra, así que esta
+        cifra es un piso, no un techo: el gasto real de los últimos meses
+        promedia ${money(promedio)}.</span></div>
+      <div id="g-plan"></div>
+      <div class="tabla-scroll">
+        <table>
+          <thead><tr><th>Mes</th><th>Comprometido</th><th>Previsto</th><th>Simulado</th></tr></thead>
+          <tbody>${plan.filas.map((f) => `
+            <tr class="desplegable" data-mes="${esc(f.mes)}" aria-expanded="false" tabindex="0">
+              <td><span class="flecha" aria-hidden="true">›</span>${esc(nombreMes(f.mes))}</td>
+              <td>${money(f.comprometido)}</td>
+              <td class="${f.previsto ? '' : 'cero'}">${f.previsto ? money(f.previsto) : '—'}</td>
+              <td><strong>${money(f.simulado)}</strong></td>
+            </tr>
+            <tr class="detalle" data-detalle="${esc(f.mes)}" hidden><td colspan="4"></td></tr>`).join('')}
+          </tbody>
+          <tfoot><tr>
+            <td>TOTAL</td>
+            <td>${money(plan.totales.comprometido)}</td>
+            <td>${money(plan.totales.previsto)}</td>
+            <td>${money(plan.totales.simulado)}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <header><h2>Gastos que se repiten</h2>
+        <span class="pista">Toca uno para dejarlo fuera</span></header>
+      ${listaRecurrencias(fiables, false)}
+    </section>
+
+    ${descartadas.length ? `
+      <section class="tarjeta">
+        <header><h2>Fuera del presupuesto</h2>
+          <span class="pista">Tócalos para devolverlos</span></header>
+        ${listaRecurrencias(descartadas, true)}
+      </section>` : ''}
+
+    ${caducadas.length ? `
+      <section class="tarjeta">
+        <header><h2>Parece que ya no se repiten</h2>
+          <span class="pista">Sin aparecer desde hace demasiado</span></header>
+        ${listaRecurrencias(caducadas, null)}
+      </section>` : ''}
+
+    ${irregulares.length ? `
+      <section class="tarjeta">
+        <header><h2>Se repiten sin ritmo fijo</h2>
+          <span class="pista">No entran en la previsión</span></header>
+        ${listaRecurrencias(irregulares, null)}
+      </section>` : ''}`;
+
+  $('#seg-horizonte', raiz).appendChild(segmentado(
+    [{ valor: 3, texto: '3 meses' }, { valor: 6, texto: '6 meses' }, { valor: 12, texto: '12 meses' }],
+    estado.horizonte,
+    (v) => { estado.horizonte = Number(v); render(raiz); },
+  ));
+
+  const pintar = () => {
+    columnasApiladas($('#g-plan', raiz), meses.map((m) => nombreMes(m, true)), [
+      { nombre: 'Comprometido', valores: plan.filas.map((f) => f.comprometido) },
+      { nombre: 'Previsto', valores: plan.filas.map((f) => f.previsto) },
+    ], { alto: 240 });
+  };
+  pintar();
+  alRedimensionar(pintar);
+
+  // Desplegar un mes para ver qué compone la previsión.
+  $$('.desplegable', raiz).forEach((fila) => {
+    const abrir = () => {
+      const m = fila.dataset.mes;
+      const det = $(`[data-detalle="${CSS.escape(m)}"]`, raiz);
+      const abierta = fila.getAttribute('aria-expanded') === 'true';
+      if (!abierta && !det.dataset.pintado) {
+        det.firstElementChild.innerHTML = `<div class="caja-desglose">${
+          detalleMes(plan.filas.find((f) => f.mes === m))}</div>`;
+        det.dataset.pintado = 'si';
+      }
+      const caja = det.querySelector('.caja-desglose');
+      const scroll = raiz.querySelector('.tabla-scroll');
+      if (caja && scroll) caja.style.width = `${Math.max(240, scroll.clientWidth - 32)}px`;
+      det.hidden = abierta;
+      fila.setAttribute('aria-expanded', String(!abierta));
+    };
+    fila.addEventListener('click', abrir);
+    fila.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); }
+    });
+  });
+
+  // Dentro / fuera del presupuesto.
+  $$('[data-alternar]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const clave = btn.dataset.alternar;
+      db.config[claveExcluida(clave)] = estaExcluida(clave) ? '' : 'Si';
+      guardar();
+      render(raiz);
+    });
+  });
+}
+
+function listaRecurrencias(filas, fuera) {
+  if (!filas.length) return '<p class="vacio">Nada por aquí.</p>';
+
+  return `<ul class="lista">${filas.map((r) => `
+    <li class="detallada con-acciones">
+      <div class="principal">
+        <div class="titulo">${esc(r.detalle)}</div>
+        <div class="meta">${esc(r.cadenciaTexto)} · ${esc(r.categoria)} ·
+          ${r.veces} veces · última hace ${r.diasDesde} días</div>
+        <div class="cifras">
+          <span>Suele ser <strong>${money(r.monto)}</strong></span>
+          ${r.mensual
+    ? `<span>Al mes <strong>${money(r.porMes)}</strong></span>`
+    : `<span>Próxima <strong>${esc(textoFecha(r.proxima))}</strong></span>`}
+        </div>
+      </div>
+      <div class="monto">${money(r.porMes)}<span class="pie">al mes</span></div>
+      ${fuera === null ? '' : `
+        <div class="acciones">
+          <button class="btn pequeno${fuera ? ' primario' : ''}" data-alternar="${esc(r.clave)}">
+            ${fuera ? 'Devolver al presupuesto' : 'Dejar fuera'}</button>
+        </div>`}
+    </li>`).join('')}</ul>`;
+}
+
+function detalleMes(fila) {
+  if (!fila) return '';
+  if (!fila.lineas.length) {
+    return `<p class="vacio">Sin previsión para ${esc(nombreMes(fila.mes))}:
+      todo lo que se espera ya está registrado.</p>`;
+  }
+  return `<ul class="desglose">${fila.lineas.map((l) => `
+    <li>
+      <div class="principal">
+        <div class="titulo">${esc(l.detalle)}</div>
+        <div class="meta">${esc(String(l.cuando).startsWith('~') ? l.cuando : textoFecha(l.cuando))}</div>
+      </div>
+      <div class="monto">${money(l.monto)}</div>
+    </li>`).join('')}
+    </ul>
+    <div class="pie-desglose">${fila.lineas.length}
+      ${fila.lineas.length === 1 ? 'gasto previsto' : 'gastos previstos'} ·
+      <strong>${money(fila.previsto)}</strong> sobre
+      ${money(fila.comprometido)} ya comprometidos</div>`;
+}
+
+return { render };
+})();
+
 M["app"] = (function () {
 /** Arranque, navegación y botón de registro rápido. */
 
@@ -7631,6 +8170,7 @@ const vistaTarjetas = M["views/tarjetas"];
 const inversiones = M["views/inversiones"];
 const cuentas = M["views/cuentas"];
 const datos = M["views/datos"];
+const plan = M["views/plan"];
 /*
  * `titulo` es el rótulo de la barra de abajo, donde cada ranura mide unos 48 px
  * en un teléfono: si no cabe, se corta. `rotulo` es el título largo de la
@@ -7643,6 +8183,7 @@ const VISTAS = [
   { id: 'tarjetas', titulo: 'Tarjetas', modulo: vistaTarjetas, icono: ICONOS.tarjetas },
   { id: 'inversiones', titulo: 'Invertir', rotulo: 'Inversiones', modulo: inversiones, icono: ICONOS.inversiones },
   { id: 'cuentas', titulo: 'Cuentas', modulo: cuentas, icono: ICONOS.cuentas },
+  { id: 'plan', titulo: 'Plan', rotulo: 'Presupuesto', modulo: plan, icono: ICONOS.plan },
   { id: 'datos', titulo: 'Datos', modulo: datos, icono: ICONOS.datos },
 ];
 
@@ -7651,7 +8192,7 @@ const VISTAS = [
  * «Datos» —importar, respaldos, sincronización— no es de uso diario, así que
  * vive en el menú de la cabecera y deja sitio para que las demás respiren.
  */
-const EN_BARRA = VISTAS.filter((v) => v.id !== 'datos');
+const EN_BARRA = VISTAS.filter((v) => v.id !== 'datos' && v.id !== 'plan');
 
 let vistaActual = 'resumen';
 
@@ -7769,6 +8310,8 @@ function menuPrincipal() {
     titulo: 'Menú',
     cuerpo: `
       <div class="filtros" style="flex-direction:column;align-items:stretch">
+        <button type="button" class="btn" id="m-plan" style="justify-content:flex-start">
+          Presupuesto y proyección</button>
         <button type="button" class="btn" id="m-datos" style="justify-content:flex-start">
           Datos, respaldos y sincronización</button>
       </div>
@@ -7785,10 +8328,12 @@ function menuPrincipal() {
     alEnviar: () => {},
   });
 
-  dlg.querySelector('#m-datos').addEventListener('click', () => {
-    dlg.close();
-    dlg.remove();
-    irA('datos');
+  [['#m-plan', 'plan'], ['#m-datos', 'datos']].forEach(([sel, vista]) => {
+    dlg.querySelector(sel).addEventListener('click', () => {
+      dlg.close();
+      dlg.remove();
+      irA(vista);
+    });
   });
   dlg.querySelectorAll('[data-tema]').forEach((b) => {
     b.addEventListener('click', () => {
