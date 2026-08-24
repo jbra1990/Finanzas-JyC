@@ -1033,6 +1033,21 @@ tr.detalle > td {
   letter-spacing: -0.01em;
 }
 .ficha-cuerpo { padding: 2px 15px 12px; }
+
+/* Reparto entre J y C dentro de una ficha. */
+.reparto { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+.reparto .chip { gap: 5px; padding: 6px 12px; font-size: 12.5px; }
+.reparto .chip strong {
+  color: var(--tinta);
+  font-weight: 660;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.reparto .chip em {
+  font-style: normal;
+  color: var(--tinta-3);
+  font-size: 11px;
+}
 .ficha-cuerpo h3 {
   font-size: 16px;
   font-weight: 660;
@@ -5482,7 +5497,7 @@ return { formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMo
 M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
-const {db, tarjetas} = M["store"];
+const {db, tarjetas, usuarios} = M["store"];
 const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
 const {crear, esc, $, segmentado} = M["ui"];
@@ -5670,10 +5685,16 @@ function seccionProximos(mes) {
     const monto = pagoDelMes(t.id, mes, 'ambos');
     if (monto > 0) {
       const vence = fechaPagoMes(mes, t.id);
+      // Cuánto pone cada uno de ese pago: el cupo es compartido, así que lo
+      // útil no es solo el total sino a quién le toca qué parte.
+      const reparto = usuarios()
+        .map((u) => ({ usuario: u, monto: pagoDelMes(t.id, mes, u) }))
+        .filter((x) => x.monto > 0);
       filas.push({
         tipo: 'Pago de tarjeta',
         cuando: vence ? textoFecha(vence) : nombreMes(mes),
         titulo: t.nombre,
+        reparto,
         pieEtq: `Consumo de ${nombreMes(mes)}`,
         monto: -monto,
       });
@@ -5708,7 +5729,17 @@ function seccionProximos(mes) {
           <span class="rotulo">${esc(f.tipo)}</span>
           <span>${esc(f.cuando)}</span>
         </div>
-        <div class="ficha-cuerpo"><h3>${esc(f.titulo)}</h3></div>
+        <div class="ficha-cuerpo">
+          <h3>${esc(f.titulo)}</h3>
+          ${f.reparto?.length ? `
+            <div class="reparto">
+              ${f.reparto.map((r) => `
+                <span class="chip ${esc(String(r.usuario).toLowerCase())}">
+                  ${esc(r.usuario)} <strong>${money(r.monto)}</strong>
+                  <em>${((r.monto / Math.abs(f.monto)) * 100).toFixed(0)} %</em>
+                </span>`).join('')}
+            </div>` : ''}
+        </div>
         <div class="ficha-pie">
           <span>${esc(f.pieEtq)}</span>
           <span><strong class="${f.monto < 0 ? 'monto neg' : 'monto pos'}">
