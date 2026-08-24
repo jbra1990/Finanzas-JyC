@@ -1250,6 +1250,111 @@ dialog .modal-pie {
   font-variant-numeric: tabular-nums; font-size: 11.5px;
 }
 
+/* --- Cajón lateral -------------------------------------------------------- */
+
+/*
+ * Panel vertical que entra desde el borde izquierdo. Está porque la cabecera
+ * se va con el scroll: sus dos botones solo se podían tocar arriba del todo, y
+ * el rebote del iPhone los sacaba del marco justo al intentar acertar.
+ */
+.cajon-velo {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(6, 17, 33, 0.5);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.24s;
+}
+.cajon-velo.abierto { opacity: 1; }
+
+.cajon {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 61;
+  width: min(312px, 84vw);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: calc(20px + env(safe-area-inset-top)) 12px calc(20px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--panel-plano);
+  background-image: var(--panel);
+  color: var(--panel-tinta);
+  border-radius: 0 26px 26px 0;
+  box-shadow: 14px 0 44px rgba(6, 17, 33, 0.42);
+  transform: translateX(-100%);
+  transition: transform 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.cajon.abierto { transform: translateX(0); }
+/* Mientras el dedo manda, la posición la fija el gesto y no la transición. */
+.cajon.arrastrando { transition: none; }
+
+.cajon-cab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 8px 16px;
+}
+.cajon-cab strong { display: block; font-size: 15px; font-weight: 660; }
+.cajon-cab span { font-size: 12px; color: var(--panel-tinta-2); }
+
+.cajon-rotulo {
+  padding: 16px 14px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--panel-tinta-2);
+}
+
+.cajon-item {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--panel-tinta-2);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 560;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.cajon-item svg { width: 20px; height: 20px; flex: none; }
+.cajon-item:hover { background: rgba(255, 255, 255, 0.08); color: var(--panel-tinta); }
+.cajon-item[aria-current="page"] {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--panel-tinta);
+  font-weight: 640;
+}
+.cajon-item .punto {
+  width: 8px; height: 8px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--critico);
+}
+.cajon .segmentado {
+  margin: 4px 8px 0;
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.cajon .segmentado button { color: var(--panel-tinta-2); }
+.cajon .segmentado button[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.95);
+  color: #101828;
+  box-shadow: none;
+}
+
+/* Con el cajón abierto la página de detrás no se desplaza. */
+body.con-cajon { overflow: hidden; }
+
 /* --- Avisos -------------------------------------------------------------- */
 
 .aviso {
@@ -4855,6 +4960,170 @@ function textoEstado() {
 return { alCambiarArchivo, archivo, crearYVincular, desvincular, detener, enMarcoAjeno, escribir, guardarDiferido, reconectar, restaurar, soportado, textoEstado, vigilar, vincularExistente };
 })();
 
+M["cajon"] = (function () {
+/**
+ * Cajón lateral: un panel vertical que entra deslizando desde el borde
+ * izquierdo.
+ *
+ * Existe porque la cabecera se va con el scroll. Los dos botones redondos
+ * —avisos y menú— solo se podían tocar estando arriba del todo, y en el
+ * iPhone, al subir de golpe, el rebote del scroll los saca del marco justo
+ * cuando se intenta acertar. Desde el cajón están siempre a un gesto.
+ *
+ * El módulo solo se ocupa del panel y del gesto; lo que va dentro lo pone
+ * quien lo monta.
+ */
+
+/** Ancho de la franja del borde donde empieza a contar el gesto. */
+const BORDE = 26;
+
+/** Desplazamiento a partir del cual el arrastre se da por intencionado. */
+const UMBRAL = 65;
+
+function crearCajon({ etiqueta = 'Menú' } = {}) {
+  const velo = document.createElement('div');
+  velo.className = 'cajon-velo';
+
+  const cajon = document.createElement('aside');
+  cajon.className = 'cajon';
+  cajon.setAttribute('aria-label', etiqueta);
+  cajon.setAttribute('aria-hidden', 'true');
+  cajon.hidden = true;
+  velo.hidden = true;
+
+  document.body.append(velo, cajon);
+
+  let abierto = false;
+
+  const colocar = (dx) => {
+    cajon.style.transform = dx === null ? '' : `translateX(${dx}px)`;
+  };
+
+  function abrir() {
+    if (abierto) return;
+    abierto = true;
+    cajon.hidden = false;
+    velo.hidden = false;
+    // Un fotograma antes de animar: si se pinta y se mueve a la vez, el
+    // navegador se salta la transición y el panel aparece de golpe.
+    requestAnimationFrame(() => {
+      cajon.classList.remove('arrastrando');
+      colocar(null);
+      cajon.classList.add('abierto');
+      velo.classList.add('abierto');
+    });
+    cajon.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('con-cajon');
+  }
+
+  function cerrar() {
+    if (!abierto) return;
+    abierto = false;
+    cajon.classList.remove('arrastrando');
+    colocar(null);
+    cajon.classList.remove('abierto');
+    velo.classList.remove('abierto');
+    cajon.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('con-cajon');
+    // Se esconde al terminar la animación para que no quede capturando toques
+    // fuera de la pantalla.
+    setTimeout(() => {
+      if (!abierto) { cajon.hidden = true; velo.hidden = true; }
+    }, 280);
+  }
+
+  velo.addEventListener('click', cerrar);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && abierto) cerrar();
+  });
+
+  /*
+   * El gesto. Se sigue el dedo hasta que queda claro hacia dónde va: si manda
+   * la vertical, es scroll y no se toca nada; si manda la horizontal, se
+   * arrastra el panel. Decidirlo antes rompería el desplazamiento normal de la
+   * página, que es lo que más se usa.
+   */
+  let x0 = 0;
+  let y0 = 0;
+  let siguiendo = false;
+  let decidido = false;
+  let desdeAbierto = false;
+  const ancho = () => cajon.getBoundingClientRect().width || 300;
+
+  document.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    /*
+     * Cerrado, el gesto solo cuenta si nace en la franja del borde; en
+     * cualquier otro sitio la página tiene que poder desplazarse con
+     * normalidad. Abierto vale desde cualquier punto —también sobre el velo—
+     * porque detrás no hay nada que desplazar, y limitarlo al interior del
+     * panel dejaba fuera justo el gesto de devolverlo empujando el velo.
+     */
+    if (!abierto && t.clientX > BORDE) return;
+    x0 = t.clientX;
+    y0 = t.clientY;
+    siguiendo = true;
+    decidido = false;
+    desdeAbierto = abierto;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!siguiendo) return;
+    const t = e.touches[0];
+    const dx = t.clientX - x0;
+    const dy = t.clientY - y0;
+
+    if (!decidido) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      if (Math.abs(dy) > Math.abs(dx)) { siguiendo = false; return; }
+      decidido = true;
+      cajon.classList.add('arrastrando');
+      if (!desdeAbierto) {
+        cajon.hidden = false;
+        velo.hidden = false;
+        cajon.classList.add('abierto');
+      }
+    }
+
+    e.preventDefault();
+    const w = ancho();
+    const pos = desdeAbierto
+      ? Math.min(0, Math.max(-w, dx))
+      : Math.min(0, Math.max(-w, dx - w));
+    colocar(pos);
+    velo.style.opacity = String(1 + pos / w);
+  }, { passive: false });
+
+  const soltar = () => {
+    if (!siguiendo) return;
+    siguiendo = false;
+    velo.style.opacity = '';
+    if (!decidido) return;
+    cajon.classList.remove('arrastrando');
+
+    const actual = new DOMMatrixReadOnly(getComputedStyle(cajon).transform).m41;
+    const w = ancho();
+    const abrirlo = desdeAbierto ? actual > -UMBRAL : actual > -w + UMBRAL;
+
+    colocar(null);
+    if (abrirlo) {
+      abierto = false; // fuerza la animación de entrada
+      abrir();
+    } else {
+      abierto = true;
+      cerrar();
+    }
+  };
+  document.addEventListener('touchend', soltar, { passive: true });
+  document.addEventListener('touchcancel', soltar, { passive: true });
+
+  return { nodo: cajon, abrir, cerrar, alterna: () => (abierto ? cerrar() : abrir()) };
+}
+
+return { crearCajon };
+})();
+
 M["plan"] = (function () {
 /**
  * Detección de gastos que se repiten y proyección del presupuesto.
@@ -8161,6 +8430,7 @@ const {db, cargar, alCambiar, almacenamiento, instantanea, guardar, tarjetas} = 
 const {iniciarSync, empujarDiferido, alCambiarSync, estadoSync, configurado} = M["sync"];
 const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta} = M["calc"];
 const archivoExcel = M["archivo"];
+const {crearCajon} = M["cajon"];
 const {$, crear, esc, ICONOS, modal, brindis, descargar} = M["ui"];
 const {formGastoTarjeta, formGastoEfectivo, formIngreso, formInversion, formMovimiento} = M["forms"];
 const resumen = M["views/resumen"];
@@ -8302,49 +8572,74 @@ function panelAvisos() {
   });
 }
 
-/** Menú de la cabecera: lo que no cabe en la barra de abajo. */
-function menuPrincipal() {
+/*
+ * Menú lateral. Sustituye al que se abría desde la cabecera: la cabecera se va
+ * con el scroll, y sus dos botones redondos solo se podían tocar estando
+ * arriba del todo. Aquí están siempre, deslizando desde el borde izquierdo.
+ */
+let cajon;
+
+function pintarCajon() {
+  if (!cajon) return;
   const temas = [['auto', 'Automático'], ['claro', 'Claro'], ['oscuro', 'Oscuro']];
   const actual = db.config.tema || 'auto';
-  const dlg = modal({
-    titulo: 'Menú',
-    cuerpo: `
-      <div class="filtros" style="flex-direction:column;align-items:stretch">
-        <button type="button" class="btn" id="m-plan" style="justify-content:flex-start">
-          Presupuesto y proyección</button>
-        <button type="button" class="btn" id="m-datos" style="justify-content:flex-start">
-          Datos, respaldos y sincronización</button>
-      </div>
-      <div class="campo" style="margin-top:14px">
-        <label>Tema</label>
-        <div class="segmentado" id="m-tema">
-          ${temas.map(([v, txt]) => `
-            <button type="button" data-tema="${v}" aria-pressed="${v === actual}">${txt}</button>
-          `).join('')}
-        </div>
-      </div>`,
-    aceptar: 'Cerrar',
-    soloCerrar: true,
-    alEnviar: () => {},
-  });
+  const pendientes = avisosPendientes().some((a) => a.nivel !== 'info');
 
-  [['#m-plan', 'plan'], ['#m-datos', 'datos']].forEach(([sel, vista]) => {
-    dlg.querySelector(sel).addEventListener('click', () => {
-      dlg.close();
-      dlg.remove();
-      irA(vista);
+  cajon.nodo.innerHTML = `
+    <div class="cajon-cab">
+      <div class="marca" aria-hidden="true">JC</div>
+      <div>
+        <strong>Finanzas J &amp; C</strong>
+        <span>${VISTAS.length} secciones</span>
+      </div>
+    </div>
+
+    <button class="cajon-item" data-avisos>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/>
+        <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+      </svg>Avisos${pendientes ? '<span class="punto" aria-label="hay avisos"></span>' : ''}</button>
+
+    <div class="cajon-rotulo">Secciones</div>
+    ${VISTAS.map((v) => `
+      <button class="cajon-item" data-vista="${v.id}"
+        ${v.id === vistaActual ? 'aria-current="page"' : ''}>
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${v.icono}</svg>
+        ${esc(v.rotulo || v.titulo)}</button>`).join('')}
+
+    <div class="cajon-rotulo">Tema</div>
+    <div class="segmentado" id="m-tema">
+      ${temas.map(([val, txt]) => `
+        <button type="button" data-tema="${val}" aria-pressed="${val === actual}">${txt}</button>
+      `).join('')}
+    </div>`;
+
+  cajon.nodo.querySelector('[data-avisos]').addEventListener('click', () => {
+    cajon.cerrar();
+    panelAvisos();
+  });
+  cajon.nodo.querySelectorAll('[data-vista]').forEach((b) => {
+    b.addEventListener('click', () => {
+      cajon.cerrar();
+      irA(b.dataset.vista);
     });
   });
-  dlg.querySelectorAll('[data-tema]').forEach((b) => {
+  cajon.nodo.querySelectorAll('[data-tema]').forEach((b) => {
     b.addEventListener('click', () => {
       db.config.tema = b.dataset.tema;
       guardar();
       aplicarTema();
-      dlg.querySelectorAll('[data-tema]').forEach((o) => {
+      cajon.nodo.querySelectorAll('[data-tema]').forEach((o) => {
         o.setAttribute('aria-pressed', String(o === b));
       });
     });
   });
+}
+
+function menuPrincipal() {
+  pintarCajon();
+  cajon.alterna();
 }
 
 /**
@@ -8381,6 +8676,7 @@ function irA(id) {
   vistaActual = vista.id;
   if (location.hash !== `#${vista.id}`) location.hash = vista.id;
   pintarNav();
+  pintarCajon();
   $('#titulo-vista').textContent = vista.rotulo || vista.titulo;
   const raiz = $('#vista');
   raiz.textContent = '';
@@ -8437,6 +8733,7 @@ async function iniciar() {
   aplicarTema();
 
   pintarNav();
+  cajon = crearCajon({ etiqueta: 'Menú de Finanzas J y C' });
   $('#btn-menu').addEventListener('click', menuPrincipal);
   $('#btn-avisos').addEventListener('click', panelAvisos);
 
