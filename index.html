@@ -5065,22 +5065,39 @@ const DIAS_MES = 30.44;
 const UMBRAL_MENSUAL = 20;
 
 const CADENCIAS = [
-  { dias: 7, nombre: 'Cada semana' },
-  { dias: 15, nombre: 'Cada quincena' },
-  { dias: 30, nombre: 'Cada mes' },
-  { dias: 60, nombre: 'Cada 2 meses' },
-  { dias: 90, nombre: 'Cada 3 meses' },
-  { dias: 120, nombre: 'Cada 4 meses' },
-  { dias: 182, nombre: 'Cada 6 meses' },
-  { dias: 365, nombre: 'Una vez al año' },
+  { dias: 7, nombre: 'Cada semana', porMes: 52 / 12 },
+  { dias: 15, nombre: 'Cada quincena', porMes: 2 },
+  { dias: 30, nombre: 'Cada mes', porMes: 1 },
+  { dias: 60, nombre: 'Cada 2 meses', porMes: 1 / 2 },
+  { dias: 90, nombre: 'Cada 3 meses', porMes: 1 / 3 },
+  { dias: 120, nombre: 'Cada 4 meses', porMes: 1 / 4 },
+  { dias: 182, nombre: 'Cada 6 meses', porMes: 1 / 6 },
+  { dias: 365, nombre: 'Una vez al año', porMes: 1 / 12 },
 ];
 
-/** Nombre humano de una cadencia, si cae cerca de una conocida. */
+/** La cadencia conocida a la que se parece un intervalo, si se parece a alguna. */
+const cadenciaCercana = (dias) => CADENCIAS.find(
+  (c) => Math.abs(dias - c.dias) <= c.dias * 0.22);
+
+/** Nombre humano de una cadencia. */
 function nombreCadencia(dias) {
-  const cerca = CADENCIAS.find((c) => Math.abs(dias - c.dias) <= c.dias * 0.22);
+  const cerca = cadenciaCercana(dias);
   if (cerca) return cerca.nombre;
   if (dias < 30) return `Cada ${Math.round(dias)} días`;
   return `Cada ${(dias / DIAS_MES).toFixed(1)} meses`;
+}
+
+/**
+ * Cuánto supone al mes un importe que se repite cada tantos días.
+ *
+ * Cuando el intervalo es una periodicidad de calendario se usa esa y no los
+ * días: un cargo mensual de $2,99 son $2,99 al mes, no $3,03. Dividir 30,44
+ * entre 30 metía un 1,5 % de más en cada cuota fija, que en una lista de
+ * suscripciones se nota.
+ */
+function porMesDe(monto, dias) {
+  const cerca = cadenciaCercana(dias);
+  return redondear(monto * (cerca ? cerca.porMes : DIAS_MES / dias));
 }
 
 /**
@@ -5104,10 +5121,57 @@ const mediana = (xs) => {
   return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2;
 };
 
+/*
+ * Lo que la app deduce del historial es un punto de partida, no la verdad. El
+ * iCloud subió de $0,99 a $2,99 y eso no está en ningún dato pasado; el precio
+ * nuevo solo lo sabe quien paga. Por eso cada gasto periódico se puede
+ * corregir —importe, cada cuánto, si es de importe fijo o variable, si sigue
+ * vivo— y se puede añadir uno que todavía no tiene historial.
+ *
+ * Los ajustes viven en la configuración, que ya se sincroniza y viaja en el
+ * respaldo, en dos claves con JSON dentro para no tocar el esquema del Excel.
+ */
+const CLAVE_AJUSTES = 'plan_ajustes';
+const CLAVE_MANUALES = 'plan_manuales';
+
+function leerJSON(clave, porDefecto) {
+  try {
+    const v = JSON.parse(db.config[clave] || 'null');
+    return v ?? porDefecto;
+  } catch {
+    return porDefecto;
+  }
+}
+
+const ajustes = () => leerJSON(CLAVE_AJUSTES, {});
+const fijosManuales = () => leerJSON(CLAVE_MANUALES, []);
+
+/** Guarda (o borra, pasando `null`) el ajuste de un gasto periódico. */
+function guardarAjuste(clave, cambios) {
+  const todos = ajustes();
+  if (cambios === null) delete todos[clave];
+  else todos[clave] = { ...todos[clave], ...cambios };
+  db.config[CLAVE_AJUSTES] = JSON.stringify(todos);
+}
+
+function guardarManual(fila) {
+  const lista = fijosManuales();
+  const i = lista.findIndex((x) => x.id === fila.id);
+  if (i >= 0) lista[i] = fila;
+  else lista.push(fila);
+  db.config[CLAVE_MANUALES] = JSON.stringify(lista);
+}
+
+function borrarManual(id) {
+  db.config[CLAVE_MANUALES] = JSON.stringify(fijosManuales().filter((x) => x.id !== id));
+}
+
 /** Clave de configuración donde se recuerda una recurrencia descartada. */
 const claveExcluida = (clave) => `plan_no_${clave}`;
 
-const estaExcluida = (clave) => db.config[claveExcluida(clave)] === 'Si';
+/** Un gasto está fuera si se apagó, o si lo estaba con el sistema anterior. */
+const estaExcluida = (clave) => ajustes()[clave]?.activo === false
+  || db.config[claveExcluida(clave)] === 'Si';
 
 /**
  * Gastos que se repiten, con su periodicidad y su importe típico.
@@ -5121,6 +5185,7 @@ const estaExcluida = (clave) => db.config[claveExcluida(clave)] === 'Si';
  * entera.
  */
 function recurrencias() {
+  const mios = ajustes();
   const grupos = new Map();
   const anota = (detalle, fecha, monto, categoria, origen) => {
     const clave = claveGasto(detalle);
@@ -5145,9 +5210,29 @@ function recurrencias() {
     return [...cuenta.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'Sin categoría';
   };
 
+  /*
+   * Un pago de una vez es una aparición. Un cargo RECURRENTE —el iCloud, el
+   * gimnasio, el seguro de la tarjeta— no: su aparición es cada una de sus
+   * cuotas, una por mes. Tratándolo así entra en la lista de fijos con su
+   * importe real, y como sus meses ya registrados son los de sus cuotas, la
+   * previsión solo rellena a partir de donde se acaban: nada se cuenta dos
+   * veces. Un DIFERIDO se queda fuera, que no se repite: es una compra suelta
+   * partida en plazos.
+   */
+  const cuotasDe = new Map();
+  db.cuotas.forEach((c) => {
+    if (!cuotasDe.has(c.gasto_id)) cuotasDe.set(c.gasto_id, []);
+    cuotasDe.get(c.gasto_id).push(c);
+  });
+
   db.gastosTarjeta.forEach((g) => {
-    if (g.tipo !== 'Corriente') return;
-    anota(g.detalle, g.fecha, Number(g.monto_total) || 0, g.categoria, g.tarjeta);
+    if (g.tipo === 'Corriente') {
+      anota(g.detalle, g.fecha, Number(g.monto_total) || 0, g.categoria, g.tarjeta);
+    } else if (g.tipo === 'Recurrente') {
+      (cuotasDe.get(g.id) || []).forEach((c) => {
+        anota(g.detalle, `${c.mes}-01`, Number(c.monto) || 0, g.categoria, g.tarjeta);
+      });
+    }
   });
   db.gastosEfectivo.forEach((g) => {
     anota(g.detalle, g.fecha, Number(g.monto) || 0, g.categoria, g.cuenta);
@@ -5171,8 +5256,18 @@ function recurrencias() {
         ? mediana(huecos.map((h) => Math.abs(h - cadencia))) / cadencia : 1;
 
       const ultima = fechas[fechas.length - 1];
-      const monto = redondear(mediana(g.montos));
-      const porMes = cadencia > 0 ? redondear(monto * (DIAS_MES / cadencia)) : 0;
+      const montoAuto = redondear(mediana(g.montos));
+
+      /*
+       * ¿El importe es siempre el mismo o cambia? Se mira cuánto se desvían
+       * los importes de su propia mediana. El gimnasio cobra $30 clavados
+       * todos los meses —fijo—; la gasolina se echa todos los meses pero por
+       * lo que toque —variable—. Los dos son periódicos; solo uno se puede dar
+       * por sabido de antemano.
+       */
+      const variacion = montoAuto > 0
+        ? mediana(g.montos.map((x) => Math.abs(x - montoAuto))) / montoAuto : 1;
+      const tipoAuto = variacion <= 0.08 ? 'Fijo' : 'Variable';
 
       /*
        * Caducidad. Un gasto «semanal» que no aparece desde hace ocho meses ya
@@ -5182,31 +5277,81 @@ function recurrencias() {
       const margen = Math.max(cadencia * 2.5, 45);
       const diasDesde = diasEntre(ultima, hoy);
 
+      // Lo corregido a mano manda sobre lo deducido.
+      const aj = mios[g.clave] || {};
+      const monto = aj.monto !== undefined ? redondear(aj.monto) : montoAuto;
+      const cad = Math.round(aj.cadencia || cadencia);
+      const porMes = cad > 0 ? porMesDe(monto, cad) : 0;
+
       return {
         clave: g.clave,
         detalle: g.detalle,
-        categoria: categoriaDominante(g.categorias),
+        categoria: aj.categoria || categoriaDominante(g.categorias),
         origen: g.origen,
         veces: fechas.length,
         fechas,
         mesesConRegistro: new Set(fechas.map(claveMes)),
-        cadencia: Math.round(cadencia),
-        cadenciaTexto: nombreCadencia(cadencia),
+        cadencia: cad,
+        cadenciaTexto: nombreCadencia(cad),
         dispersion,
+        variacion,
+        tipo: aj.tipo || tipoAuto,
+        tipoAuto,
         // Con los intervalos muy desiguales no se proyecta: se lista para que
         // se vea, pero no entra en el presupuesto por su cuenta.
         fiable: dispersion <= 0.6,
-        mensual: cadencia <= UMBRAL_MENSUAL,
+        mensual: cad <= UMBRAL_MENSUAL,
         monto,
+        montoAuto,
         porMes,
         ultima,
         diasDesde,
-        vigente: diasDesde <= margen,
-        proxima: sumarDias(ultima, Math.round(cadencia)),
+        // Un ajuste a mano también revive un gasto que la app daba por muerto:
+        // si alguien se molesta en corregirlo, es que sigue vigente.
+        vigente: diasDesde <= margen || aj.monto !== undefined,
+        proxima: siguienteLibre(ultima, cad, new Set(fechas.map(claveMes))),
+        ajustado: Object.keys(aj).length > 0,
+        manual: false,
       };
     })
     .filter(Boolean)
+    .concat(fijosManuales().map((f) => ({
+      ...f,
+      clave: f.id,
+      veces: 0,
+      fechas: [],
+      mesesConRegistro: new Set(),
+      cadenciaTexto: nombreCadencia(f.cadencia),
+      dispersion: 0,
+      variacion: 0,
+      tipoAuto: f.tipo,
+      fiable: true,
+      vigente: f.activo !== false,
+      mensual: f.cadencia <= UMBRAL_MENSUAL,
+      montoAuto: f.monto,
+      porMes: f.cadencia > 0 ? porMesDe(f.monto, f.cadencia) : 0,
+      ultima: f.desde || hoy,
+      diasDesde: 0,
+      proxima: sumarDias(f.desde || hoy, f.cadencia),
+      ajustado: true,
+      manual: true,
+    })))
     .sort((a, b) => b.porMes - a.porMes);
+}
+
+/**
+ * La primera fecha futura que cae en un mes sin registro de ese gasto. Un
+ * cargo con las cuotas ya metidas hasta diciembre no vuelve «el 31 de
+ * diciembre»: vuelve en enero, que es cuando de verdad habrá que pagarlo otra
+ * vez y donde lo pone la previsión.
+ */
+function siguienteLibre(ultima, cadencia, meses) {
+  let f = ultima;
+  for (let i = 0; i < 400; i += 1) {
+    f = sumarDias(f, cadencia);
+    if (!meses.has(claveMes(f))) return f;
+  }
+  return f;
 }
 
 /** Último día de un mes 'YYYY-MM', en ISO. */
@@ -5391,7 +5536,7 @@ function mesesProyectados(n = 6) {
   return Array.from({ length: n }, (_, i) => sumarMeses(base, i));
 }
 
-return { aplicarPresupuesto, claveExcluida, claveGasto, estaExcluida, mesesProyectados, presupuestoSugerido, proyeccion, recurrencias };
+return { ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, estaExcluida, fijosManuales, guardarAjuste, guardarManual, mesesProyectados, presupuestoSugerido, proyeccion, recurrencias };
 })();
 
 M["forms"] = (function () {
@@ -8250,11 +8395,11 @@ M["views/plan"] = (function () {
  * comprometido más lo previsto, y la suma de los dos es el presupuesto.
  */
 
-const {db, guardar} = M["store"];
+const {db, guardar, categoriasGasto} = M["store"];
 const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha} = M["calc"];
 const {columnasApiladas, alRedimensionar} = M["charts"];
-const {esc, $, $$, segmentado} = M["ui"];
-const {recurrencias, proyeccion, mesesProyectados, claveExcluida, estaExcluida} = M["plan"];
+const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones} = M["ui"];
+const {recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual} = M["plan"];
 const estado = { horizonte: 6, mesAbierto: null };
 
 function render(raiz) {
@@ -8287,6 +8432,18 @@ function render(raiz) {
   const caducadas = todas.filter((r) => r.fiable && !r.vigente);
   const irregulares = todas.filter((r) => !r.fiable);
 
+  /*
+   * Los periódicos se parten en dos, que no son lo mismo aunque los dos
+   * vuelvan cada mes: el FIJO cobra siempre igual —el gimnasio, $30 clavados—
+   * y se puede dar por sabido; el VARIABLE vuelve seguro pero por lo que toque
+   * —la gasolina—, y de ese solo cabe estimar. Lo que se compra una vez y no
+   * vuelve no está en ninguna de las dos: eso es el gasto real y se apunta
+   * como siempre.
+   */
+  const fijos = fiables.filter((r) => r.tipo === 'Fijo');
+  const variables = fiables.filter((r) => r.tipo !== 'Fijo');
+  const suma = (lista) => redondear(lista.reduce((t, r) => t + r.porMes, 0));
+
   raiz.innerHTML = `
     <section class="panel">
       <span class="etiqueta">Presupuesto de ${esc(nombreMes(primero.mes))}</span>
@@ -8302,10 +8459,10 @@ function render(raiz) {
             vs. promedio</span>` : ''}
       </div>
       <div class="panel-datos">
-        <div><div class="etq">${meses.length} meses</div>
-          <div class="val">${money(plan.totales.simulado)}</div></div>
-        <div><div class="etq">Promedio simulado</div>
-          <div class="val">${money(redondear(plan.totales.simulado / meses.length))}</div></div>
+        <div><div class="etq">Fijos al mes</div>
+          <div class="val">${money(suma(fijos))}</div></div>
+        <div><div class="etq">Variables al mes</div>
+          <div class="val">${money(suma(variables))}</div></div>
         <div><div class="etq">Promedio real previo</div>
           <div class="val">${money(promedio)}</div></div>
       </div>
@@ -8347,10 +8504,22 @@ function render(raiz) {
       </div>
     </section>
 
+    <div class="barra-accion">
+      <span class="pista crece">Corrige el importe si cambió, o añade uno que
+        todavía no tiene historial.</span>
+      <button class="btn primario pequeno" id="btn-fijo">+ Fijo</button>
+    </div>
+
     <section class="tarjeta">
-      <header><h2>Gastos que se repiten</h2>
-        <span class="pista">Toca uno para dejarlo fuera</span></header>
-      ${listaRecurrencias(fiables, false)}
+      <header><h2>Fijos</h2>
+        <span class="pista">${money(suma(fijos))} al mes · importe conocido</span></header>
+      ${listaRecurrencias(fijos, false)}
+    </section>
+
+    <section class="tarjeta">
+      <header><h2>Variables que se repiten</h2>
+        <span class="pista">${money(suma(variables))} al mes · importe estimado</span></header>
+      ${listaRecurrencias(variables, false)}
     </section>
 
     ${descartadas.length ? `
@@ -8412,11 +8581,21 @@ function render(raiz) {
     });
   });
 
+  const recargar = () => render(raiz);
+  $('#btn-fijo', raiz).addEventListener('click', () => formFijo(null, recargar));
+  $$('[data-editar]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const r = todas.find((x) => x.clave === btn.dataset.editar);
+      if (r) formFijo(r, recargar);
+    });
+  });
+
   // Dentro / fuera del presupuesto.
   $$('[data-alternar]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => {
       const clave = btn.dataset.alternar;
-      db.config[claveExcluida(clave)] = estaExcluida(clave) ? '' : 'Si';
+      guardarAjuste(clave, { activo: estaExcluida(clave) });
+      db.config[`plan_no_${clave}`] = '';
       guardar();
       render(raiz);
     });
@@ -8429,11 +8608,18 @@ function listaRecurrencias(filas, fuera) {
   return `<ul class="lista">${filas.map((r) => `
     <li class="detallada con-acciones">
       <div class="principal">
-        <div class="titulo">${esc(r.detalle)}</div>
-        <div class="meta">${esc(r.cadenciaTexto)} · ${esc(r.categoria)} ·
-          ${r.veces} veces · última hace ${r.diasDesde} días</div>
+        <div class="titulo">${esc(r.detalle)}
+          ${r.manual ? '<span class="chip">a mano</span>' : ''}
+          ${r.ajustado && !r.manual ? '<span class="chip">corregido</span>' : ''}</div>
+        <div class="meta">${esc(r.cadenciaTexto)} · ${esc(r.categoria)}${r.manual ? ''
+    : ` · ${r.veces} veces · ${r.diasDesde >= 0
+      ? `última hace ${r.diasDesde} días`
+      // Un cargo recurrente ya tiene cuotas apuntadas por delante: decir que
+      // la última fue «hace -98 días» no lo entiende nadie.
+      : `apuntado hasta ${esc(nombreMes(r.ultima.slice(0, 7)))}`}`}</div>
         <div class="cifras">
-          <span>Suele ser <strong>${money(r.monto)}</strong></span>
+          <span>${r.tipo === 'Fijo' ? 'Cobra' : 'Suele ser'}
+            <strong>${money(r.monto)}</strong></span>
           ${r.mensual
     ? `<span>Al mes <strong>${money(r.porMes)}</strong></span>`
     : `<span>Próxima <strong>${esc(textoFecha(r.proxima))}</strong></span>`}
@@ -8442,10 +8628,128 @@ function listaRecurrencias(filas, fuera) {
       <div class="monto">${money(r.porMes)}<span class="pie">al mes</span></div>
       ${fuera === null ? '' : `
         <div class="acciones">
+          <button class="btn pequeno" data-editar="${esc(r.clave)}">Editar</button>
           <button class="btn pequeno${fuera ? ' primario' : ''}" data-alternar="${esc(r.clave)}">
-            ${fuera ? 'Devolver al presupuesto' : 'Dejar fuera'}</button>
+            ${fuera ? 'Devolver' : 'Dejar fuera'}</button>
         </div>`}
     </li>`).join('')}</ul>`;
+}
+
+/** Opciones de periodicidad, en días. */
+const CADENCIAS = [
+  { valor: 7, texto: 'Cada semana' },
+  { valor: 15, texto: 'Cada quincena' },
+  { valor: 30, texto: 'Cada mes' },
+  { valor: 60, texto: 'Cada 2 meses' },
+  { valor: 90, texto: 'Cada 3 meses' },
+  { valor: 182, texto: 'Cada 6 meses' },
+  { valor: 365, texto: 'Una vez al año' },
+];
+
+/**
+ * Corregir un gasto periódico, o dar de alta uno nuevo.
+ *
+ * Lo que la app deduce del historial es un punto de partida: el iCloud subió
+ * de $0,99 a $2,99 y eso no está en ningún dato pasado. El precio nuevo solo
+ * lo sabe quien paga, así que tiene que poder escribirlo.
+ */
+function formFijo(r, alTerminar) {
+  const nuevo = !r;
+  const cats = categoriasGasto();
+  const cuerpo = `
+    <div class="campo ancho"><label for="pf-detalle">Concepto</label>
+      <input id="pf-detalle" name="detalle" required placeholder="iCloud"
+             value="${esc(r?.detalle || '')}" ${nuevo ? '' : 'readonly'}></div>
+    <div class="filtros">
+      ${campoMonto('pf-monto', 'monto', {
+    etiqueta: 'Importe de cada vez', valor: String(r?.monto ?? '').replace('.', ','), requerido: true,
+  })}
+      <div class="campo"><label for="pf-cada">Cada cuánto</label>
+        <select id="pf-cada" name="cadencia">
+          ${opciones(CADENCIAS, cercana(r?.cadencia ?? 30))}</select></div>
+    </div>
+    <div class="filtros">
+      <div class="campo"><label for="pf-cat">Categoría</label>
+        <select id="pf-cat" name="categoria">${opciones(cats, r?.categoria)}</select></div>
+      <div class="campo"><label>Tipo de importe</label><div id="pf-tipo"></div></div>
+    </div>
+    <div class="previsualizacion" id="pf-preview"></div>
+    ${r && !r.manual ? `<p class="pista">La app calculó ${money(r.montoAuto)}
+      a partir de ${r.veces} apariciones. Lo que escribas aquí manda sobre eso.</p>` : ''}`;
+
+  let tipo = r?.tipo || 'Fijo';
+  const dlg = modal({
+    titulo: nuevo ? 'Nuevo gasto periódico' : `Corregir «${r.detalle}»`,
+    cuerpo,
+    aceptar: nuevo ? 'Añadir' : 'Guardar',
+    alAbrir(form) {
+      $('#pf-tipo', form).appendChild(segmentado(
+        [{ valor: 'Fijo', texto: 'Fijo' }, { valor: 'Variable', texto: 'Variable' }],
+        tipo, (v) => { tipo = v; },
+      ));
+      const preview = $('#pf-preview', form);
+      const refrescar = () => {
+        const monto = aNumero($('#pf-monto', form).value);
+        const cada = Number($('#pf-cada', form).value) || 30;
+        // Los mismos factores de calendario que usa el plan, para que la
+        // vista previa no prometa una cifra y la lista enseñe otra.
+        const factor = { 7: 52 / 12, 15: 2, 30: 1, 60: 1 / 2, 90: 1 / 3, 182: 1 / 6, 365: 1 / 12 }[cada]
+          || 30.44 / cada;
+        preview.innerHTML = `Al mes serían <strong>${money(monto * factor)}</strong>,
+          y al año <strong>${money(monto * factor * 12)}</strong>.`;
+      };
+      ['input', 'change'].forEach((e) => form.addEventListener(e, refrescar));
+      refrescar();
+    },
+    alEnviar(d) {
+      const fila = {
+        detalle: d.detalle.trim(),
+        monto: redondear(aNumero(d.monto)),
+        cadencia: Number(d.cadencia) || 30,
+        categoria: d.categoria,
+        tipo,
+      };
+      if (nuevo) {
+        guardarManual({
+          ...fila,
+          id: `fijo-${Date.now().toString(36)}`,
+          desde: new Date().toISOString().slice(0, 10),
+          activo: true,
+        });
+      } else if (r.manual) {
+        guardarManual({ ...r, ...fila });
+      } else {
+        guardarAjuste(r.clave, fila);
+      }
+      guardar();
+      brindis(nuevo ? 'Gasto periódico añadido' : 'Actualizado');
+      alTerminar?.();
+    },
+  });
+
+  if (r?.manual) {
+    const pie = dlg.querySelector('.modal-pie');
+    const borrar = document.createElement('button');
+    borrar.type = 'button';
+    borrar.className = 'btn pequeno peligro';
+    borrar.style.marginRight = 'auto';
+    borrar.textContent = 'Eliminar';
+    borrar.addEventListener('click', () => {
+      borrarManual(r.id);
+      guardar();
+      dlg.close();
+      dlg.remove();
+      brindis('Eliminado');
+      alTerminar?.();
+    });
+    pie.prepend(borrar);
+  }
+}
+
+/** La periodicidad conocida más cercana a un número de días. */
+function cercana(dias) {
+  return CADENCIAS.reduce((mejor, c) => (
+    Math.abs(c.valor - dias) < Math.abs(mejor - dias) ? c.valor : mejor), 30);
 }
 
 function detalleMes(fila) {
