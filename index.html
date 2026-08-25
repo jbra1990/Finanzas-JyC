@@ -6489,7 +6489,7 @@ M["views/mensual"] = (function () {
  */
 
 const {tarjetas, categoriasGasto, guardar} = M["store"];
-const {mesActual, nombreMes, money, sumarMeses, rangoMeses, mesesConDatos, matrizCategoriaMes, totalPorCategoria, totalPorUsuario, serieMensual, presupuestoVsReal, detalleDeCategoria} = M["calc"];
+const {mesActual, nombreMes, money, rangoMeses, mesesConDatos, matrizCategoriaMes, totalPorCategoria, totalPorUsuario, serieMensual, presupuestoVsReal, detalleDeCategoria} = M["calc"];
 const {dona, barrasHorizontales, columnas, alRedimensionar} = M["charts"];
 const {esc, $, $$, opciones, segmentado, modal, brindis} = M["ui"];
 const {presupuestoSugerido, aplicarPresupuesto} = M["plan"];
@@ -6502,15 +6502,27 @@ const estado = {
   origen: 'todo', // todo | tarjeta | efectivo
 };
 
+/*
+ * Al abrir, el mes en curso y nada más. Es lo que se viene a mirar: cómo va el
+ * mes. Ampliar el rango es un toque en «Desde», y mientras la app siga abierta
+ * se respeta lo que se haya elegido; al volver a entrar, otra vez al mes en
+ * curso.
+ */
 function inicializarRango() {
-  const conDatos = mesesConDatos();
-  const ultimo = conDatos[conDatos.length - 1] || mesActual();
-  // Por defecto se muestra el semestre que termina en el mes en curso: los
-  // meses futuros existen (cuotas por venir) pero no son la vista natural.
-  const hasta = estado.hasta || (ultimo > mesActual() ? mesActual() : ultimo);
-  const desde = estado.desde || sumarMeses(hasta, -5);
-  estado.desde = desde < conDatos[0] ? conDatos[0] : desde;
-  estado.hasta = hasta;
+  const mes = mesActual();
+  estado.hasta = estado.hasta || mes;
+  estado.desde = estado.desde || estado.hasta;
+}
+
+/**
+ * Meses que se pueden elegir. El mes en curso entra siempre, tenga o no
+ * registros: es el que la vista abre por defecto, y sin él los desplegables
+ * arrancarían vacíos justo al empezar un mes.
+ */
+function mesesElegibles() {
+  const set = new Set([...mesesConDatos(), mesActual(), estado.desde, estado.hasta]);
+  return [...set].filter(Boolean).sort()
+    .map((m) => ({ valor: m, texto: nombreMes(m) }));
 }
 
 function render(raiz) {
@@ -6528,7 +6540,7 @@ function render(raiz) {
 
   const matriz = matrizCategoriaMes(meses, filtros);
   const serie = serieMensual(meses, filtros);
-  const opcionesMes = mesesConDatos().map((m) => ({ valor: m, texto: nombreMes(m) }));
+  const opcionesMes = mesesElegibles();
 
   raiz.innerHTML = `
     <section class="tarjeta">
