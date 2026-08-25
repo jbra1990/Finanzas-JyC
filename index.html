@@ -892,7 +892,10 @@ tr.detalle > td {
  */
 .lista li.con-acciones { flex-wrap: wrap; row-gap: 8px; }
 .lista li.con-acciones .monto { margin-left: auto; }
-.lista li.con-acciones .titulo { white-space: normal; }
+/* Estas filas ocupan dos alturas de todas formas, así que el texto se envuelve
+   en vez de cortarse: la fecha de pago quedaba en «se paga el 1…». */
+.lista li.con-acciones .titulo,
+.lista li.con-acciones .meta { white-space: normal; }
 .lista li.con-acciones .acciones {
   flex: 1 0 100%;
   display: flex; justify-content: flex-end; gap: 8px;
@@ -954,6 +957,37 @@ tr.detalle > td {
 .ficha-cuerpo { padding: 2px 15px 12px; }
 
 /* Reparto entre J y C dentro de una ficha. */
+/* Proporción J | C de una tarjeta: los mismos colores que los chips y que las
+   series de los gráficos, para que la lectura sea la misma en toda la app. */
+.barra-jc {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  border-radius: var(--radio-pill);
+  overflow: hidden;
+  background: var(--superficie-2);
+}
+.barra-jc span { display: block; min-width: 3px; }
+
+.pie-reparto {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--baseline);
+  font-size: 12.5px;
+  color: var(--tinta-3);
+}
+.pie-reparto strong {
+  font-size: 17px;
+  font-weight: 660;
+  color: var(--tinta);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
 .reparto { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
 .reparto .chip { gap: 5px; padding: 6px 12px; font-size: 12.5px; }
 .reparto .chip strong {
@@ -6316,6 +6350,8 @@ function render(raiz, { irA }) {
       </div>
     </section>
 
+    <section class="tarjeta" id="reparto-mes"></section>
+
     <section class="rejilla dos">
       <div class="tarjeta">
         <header><h2>Cupos de las tarjetas</h2><span class="pista">Saldo pendiente</span></header>
@@ -6416,6 +6452,9 @@ function render(raiz, { irA }) {
   pintarGraficos();
   alRedimensionar(pintarGraficos);
 
+  // Cuánto lleva cada tarjeta este mes y de quién es cada parte.
+  $('#reparto-mes', raiz).innerHTML = seccionRepartoMes(mes);
+
   // Próximos vencimientos e hitos
   $('#proximos', raiz).innerHTML = seccionProximos(mes);
 
@@ -6430,6 +6469,88 @@ function render(raiz, { irA }) {
   $('[data-accion="ingreso"]', raiz).addEventListener('click',
     () => formIngreso(recargar));
   $('[data-accion="pagar"]', raiz).addEventListener('click', () => irA('tarjetas'));
+}
+
+/**
+ * El total del mes de cada tarjeta, partido entre J y C.
+ *
+ * Es la pregunta de todos los días —«¿cuánto llevamos y cuánto puso cada
+ * uno?»— y hasta ahora había que ir tarjeta por tarjeta a la vista de
+ * Tarjetas. Deliberadamente no atiende al filtro J/C del panel: la gracia de
+ * esta sección es ver a los dos a la vez.
+ */
+function seccionRepartoMes(mes) {
+  const gente = usuarios();
+  const filas = tarjetas().map((t) => {
+    const total = pagoDelMes(t.id, mes, 'ambos');
+    return {
+      tarjeta: t,
+      total,
+      movs: db.cuotas.filter((c) => c.tarjeta === t.id && c.mes === mes).length,
+      vence: fechaPagoMes(mes, t.id),
+      partes: gente.map((u) => ({ usuario: u, monto: pagoDelMes(t.id, mes, u) })),
+    };
+  });
+
+  const total = redondear(filas.reduce((s, f) => s + f.total, 0));
+  const porPersona = gente.map((u) => ({
+    usuario: u,
+    monto: redondear(filas.reduce((s, f) => s
+      + (f.partes.find((p) => p.usuario === u)?.monto || 0), 0)),
+  }));
+
+  const cab = `<header><h2>Tarjetas de ${esc(nombreMes(mes))}</h2>
+    <span class="pista">Cuánto puso cada uno</span></header>`;
+
+  if (!total) {
+    return `${cab}<p class="vacio">Todavía no hay consumo cargado en este mes.</p>`;
+  }
+
+  return `${cab}
+    <ul class="lista">
+      ${filas.map((f) => `
+        <li class="con-acciones">
+          <span class="insignia">${esc(iniciales(f.tarjeta.nombre))}</span>
+          <div class="principal">
+            <div class="titulo">${esc(f.tarjeta.nombre.replace(/^TC /, ''))}</div>
+            <div class="meta">${f.movs} ${f.movs === 1 ? 'movimiento' : 'movimientos'}${
+  // Fecha corta: el año se sobreentiende y la línea no llega a cortarse.
+  f.vence ? ` · se paga el ${esc(fechaCorta(f.vence))}` : ''}</div>
+          </div>
+          <div class="monto">${money(f.total)}</div>
+          <div class="acciones" style="justify-content:stretch;flex-direction:column;align-items:stretch">
+            ${barraReparto(f.partes, f.total)}
+            <div class="reparto">${chipsReparto(f.partes, f.total)}</div>
+          </div>
+        </li>`).join('')}
+    </ul>
+    <div class="pie-reparto">
+      <span>Total de ${esc(nombreMes(mes, true))} en las ${filas.length} tarjetas</span>
+      <strong>${money(total)}</strong>
+    </div>
+    <div class="reparto">${chipsReparto(porPersona, total)}</div>`;
+}
+
+/** '2026-09-18' → '18 de septiembre'. */
+function fechaCorta(fechaISO) {
+  return textoFecha(fechaISO).replace(/ de \d{4}$/, '');
+}
+
+/** Barra de proporción J | C. Sin datos no se dibuja: una barra vacía engaña. */
+function barraReparto(partes, total) {
+  if (total <= 0) return '';
+  return `<div class="barra-jc" role="presentation">
+    ${partes.filter((p) => p.monto > 0).map((p, i) => `
+      <span style="flex:${p.monto};background:var(--serie-${(i % 8) + 1})"></span>`).join('')}
+  </div>`;
+}
+
+function chipsReparto(partes, total) {
+  return partes.map((p) => `
+    <span class="chip ${esc(String(p.usuario).toLowerCase())}">
+      ${esc(p.usuario)} <strong>${money(p.monto)}</strong>
+      <em>${total > 0 ? `${((p.monto / total) * 100).toFixed(0)} %` : '—'}</em>
+    </span>`).join('');
 }
 
 function seccionProximos(mes) {
@@ -9124,7 +9245,11 @@ async function iniciar() {
     if (id && id !== vistaActual) irA(id);
   });
 
-  irA(location.hash.slice(1) || 'resumen');
+  // Siempre se arranca en Inicio. El iPhone reabre la app en la última
+  // dirección visitada, fragmento incluido, así que al volver aparecía la
+  // sección donde se quedó uno y no el resumen. El fragmento sigue mandando
+  // dentro de la sesión: solo se ignora el heredado del arranque.
+  irA('resumen');
 
   if (origen === 'semilla') {
     brindis('Datos cargados desde el Excel migrado');
