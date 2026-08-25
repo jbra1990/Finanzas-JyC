@@ -2557,6 +2557,26 @@ function plegarOtros(datos, max = MAX_SERIES) {
 // --- Tooltip compartido ------------------------------------------------------
 
 let tooltip;
+let dueno = null;      // la marca que lo abrió
+let cierre = 0;        // temporizador de cierre para el dedo
+
+/*
+ * El globo vive en `body` y va en `position: fixed`, así que si nadie lo cierra
+ * se queda flotando por encima de toda la app hasta recargar. Con el ratón
+ * bastaba `pointerleave`, pero con el dedo hay tres huecos por donde se
+ * escapaba:
+ *
+ *   · si el toque se convierte en un arrastre para bajar la lista, el
+ *     navegador manda `pointercancel` y nunca `pointerleave`;
+ *   · si se cambia de sección, la marca desaparece del documento sin avisar y
+ *     el globo, que cuelga de `body`, sobrevive;
+ *   · y aunque se levante el dedo encima, en iOS `pointerleave` no siempre
+ *     llega.
+ *
+ * De ahí que se cierre por todos lados a la vez y, en el peor de los casos,
+ * solo: es un dato de paso, no algo que deba quedarse fijo en pantalla.
+ */
+const ESPERA_DEDO = 2600;
 
 function elTooltip() {
   if (!tooltip) {
@@ -2564,12 +2584,32 @@ function elTooltip() {
     tooltip.className = 'viz-tooltip';
     tooltip.hidden = true;
     document.body.appendChild(tooltip);
+    vigilar();
   }
   return tooltip;
 }
 
-function mostrarTooltip(evt, html) {
+function vigilar() {
+  const salir = () => ocultarTooltip();
+  // En captura y sobre `document`: el desplazamiento de una tabla interna no
+  // burbujea hasta `window`.
+  document.addEventListener('scroll', salir, { capture: true, passive: true });
+  window.addEventListener('scroll', salir, { passive: true });
+  document.addEventListener('pointercancel', salir, true);
+  document.addEventListener('pointerdown', (e) => {
+    // Tocar en otro sitio lo cierra. Si el toque es sobre otra marca, su propio
+    // manejador lo vuelve a abrir un instante después, ya con el dato nuevo.
+    if (dueno && !dueno.contains(e.target)) ocultarTooltip();
+  }, true);
+  window.addEventListener('hashchange', salir);
+  window.addEventListener('resize', salir);
+  document.addEventListener('visibilitychange', salir);
+}
+
+function mostrarTooltip(evt, html, marca) {
   const t = elTooltip();
+  if (cierre) { clearTimeout(cierre); cierre = 0; }
+  dueno = marca || evt.currentTarget;
   t.innerHTML = html;
   t.hidden = false;
   const r = t.getBoundingClientRect();
@@ -2577,18 +2617,31 @@ function mostrarTooltip(evt, html) {
   const y = evt.clientY - r.height - 14;
   t.style.left = `${x}px`;
   t.style.top = `${y < 8 ? evt.clientY + 18 : y}px`;
+  // Con el dedo no hay «salir del elemento»: se cierra solo.
+  if (evt.pointerType && evt.pointerType !== 'mouse') {
+    cierre = setTimeout(ocultarTooltip, ESPERA_DEDO);
+  }
 }
 
 function ocultarTooltip() {
+  if (cierre) { clearTimeout(cierre); cierre = 0; }
+  dueno = null;
   if (tooltip) tooltip.hidden = true;
 }
 
 /** Conecta hover/touch de una marca con el tooltip. */
 function conectar(nodo, html) {
-  nodo.addEventListener('pointerenter', (e) => mostrarTooltip(e, html));
-  nodo.addEventListener('pointermove', (e) => mostrarTooltip(e, html));
-  nodo.addEventListener('pointerleave', ocultarTooltip);
-  nodo.addEventListener('pointerdown', (e) => mostrarTooltip(e, html));
+  const abrir = (e) => mostrarTooltip(e, html, nodo);
+  nodo.addEventListener('pointerenter', abrir);
+  nodo.addEventListener('pointermove', abrir);
+  nodo.addEventListener('pointerdown', abrir);
+  // Con el dedo manda el temporizador: al levantarlo, unos navegadores mandan
+  // `pointerleave` al instante —el dato se vería un parpadeo— y otros, como
+  // Safari, no lo mandan nunca. Así el dato dura lo mismo en todos.
+  nodo.addEventListener('pointerleave', (e) => {
+    if (!e.pointerType || e.pointerType === 'mouse') ocultarTooltip();
+  });
+  nodo.addEventListener('pointercancel', ocultarTooltip);
 }
 
 // --- Utilidades de escala ----------------------------------------------------
@@ -2615,8 +2668,15 @@ const etiquetaEje = (v) => (Math.abs(v) >= 1000
   ? `$${(v / 1000).toLocaleString('es-EC', { maximumFractionDigits: 1 })}k`
   : `$${Math.round(v)}`);
 
-function lienzo(contenedor, alto) {
+/** Vacía un contenedor de gráfico cerrando el globo si colgaba de él. */
+function limpiar(contenedor) {
+  // Redibujar tira las marcas: si había un globo abierto, se queda huérfano.
+  if (dueno && contenedor.contains(dueno)) ocultarTooltip();
   contenedor.textContent = '';
+}
+
+function lienzo(contenedor, alto) {
+  limpiar(contenedor);
   const ancho = Math.max(280, contenedor.clientWidth || 320);
   const svg = el('svg', {
     viewBox: `0 0 ${ancho} ${alto}`, width: '100%', height: alto,
@@ -2627,6 +2687,7 @@ function lienzo(contenedor, alto) {
 }
 
 function vacio(contenedor, mensaje = 'Sin datos para este filtro') {
+  limpiar(contenedor);
   contenedor.innerHTML = `<p class="viz-vacio">${mensaje}</p>`;
 }
 
@@ -2677,7 +2738,7 @@ function dona(contenedor, datos, { titulo = 'Total' } = {}) {
   const total = serie.reduce((s, d) => s + d.valor, 0);
   if (!total) return vacio(contenedor);
 
-  contenedor.textContent = '';
+  limpiar(contenedor);
   const envoltura = document.createElement('div');
   envoltura.className = 'viz-dona';
   contenedor.appendChild(envoltura);
@@ -2829,7 +2890,7 @@ function barrasHorizontales(contenedor, datos, { max = 10 } = {}) {
   const serie = datos.filter((d) => d.valor > 0).slice(0, max);
   if (!serie.length) return vacio(contenedor);
 
-  contenedor.textContent = '';
+  limpiar(contenedor);
   const lista = document.createElement('div');
   lista.className = 'viz-ranking';
   const tope = Math.max(...serie.map((d) => d.valor));
@@ -2861,7 +2922,7 @@ function columnas(contenedor, etiquetas, series, { alto = 240, leyenda = true } 
   const hayDatos = series.some((s) => s.valores.some((v) => Math.abs(v) > 0));
   if (!etiquetas.length || !hayDatos) return vacio(contenedor);
 
-  contenedor.textContent = '';
+  limpiar(contenedor);
   const caja = document.createElement('div');
   caja.className = 'viz-caja';
   contenedor.appendChild(caja);
@@ -2929,7 +2990,7 @@ function columnasApiladas(contenedor, etiquetas, series, { alto = 260 } = {}) {
   const hayDatos = series.some((s) => s.valores.some((v) => v > 0));
   if (!etiquetas.length || !hayDatos) return vacio(contenedor);
 
-  contenedor.textContent = '';
+  limpiar(contenedor);
   const caja = document.createElement('div');
   caja.className = 'viz-caja';
   contenedor.appendChild(caja);
@@ -2995,7 +3056,7 @@ function linea(contenedor, etiquetas, series, { alto = 230 } = {}) {
   const hayDatos = series.some((s) => s.valores.some((v) => Math.abs(v) > 0));
   if (etiquetas.length < 2 || !hayDatos) return vacio(contenedor);
 
-  contenedor.textContent = '';
+  limpiar(contenedor);
   const caja = document.createElement('div');
   caja.className = 'viz-caja';
   contenedor.appendChild(caja);
@@ -3128,7 +3189,7 @@ window.addEventListener('resize', () => {
   temporizador = setTimeout(() => { if (repintar) repintar(); }, 180);
 });
 
-return { MAX_SERIES, alRedimensionar, barrasHorizontales, colorSerie, columnas, columnasApiladas, dona, linea, medidor, plegarOtros };
+return { MAX_SERIES, alRedimensionar, barrasHorizontales, colorSerie, columnas, columnasApiladas, dona, linea, medidor, ocultarTooltip, plegarOtros };
 })();
 
 M["ui"] = (function () {
