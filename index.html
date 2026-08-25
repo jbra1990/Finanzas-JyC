@@ -242,7 +242,7 @@ a { color: var(--acento); }
 .app {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 0 16px 118px;
+  padding: 0 16px 104px;
 }
 
 .cabecera {
@@ -257,18 +257,42 @@ a { color: var(--acento); }
   letter-spacing: -0.03em;
 }
 
+/*
+ * La marca es además el tirador del menú. Sin los dos botones de la esquina
+ * hace falta algo VISIBLE que abra el cajón: el gesto desde el borde está bien
+ * para quien ya lo conoce, pero no puede ser la única puerta.
+ */
 .cabecera .marca {
+  position: relative;
   display: grid;
   place-items: center;
   width: 42px; height: 42px;
+  padding: 0;
+  border: 0;
   border-radius: 14px;
   background: var(--panel);
+  background-color: var(--panel-plano);
   color: #fff;
+  font: inherit;
   font-weight: 700;
   font-size: 13.5px;
   letter-spacing: 0.02em;
   flex: none;
+  cursor: pointer;
   box-shadow: 0 6px 16px rgba(11, 31, 61, 0.22);
+  transition: transform 0.1s;
+}
+.cabecera .marca:active { transform: scale(0.93); }
+
+/* Punto rojo cuando hay algo en los avisos. */
+.cabecera .marca[data-avisos="si"]::after {
+  content: "";
+  position: absolute;
+  top: -3px; right: -3px;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: var(--critico);
+  border: 2px solid var(--fondo-1);
 }
 
 .cabecera .crece { flex: 1; min-width: 0; }
@@ -280,150 +304,45 @@ a { color: var(--acento); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* Los dos botones redondos de la esquina: avisos y menú. */
-.icono-btn {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 42px; height: 42px;
-  padding: 0;
-  border: 1px solid var(--borde);
-  border-radius: 50%;
-  background: var(--superficie);
-  color: var(--tinta-2);
-  cursor: pointer;
-  box-shadow: var(--sombra);
-  transition: transform 0.1s, background 0.15s;
-}
-.icono-btn svg { width: 20px; height: 20px; }
-.icono-btn:active { transform: scale(0.93); }
-.icono-btn:hover { background: var(--superficie-2); }
+/* --- El «+» flotante ------------------------------------------------------ */
 
-/* Punto rojo cuando hay algo que mirar en los avisos. */
-.icono-btn[data-avisos="si"] { position: relative; }
-.icono-btn[data-avisos="si"]::after {
-  content: "";
-  position: absolute;
-  top: 7px; right: 8px;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--critico);
-  border: 2px solid var(--superficie);
-}
-
-/* --- Navegación: barra flotante con el «+» en medio ---------------------- */
-
+/*
+ * Abajo ya no hay barra de secciones: navegar es cosa del cajón lateral, así
+ * que aquí solo queda el gesto que se repite a diario. El contenedor no pinta
+ * nada y deja pasar los toques; lo único que existe de verdad es el botón.
+ */
 .nav {
   position: fixed;
-  left: 12px; right: 12px;
-  bottom: calc(14px + env(safe-area-inset-bottom));
+  left: 0; right: 0;
+  bottom: calc(20px + env(safe-area-inset-bottom));
   z-index: 40;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1px;
-  padding: 8px 6px;
-  border-radius: var(--radio-xl);
-
-  /* Vidrio: lo de detrás se ve, desenfocado y con el color más vivo. */
-  background: var(--vidrio);
-  backdrop-filter: saturate(210%) blur(34px);
-  -webkit-backdrop-filter: saturate(210%) blur(34px);
-  border: 1px solid var(--vidrio-borde);
-
-  /*
-   * Las tres capas que convierten una superficie translúcida en vidrio:
-   * la sombra que la separa del fondo, el filo de luz de arriba —donde
-   * rebotaría el reflejo— y una caída suave en el canto de abajo.
-   */
-  box-shadow:
-    0 12px 36px var(--vidrio-sombra),
-    inset 0 1px 0 var(--vidrio-brillo),
-    inset 0 -1px 0 var(--borde);
+  justify-content: center;
+  pointer-events: none;
 }
 
-/*
- * Safari sin `backdrop-filter` (o con él desactivado) dejaría la barra casi
- * invisible sobre el contenido. Ahí se vuelve opaca: es preferible perder el
- * efecto a perder los rótulos.
- */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .nav { background: var(--panel-plano); }
-}
-
-.nav button {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  min-width: 0;
-  padding: 6px 0;
-  border: 0;
-  border-radius: 15px;
-  background: transparent;
-  /* El vidrio es marino, así que la tinta va clara. */
-  color: var(--vidrio-tinta);
-  font: inherit;
-  font-size: 9px;
-  font-weight: 560;
-  letter-spacing: -0.02em;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s;
-}
-.nav button svg { width: 21px; height: 21px; }
-.nav button[aria-current="page"] { color: var(--vidrio-tinta-viva); }
-.nav button[aria-current="page"] svg {
-  background: rgba(255, 255, 255, 0.16);
-  border-radius: 11px;
-  padding: 2px 8px;
-  width: 37px;
-}
-.nav button span {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
-}
-
-/*
- * El «+» va en el centro exacto de la barra y levantado sobre ella: es el gesto
- * que más se repite en la app, así que no comparte aspecto con las secciones.
- */
 .nav .nav-mas {
-  flex: none;
+  pointer-events: auto;
   display: grid;
   place-items: center;
-  width: 56px; height: 56px;
-  margin: -22px 5px 0;
+  width: 62px; height: 62px;
   padding: 0;
   border-radius: 50%;
   background: var(--panel-plano);
   background-image: linear-gradient(150deg, #4f8ac4 0%, #1d4a7e 45%, #0d2547 100%);
   color: #fff;
   line-height: 0;
-  box-shadow: 0 12px 26px rgba(11, 31, 61, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28);
-  /* El aro que lo separa de la barra es del mismo vidrio, no un blanco sólido:
-     así el botón se ve incrustado en el cristal y no pegado encima. */
+  cursor: pointer;
+  box-shadow: 0 14px 30px rgba(11, 31, 61, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.28);
   border: 3px solid rgba(255, 255, 255, 0.22);
   transition: transform 0.12s, box-shadow 0.12s;
 }
-.nav .nav-mas svg { width: 26px; height: 26px; display: block; }
+.nav .nav-mas svg { width: 28px; height: 28px; display: block; }
 .nav .nav-mas:active { transform: scale(0.92); }
-.nav .nav-mas:hover { box-shadow: 0 14px 30px rgba(11, 31, 61, 0.5); }
+.nav .nav-mas:hover { box-shadow: 0 16px 34px rgba(11, 31, 61, 0.55); }
 
 @media (min-width: 860px) {
-  .nav {
-    position: sticky;
-    left: auto; right: auto;
-    top: 12px;
-    bottom: auto;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-    margin: 0 0 8px;
-    padding: 7px;
-  }
-  .nav button { flex: 0 0 auto; flex-direction: row; font-size: 13.5px; padding: 9px 15px; gap: 7px; }
-  .nav button[aria-current="page"] { background: var(--acento-suave); }
-  .nav button[aria-current="page"] svg { background: none; padding: 0; width: 21px; }
-  .nav .nav-mas { width: 44px; height: 44px; margin: 0 0 0 auto; }
+  .nav { left: auto; right: 26px; bottom: 26px; }
   .app { padding-bottom: 48px; }
 }
 
@@ -1437,26 +1356,13 @@ body.con-cajon { overflow: hidden; }
 
   <div class="app">
     <header class="cabecera">
-      <div class="marca" aria-hidden="true">JC</div>
+      <button class="marca" id="btn-menu" aria-label="Abrir el menú">JC</button>
       <div class="crece">
         <h1 id="titulo-vista">Resumen</h1>
         <div class="sub">Finanzas J &amp; C</div>
       </div>
       <span class="estado-sync" id="estado-sync" data-estado="ok" hidden
             role="status" aria-label="Estado de sincronización"></span>
-      <button class="icono-btn" id="btn-avisos" aria-label="Avisos">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/>
-          <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
-        </svg>
-      </button>
-      <button class="icono-btn" id="btn-menu" aria-label="Menú">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-             stroke-linecap="round" aria-hidden="true">
-          <path d="M4 7h16M4 12h16M4 17h10"/>
-        </svg>
-      </button>
     </header>
 
     <nav class="nav" id="nav" aria-label="Secciones"></nav>
@@ -8457,13 +8363,6 @@ const VISTAS = [
   { id: 'datos', titulo: 'Datos', modulo: datos, icono: ICONOS.datos },
 ];
 
-/*
- * La barra de abajo lleva seis secciones repartidas a los lados del «+».
- * «Datos» —importar, respaldos, sincronización— no es de uso diario, así que
- * vive en el menú de la cabecera y deja sitio para que las demás respiren.
- */
-const EN_BARRA = VISTAS.filter((v) => v.id !== 'datos' && v.id !== 'plan');
-
 let vistaActual = 'resumen';
 
 function aplicarTema() {
@@ -8491,31 +8390,23 @@ function pintarEstadoSync() {
   }[estado];
 }
 
+/*
+ * Abajo solo queda el «+». Navegar es cosa del cajón lateral, así que la barra
+ * con las seis secciones sobraba: repetía lo mismo y se comía el ancho.
+ *
+ * El «+» va dibujado, no escrito: el carácter de texto se apoya en la línea
+ * base de la fuente y nunca queda centrado del todo dentro del círculo.
+ */
 function pintarNav() {
   const nav = $('#nav');
-  const boton = (v) => `
-    <button data-vista="${v.id}" ${v.id === vistaActual ? 'aria-current="page"' : ''}>
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${v.icono}</svg>
-      <span>${v.titulo}</span>
-    </button>`;
-
-  // El «+» va dibujado, no escrito: el carácter de texto se apoya en la línea
-  // base de la fuente y nunca queda centrado del todo dentro del círculo.
-  const mas = `
+  if (nav.dataset.listo) return;
+  nav.innerHTML = `
     <button class="nav-mas" id="fab" aria-label="Registrar movimiento">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
            stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
     </button>`;
-
-  const mitad = Math.ceil(EN_BARRA.length / 2);
-  nav.innerHTML = EN_BARRA.slice(0, mitad).map(boton).join('')
-    + mas
-    + EN_BARRA.slice(mitad).map(boton).join('');
-
-  nav.querySelectorAll('[data-vista]').forEach((b) => {
-    b.addEventListener('click', () => irA(b.dataset.vista));
-  });
   nav.querySelector('#fab').addEventListener('click', menuRegistro);
+  nav.dataset.listo = 'si';
 }
 
 /** Lo que hay que mirar hoy: se pinta en la campana de la cabecera. */
@@ -8548,11 +8439,17 @@ function avisosPendientes() {
   return lista;
 }
 
+/*
+ * El punto de aviso vive ahora en la marca «JC», que es lo único que queda en
+ * la cabecera y a la vez el tirador del menú: donde se ve el aviso es donde se
+ * abre lo que lo explica.
+ */
 function pintarAvisos() {
-  const btn = $('#btn-avisos');
+  const btn = $('#btn-menu');
   if (!btn) return;
   const hay = avisosPendientes().some((a) => a.nivel !== 'info');
   btn.dataset.avisos = hay ? 'si' : 'no';
+  pintarCajon();
 }
 
 function panelAvisos() {
@@ -8735,7 +8632,6 @@ async function iniciar() {
   pintarNav();
   cajon = crearCajon({ etiqueta: 'Menú de Finanzas J y C' });
   $('#btn-menu').addEventListener('click', menuPrincipal);
-  $('#btn-avisos').addEventListener('click', panelAvisos);
 
   window.addEventListener('hashchange', () => {
     const id = location.hash.slice(1);
