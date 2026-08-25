@@ -5051,7 +5051,7 @@ M["plan"] = (function () {
  */
 
 const {db} = M["store"];
-const {claveMes, mesActual, redondear, sumarDias, diasEntre, sumarMeses} = M["calc"];
+const {claveMes, mesActual, redondear, sumarDias, diasEntre, sumarMeses, rangoMeses} = M["calc"];
 /** Con menos de tres apariciones no hay periodicidad, hay casualidad. */
 const MIN_OCURRENCIAS = 3;
 
@@ -5290,13 +5290,108 @@ function proyeccion(meses, { excluidas = null } = {}) {
   };
 }
 
+// --- Presupuesto por categoría -----------------------------------------------
+
+/** Meses cerrados que se miran para sacar el gasto habitual de una categoría. */
+const MESES_REFERENCIA = 6;
+
+/**
+ * Presupuesto que le tocaría a cada categoría según lo que se gasta de verdad.
+ *
+ * Se toma el mayor de dos medidas, que miran cosas distintas:
+ *
+ *   PROMEDIO   lo gastado al mes en los últimos meses cerrados. Recoge todo,
+ *              también lo suelto, pero se queda corto con lo que empezó hace
+ *              poco: un gimnasio de $30 que lleva dos meses promedia $10.
+ *   FIJO       lo que ya está comprometido al mes en esa categoría: los gastos
+ *              que se repiten con ritmo propio, más las cuotas vivas de los
+ *              diferidos y de los cargos recurrentes. Ese sí ve los $30
+ *              completos del gimnasio, porque mira el compromiso, no el total
+ *              repartido entre meses en los que aún no existía.
+ *
+ * El mes en curso no entra en el promedio: va a medias y tiraría la cifra
+ * hacia abajo. Sí entra en el fijo, que es justo donde se ve lo que se paga
+ * ahora mismo.
+ */
+function presupuestoSugerido() {
+  const hasta = sumarMeses(mesActual(), -1);
+  const desde = sumarMeses(hasta, -(MESES_REFERENCIA - 1));
+  const ventana = new Set(rangoMeses(desde, hasta));
+
+  const gastado = new Map();
+  const suma = (categoria, mes, monto) => {
+    if (!ventana.has(mes)) return;
+    const c = categoria || 'Sin categoría';
+    gastado.set(c, (gastado.get(c) || 0) + (Number(monto) || 0));
+  };
+  db.cuotas.forEach((c) => suma(c.categoria, c.mes, c.monto));
+  db.gastosEfectivo.forEach((g) => suma(g.categoria, claveMes(g.fecha), g.monto));
+
+  const periodico = new Map();
+  const sumaFijo = (categoria, monto) => {
+    const c = categoria || 'Sin categoría';
+    periodico.set(c, (periodico.get(c) || 0) + (Number(monto) || 0));
+  };
+
+  recurrencias()
+    .filter((r) => r.fiable && r.vigente && !estaExcluida(r.clave))
+    .forEach((r) => sumaFijo(r.categoria, r.porMes));
+
+  /*
+   * Y las cuotas del mes en curso de lo diferido y lo recurrente. Quedan fuera
+   * de `recurrencias()` a propósito —sus meses futuros ya están en la base y
+   * proyectarlos los contaría dos veces— pero para presupuestar sí hacen
+   * falta: son dinero que sale todos los meses. Es lo que dejaba el gimnasio
+   * en $10 cuando se paga $30.
+   */
+  const ahora = mesActual();
+  const porTipo = new Map(db.gastosTarjeta.map((g) => [g.id, g.tipo]));
+  db.cuotas
+    .filter((c) => c.mes === ahora && porTipo.get(c.gasto_id) !== 'Corriente')
+    .forEach((c) => sumaFijo(c.categoria, c.monto));
+
+  const historico = new Set([
+    ...db.cuotas.map((c) => c.categoria),
+    ...db.gastosEfectivo.map((g) => g.categoria),
+  ]);
+
+  return db.categorias
+    .filter((c) => c.tipo !== 'Ingreso')
+    .map((c) => {
+      const promedio = (gastado.get(c.nombre) || 0) / MESES_REFERENCIA;
+      const recurrente = periodico.get(c.nombre) || 0;
+      const actual = Number(c.presupuesto) || 0;
+      // Sin nada en el historial no hay con qué estimar: se deja como está en
+      // vez de ponerlo a cero y hacer desaparecer la categoría del cuadro.
+      const sugerido = historico.has(c.nombre)
+        ? Math.round(Math.max(promedio, recurrente)) : actual;
+      return {
+        categoria: c.nombre, actual, sugerido, promedio: redondear(promedio),
+        recurrente: redondear(recurrente), cambia: sugerido !== actual,
+      };
+    })
+    .sort((a, b) => Math.abs(b.sugerido - b.actual) - Math.abs(a.sugerido - a.actual));
+}
+
+/** Escribe los presupuestos sugeridos. Devuelve cuántos cambiaron. */
+function aplicarPresupuesto(filas) {
+  let n = 0;
+  filas.filter((f) => f.cambia).forEach((f) => {
+    const cat = db.categorias.find((c) => c.nombre === f.categoria);
+    if (!cat) return;
+    cat.presupuesto = f.sugerido;
+    n += 1;
+  });
+  return n;
+}
+
 /** Rango por defecto del módulo: el mes en curso y los cinco siguientes. */
 function mesesProyectados(n = 6) {
   const base = mesActual();
   return Array.from({ length: n }, (_, i) => sumarMeses(base, i));
 }
 
-return { claveExcluida, claveGasto, estaExcluida, mesesProyectados, proyeccion, recurrencias };
+return { aplicarPresupuesto, claveExcluida, claveGasto, estaExcluida, mesesProyectados, presupuestoSugerido, proyeccion, recurrencias };
 })();
 
 M["forms"] = (function () {
@@ -6248,10 +6343,11 @@ M["views/mensual"] = (function () {
  * gráficos (requisito de accesibilidad: los valores nunca dependen del color).
  */
 
-const {tarjetas, categoriasGasto} = M["store"];
+const {tarjetas, categoriasGasto, guardar} = M["store"];
 const {mesActual, nombreMes, money, sumarMeses, rangoMeses, mesesConDatos, matrizCategoriaMes, totalPorCategoria, totalPorUsuario, serieMensual, presupuestoVsReal, detalleDeCategoria} = M["calc"];
 const {dona, barrasHorizontales, columnas, alRedimensionar} = M["charts"];
-const {esc, $, $$, opciones, segmentado} = M["ui"];
+const {esc, $, $$, opciones, segmentado, modal, brindis} = M["ui"];
+const {presupuestoSugerido, aplicarPresupuesto} = M["plan"];
 const estado = {
   usuario: 'ambos',
   tarjeta: 'todas',
@@ -6362,7 +6458,8 @@ function render(raiz) {
 
     <section class="tarjeta">
       <header><h2>Presupuesto vs. real</h2>
-        <span class="pista">${esc(nombreMes(estado.hasta))}</span></header>
+        <button class="btn pequeno" id="btn-ppto">Ajustar a lo real</button></header>
+      <p class="pista" style="margin:-4px 0 10px">${esc(nombreMes(estado.hasta))}</p>
       <div class="tabla-scroll" id="tabla-ppto"></div>
     </section>`;
 
@@ -6391,6 +6488,7 @@ function render(raiz) {
   ));
 
   $('#btn-csv', raiz).addEventListener('click', () => exportarCSV(matriz));
+  $('#btn-ppto', raiz).addEventListener('click', () => ajustarPresupuesto(() => render(raiz)));
 
   // Desplegar una categoría para ver en qué se fue el dinero.
   $$('.desplegable', raiz).forEach((fila) => {
@@ -6450,6 +6548,51 @@ function render(raiz) {
           <td>${p.uso.toFixed(0)} %</td>
         </tr>`).join('')}</tbody>
     </table>` : '<p class="vacio">Define presupuestos por categoría en la pestaña Datos.</p>';
+}
+
+/**
+ * Pone al día el presupuesto de cada categoría con lo que se gasta de verdad.
+ *
+ * Se enseña antes lo que va a cambiar y de dónde sale cada cifra: es el dato
+ * contra el que se mide todo el mes, así que no puede reescribirse a espaldas
+ * de quien lo mira.
+ */
+function ajustarPresupuesto(alTerminar) {
+  const filas = presupuestoSugerido();
+  const cambian = filas.filter((f) => f.cambia);
+
+  modal({
+    titulo: 'Ajustar el presupuesto',
+    cuerpo: cambian.length ? `
+      <p class="pista">Se toma, para cada categoría, lo mayor entre el gasto
+      medio de los últimos seis meses cerrados y lo que ya está fijo al mes:
+      los gastos que se repiten más las cuotas vivas de diferidos y cargos
+      recurrentes. El mes en curso no entra en el promedio, que va a medias.</p>
+      <div class="tabla-scroll" style="max-height:46vh">
+        <table>
+          <thead><tr><th>Categoría</th><th>Ahora</th><th>Queda en</th>
+            <th>Promedio</th><th>Fijo</th></tr></thead>
+          <tbody>${cambian.map((f) => `
+            <tr>
+              <td>${esc(f.categoria)}</td>
+              <td class="cero">${money(f.actual)}</td>
+              <td><strong>${money(f.sugerido)}</strong></td>
+              <td>${money(f.promedio)}</td>
+              <td>${f.recurrente ? money(f.recurrente) : '—'}</td>
+            </tr>`).join('')}</tbody>
+        </table>
+      </div>`
+      : '<p class="vacio">El presupuesto ya está al día: nada que cambiar.</p>',
+    aceptar: cambian.length ? `Ajustar ${cambian.length}` : 'Cerrar',
+    soloCerrar: !cambian.length,
+    alEnviar() {
+      if (!cambian.length) return;
+      const n = aplicarPresupuesto(filas);
+      guardar();
+      brindis(`${n} ${n === 1 ? 'categoría ajustada' : 'categorías ajustadas'}`);
+      alTerminar?.();
+    },
+  });
 }
 
 function tablaHTML(matriz) {
