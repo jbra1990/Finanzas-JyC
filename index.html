@@ -29,39 +29,61 @@
    ========================================================================== */
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 
-  /* Fondo de seda: tres paradas de un mismo azul. */
-  --fondo-1: #eaf3fd;
-  --fondo-2: #cbe0f6;
-  --fondo-3: #a9c8e8;
-  --plano: var(--fondo-2);
+  /*
+   * El degradado de la referencia, muestreado de la propia imagen: la página
+   * empieza en azul casi blanco y se hunde hasta el navy de medianoche a la
+   * altura del primer bloque de contenido. No es un fondo claro con tarjetas
+   * blancas encima —eso era lo que teníamos— sino al revés: la cabecera vive
+   * en la franja clara y todo lo demás es cristal sobre el azul profundo.
+   */
+  --fondo-1: #dfecfd;
+  --fondo-2: #75a2df;
+  --fondo-3: #182f61;
+  --fondo-4: #0a142a;
+  --plano: #0b1a35;
 
-  /* Superficies */
-  --superficie: #f2f8ff;
-  --superficie-2: #dfecfb;
-  --superficie-3: #c8dcf2;
+  /* Paradas calcadas de la referencia: medidas sobre la imagen y pasadas de
+     píxel de captura a punto de pantalla. */
+  --degradado: linear-gradient(180deg,
+    #dfecfd 0, #dfecfd 62px, #c7dff6 128px, #75a2df 196px, #315596 262px,
+    #182f61 330px, #13264e 398px, #0f2147 600px, #0b1c3c 668px, #0a142a 804px);
+
+  /* La cabecera es lo único que se apoya en la franja clara. */
+  --tinta-cabecera: #0b2244;
+  --tinta-cabecera-2: #3a5f92;
+
+  /*
+   * Superficies de cristal. En la referencia las tarjetas no tienen color
+   * propio: son un velo de luz sobre el fondo, y por eso las de arriba se ven
+   * azules y las de abajo casi negras sin cambiar de estilo.
+   */
+  --superficie: rgba(13, 31, 60, 0.66);
+  --superficie-2: rgba(255, 255, 255, 0.10);
+  --superficie-3: rgba(255, 255, 255, 0.155);
 
   /* El panel es el mismo objeto en los dos temas. */
-  --panel: linear-gradient(148deg, #5f97cf 0%, #24568d 34%, #102c53 68%, #0b1f3d 100%);
-  --panel-plano: #102c53;
+  --panel: linear-gradient(148deg, #4d8ccb 0%, #1d4a7e 30%, #10294f 64%, #081734 100%);
+  --panel-plano: #10294f;
   --panel-tinta: #ffffff;
   --panel-tinta-2: #a7c3e2;
 
   /* Tinta */
-  --tinta: #0b2244;
-  --tinta-2: #37567e;
-  --tinta-3: #6e8cb2;
+  --tinta: #ffffff;
+  --tinta-2: #b3cae6;
+  --tinta-3: #7f9cc1;
 
   /* Líneas */
-  --grid: #d3e3f6;
-  --baseline: #a9c4e3;
-  --borde: rgba(16, 44, 83, 0.09);
-  --borde-fuerte: rgba(16, 44, 83, 0.16);
+  --grid: rgba(255, 255, 255, 0.085);
+  --baseline: rgba(255, 255, 255, 0.15);
+  --borde: rgba(255, 255, 255, 0.10);
+  --borde-fuerte: rgba(255, 255, 255, 0.19);
 
-  --sombra: 0 1px 2px rgba(16, 44, 83, 0.05), 0 10px 26px rgba(16, 44, 83, 0.08);
-  --sombra-panel: 0 18px 44px rgba(11, 31, 61, 0.32);
-  --sombra-nav: 0 10px 34px rgba(11, 31, 61, 0.18);
+  /* Sobre el azul profundo la profundidad la da el velo de luz, no la sombra. */
+  --sombra: none;
+  --sombra-panel: 0 20px 46px rgba(4, 12, 28, 0.5);
+  --sombra-nav: 0 10px 34px rgba(4, 12, 28, 0.45);
 
   /*
    * Cristal. Lo que hace que una superficie parezca vidrio no es la
@@ -76,25 +98,38 @@
   --vidrio-tinta: #b7cfe9;
   --vidrio-tinta-viva: #ffffff;
 
-  /* Series de gráficos: paleta validada, no cambiar sin volver a validar. */
-  --serie-1: #2a78d6;
-  --serie-2: #eb6834;
-  --serie-3: #1baf7a;
-  --serie-4: #eda100;
-  --serie-5: #e87ba4;
-  --serie-6: #008300;
-  --serie-7: #4a3aa7;
-  --serie-8: #e34948;
+  /*
+   * Series de gráficos: una sola escala de azules, de casi blanco a azul medio,
+   * como en la referencia. Se ordenan de mayor a menor, así que el degradado
+   * dice por sí solo quién manda, y la leyenda pone el nombre al lado.
+   *
+   * Nota: al ser un solo tono, dos series contiguas se distinguen por claridad
+   * y no por color. Por eso ninguna cifra depende de acertar el color: siempre
+   * está escrita al lado, en la leyenda o en la tabla.
+   */
+  --serie-1: #eaf3fe;
+  --serie-2: #b9d7f6;
+  --serie-3: #8dbcee;
+  --serie-4: #6aa0e2;
+  --serie-5: #4f84d0;
+  --serie-6: #3d6ab5;
+  --serie-7: #315699;
+  --serie-8: #27447c;
+
+  /* J y C no son «serie 1 y 2»: son dos extremos de la escala, para que se
+     distingan de un vistazo aunque todo lo demás sea del mismo azul. */
+  --persona-j: #dcecfd;
+  --persona-c: #4f84d0;
 
   /* Estado: separado del acento, nunca hace de «serie 9». */
-  --ok: #0ca30c;
-  --ok-texto: #067306;
+  --ok: #35c46a;
+  --ok-texto: #4ade80;
   --alerta: #fab219;
   --grave: #ec835a;
-  --critico: #d03b3b;
+  --critico: #f06a6a;
 
-  --acento: #1d4e8f;
-  --acento-suave: rgba(29, 78, 143, 0.12);
+  --acento: #6aa6e8;
+  --acento-suave: rgba(106, 166, 232, 0.18);
 
   --radio-xl: 28px;
   --radio: 22px;
@@ -115,11 +150,17 @@
     --fondo-1: #0d2141;
     --fondo-2: #091a33;
     --fondo-3: #061224;
-    --plano: var(--fondo-2);
+    --fondo-4: #040d1c;
+    --plano: #061224;
+    /* Sin franja clara arriba: en oscuro la cabecera ya se apoya en el navy. */
+    --degradado: linear-gradient(180deg,
+      #14294e 0, #102142 180px, #0a1832 400px, #061224 640px, #040d1c 804px);
+    --tinta-cabecera: #eaf3ff;
+    --tinta-cabecera-2: #9fbcda;
 
-    --superficie: #10294b;
-    --superficie-2: #17375f;
-    --superficie-3: #1f4674;
+    --superficie: rgba(255, 255, 255, 0.055);
+    --superficie-2: rgba(255, 255, 255, 0.095);
+    --superficie-3: rgba(255, 255, 255, 0.15);
 
     --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
     --panel-plano: #0e2749;
@@ -146,14 +187,14 @@
     --vidrio-tinta: #9fbcda;
     --vidrio-tinta-viva: #ffffff;
 
-    --serie-1: #5aa2f0;
-    --serie-2: #d95926;
-    --serie-3: #199e70;
-    --serie-4: #c98500;
-    --serie-5: #d55181;
-    --serie-6: #008300;
-    --serie-7: #9085e9;
-    --serie-8: #e66767;
+    --serie-1: #eaf3fe;
+    --serie-2: #b9d7f6;
+    --serie-3: #8dbcee;
+    --serie-4: #6aa0e2;
+    --serie-5: #4f84d0;
+    --serie-6: #3d6ab5;
+    --serie-7: #315699;
+    --serie-8: #27447c;
     --ok-texto: #4ade80;
     --acento: #6aa6e8;
     --acento-suave: rgba(106, 166, 232, 0.18);
@@ -165,10 +206,15 @@
   --fondo-1: #0d2141;
   --fondo-2: #091a33;
   --fondo-3: #061224;
-  --plano: var(--fondo-2);
-  --superficie: #10294b;
-  --superficie-2: #17375f;
-  --superficie-3: #1f4674;
+  --fondo-4: #040d1c;
+  --plano: #061224;
+  --degradado: linear-gradient(180deg,
+    #14294e 0, #102142 180px, #0a1832 400px, #061224 640px, #040d1c 804px);
+  --tinta-cabecera: #eaf3ff;
+  --tinta-cabecera-2: #9fbcda;
+  --superficie: rgba(255, 255, 255, 0.055);
+  --superficie-2: rgba(255, 255, 255, 0.095);
+  --superficie-3: rgba(255, 255, 255, 0.15);
   --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
   --panel-plano: #0e2749;
   --tinta: #eaf3ff;
@@ -187,14 +233,14 @@
   --vidrio-sombra: rgba(0, 0, 0, 0.5);
   --vidrio-tinta: #9fbcda;
   --vidrio-tinta-viva: #ffffff;
-  --serie-1: #5aa2f0;
-  --serie-2: #d95926;
-  --serie-3: #199e70;
-  --serie-4: #c98500;
-  --serie-5: #d55181;
-  --serie-6: #008300;
-  --serie-7: #9085e9;
-  --serie-8: #e66767;
+  --serie-1: #eaf3fe;
+  --serie-2: #b9d7f6;
+  --serie-3: #8dbcee;
+  --serie-4: #6aa0e2;
+  --serie-5: #4f84d0;
+  --serie-6: #3d6ab5;
+  --serie-7: #315699;
+  --serie-8: #27447c;
   --ok-texto: #4ade80;
   --acento: #6aa6e8;
   --acento-suave: rgba(106, 166, 232, 0.18);
@@ -209,11 +255,10 @@
  */
 html {
   min-height: 100%;
-  background-color: var(--fondo-3);
-  background-image: linear-gradient(180deg,
-    var(--fondo-1) 0, var(--fondo-2) 380px, var(--fondo-3) 860px);
+  background-color: var(--fondo-4);
+  background-image: var(--degradado);
   background-repeat: no-repeat;
-  background-size: 100% 860px;
+  background-size: 100% 804px;
 }
 
 html, body {
@@ -253,6 +298,7 @@ a { color: var(--acento); }
 }
 
 .cabecera h1 {
+  color: var(--tinta-cabecera);
   font-size: 22px;
   letter-spacing: -0.03em;
 }
@@ -299,7 +345,7 @@ a { color: var(--acento); }
 
 .cabecera .sub {
   font-size: 12.5px;
-  color: var(--tinta-3);
+  color: var(--tinta-cabecera-2);
   margin-top: 1px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -515,12 +561,19 @@ a { color: var(--acento); }
 
 /* --- Tarjetas ------------------------------------------------------------ */
 
+/*
+ * La tarjeta de la referencia no tiene color propio: es un velo de luz sobre el
+ * fondo. Por eso las de arriba se ven azules y las de abajo casi negras sin
+ * cambiar de estilo, y por eso lleva desenfoque —sin él el velo se ve plano.
+ */
 .tarjeta {
   background: var(--superficie);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  backdrop-filter: blur(18px) saturate(1.25);
   border: 1px solid var(--borde);
-  border-radius: var(--radio);
+  border-radius: var(--radio-xl);
   padding: 18px;
-  margin: 12px 0;
+  margin: 14px 0;
   box-shadow: var(--sombra);
 }
 
@@ -701,10 +754,10 @@ textarea { min-height: 66px; resize: vertical; }
   color: var(--tinta-2);
 }
 /* J y C: cada persona con su color, el mismo de las series 1 y 2. */
-.chip.j { background: color-mix(in srgb, var(--serie-1) 14%, transparent);
-  border-color: color-mix(in srgb, var(--serie-1) 34%, transparent); }
-.chip.c { background: color-mix(in srgb, var(--serie-2) 14%, transparent);
-  border-color: color-mix(in srgb, var(--serie-2) 34%, transparent); }
+.chip.j { background: color-mix(in srgb, var(--persona-j) 16%, transparent);
+  border-color: color-mix(in srgb, var(--persona-j) 40%, transparent); }
+.chip.c { background: color-mix(in srgb, var(--persona-c) 22%, transparent);
+  border-color: color-mix(in srgb, var(--persona-c) 52%, transparent); }
 
 /* --- Tablas -------------------------------------------------------------- */
 
@@ -1082,13 +1135,20 @@ tr.detalle > td {
   font-variant-numeric: tabular-nums;
 }
 
-/* Rótulo escrito sobre el propio segmento del anillo. */
+/* Rótulo curvado sobre el anillo. */
 .viz-arco-etq {
   font-family: var(--fuente);
   font-size: 12.5px;
   font-weight: 700;
   letter-spacing: 0.005em;
   pointer-events: none;
+}
+/* Cuando va por fuera de la banda escribe sobre el fondo, no sobre el color. */
+.viz-arco-fuera {
+  fill: var(--tinta-2);
+  font-size: 11px;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
 }
 .viz-barra, .viz-arco { transition: opacity 0.15s; }
 .viz-barra:hover, .viz-arco:hover { opacity: 0.8; }
@@ -2512,6 +2572,18 @@ const el = (nombre, attrs = {}) => {
 
 const colorSerie = (i) => `var(--serie-${(i % SLOTS) + 1})`;
 
+/*
+ * Con una escala de un solo tono, dos series seguidas son dos azules casi
+ * iguales: en la dona no molesta —van ordenadas de mayor a menor y el degradado
+ * se lee como una rampa— pero en un gráfico de barras con dos series pasa a ser
+ * ilegible. Aquí se reparten por toda la escala en vez de tomarlas del tirón.
+ */
+function colorSerieDe(i, n) {
+  if (n <= 1) return colorSerie(0);
+  const paso = (SLOTS - 1) / (n - 1);
+  return colorSerie(Math.round(i * paso));
+}
+
 /**
  * El mismo color, ya resuelto a un valor concreto. Hace falta para decidir si
  * un rótulo escrito ENCIMA del color debe ir en blanco o en tinta oscura:
@@ -2712,6 +2784,38 @@ function caminoArco(cx, cy, r, desde, hasta, invertido = false) {
     + `A ${r} ${r} 0 ${grande} ${invertido ? 0 : 1} ${x1.toFixed(2)} ${y1.toFixed(2)}`;
 }
 
+/*
+ * Una porción del anillo dibujada como FIGURA, no como trazo.
+ *
+ * Con `stroke-linecap` solo se puede elegir entre el corte recto (`butt`) y la
+ * punta semicircular (`round`), y en la referencia los extremos son un corte
+ * recto con las esquinas apenas matadas: ni lo uno ni lo otro. Así que se
+ * construye el sector a mano — arco exterior, esquina, cara recta, arco
+ * interior — con un radio de esquina pequeño.
+ */
+function sectorRedondeado(cx, cy, rInt, rExt, desde, hasta, radio) {
+  const P = (r, a) => puntoAnillo(cx, cy, r, a).map((n) => n.toFixed(2)).join(' ');
+  const barrido = hasta - desde;
+  // La esquina no puede pasar de la mitad de la banda ni comerse el arco.
+  const k = Math.max(0.5, Math.min(radio, (rExt - rInt) / 2, (barrido * Math.PI / 180) * rInt / 2.2));
+  const gExt = ((k / rExt) * 180) / Math.PI;
+  const gInt = ((k / rInt) * 180) / Math.PI;
+  const grande = barrido - 2 * gExt > 180 ? 1 : 0;
+
+  return [
+    `M ${P(rExt, desde + gExt)}`,
+    `A ${rExt} ${rExt} 0 ${grande} 1 ${P(rExt, hasta - gExt)}`,
+    `A ${k} ${k} 0 0 1 ${P(rExt - k, hasta)}`,
+    `L ${P(rInt + k, hasta)}`,
+    `A ${k} ${k} 0 0 1 ${P(rInt, hasta - gInt)}`,
+    `A ${rInt} ${rInt} 0 ${grande} 0 ${P(rInt, desde + gInt)}`,
+    `A ${k} ${k} 0 0 1 ${P(rInt + k, desde)}`,
+    `L ${P(rExt - k, desde)}`,
+    `A ${k} ${k} 0 0 1 ${P(rExt, desde + gExt)}`,
+    'Z',
+  ].join(' ');
+}
+
 let nDona = 0;
 
 /**
@@ -2733,8 +2837,18 @@ let nDona = 0;
  * el propio segmento, así que el gráfico se sigue leyendo sin distinguir los
  * tonos. En el centro, el total; en la leyenda, lo que no cupo.
  */
+/*
+ * La dona pliega a menos categorías que el resto de los gráficos. El anillo de
+ * la referencia es grueso y con pocas porciones; repartido en siete, cada tramo
+ * se queda tan corto que con las puntas redondeadas y el aire entre porciones
+ * parece un collar de cuentas sueltas en vez de un anillo. Con cinco la forma
+ * se sostiene. El desglose completo no se pierde: está en la leyenda de abajo y
+ * en la tabla de categorías, que es donde se leen las cifras de todos modos.
+ */
+const MAX_DONA = 5;
+
 function dona(contenedor, datos, { titulo = 'Total' } = {}) {
-  const serie = plegarOtros(datos.filter((d) => d.valor > 0));
+  const serie = plegarOtros(datos.filter((d) => d.valor > 0), MAX_DONA);
   const total = serie.reduce((s, d) => s + d.valor, 0);
   if (!total) return vacio(contenedor);
 
@@ -2768,12 +2882,35 @@ function dona(contenedor, datos, { titulo = 'Total' } = {}) {
    * porciones el aire generoso luce, y repetido siete veces se comería el
    * anillo. El resto de la forma no cambia.
    */
-  const r = 96;
-  const grosor = 28;
-  const redondas = true;
+  /*
+   * Proporciones medidas sobre la imagen de referencia: radio interior 139 y
+   * exterior 191, o sea grosor / radio de la línea media = 0,315. Y el anillo
+   * está ABIERTO, con un hueco de unos 87° arriba —es lo que le da el aire.
+   *
+   * El hueco se estrecha cuando hay muchas categorías: con dos porciones los
+   * 87° de la referencia lucen, y con siete dejarían cada tramo en una cuenta
+   * de collar. Es el mismo criterio que ya se aplicaba a la separación entre
+   * porciones.
+   */
+  const r = 99;
+  // La mitad del grosor de la referencia. Con la banda gruesa, un tramo corto
+  // acaba tan ancho como largo y parece una cuenta suelta; fino, hasta el 5 %
+  // se lee como un arco.
+  const grosor = 15;
+  /*
+   * Los extremos van CUADRADOS, no redondos. En la referencia cada porción
+   * termina en un corte recto de lado a lado de la banda, con las esquinas
+   * apenas matadas; la punta semicircular de `round` engorda el tramo y es lo
+   * que hacía que los cortos parecieran pastillas sueltas.
+   */
   const circ = 2 * Math.PI * r;
 
-  const aire = serie.length <= 3 ? 0.8 : serie.length <= 5 ? 0.6 : 0.45;
+  // Anillo cerrado: la vuelta completa son los 360°.
+  const barridoTotal = 360;
+
+  // Y la separación entre porciones es fina: en la referencia los tramos casi
+  // se tocan, apenas una rendija del fondo entre uno y otro.
+  const aire = 0.34;
   const hueco = ((grosor * aire) / circ) * 360;
   const idBase = `dona${(nDona += 1)}`;
   const defs = svg.appendChild(el('defs'));
@@ -2781,71 +2918,77 @@ function dona(contenedor, datos, { titulo = 'Total' } = {}) {
   let ang = 0;
   serie.forEach((d, i) => {
     const frac = d.valor / total;
-    const barrido = frac * 360;
-    // Una porción diminuta no puede permitirse el hueco: se quedaría sin arco.
-    const holgada = barrido > hueco * 2 + 1.5;
-    const a0 = ang + (holgada ? hueco : 0);
-    const a1 = ang + barrido - (holgada ? hueco : 0);
+    const barrido = frac * barridoTotal;
+    /*
+     * El aire se descuenta de cada porción, así que un hueco fijo se lleva casi
+     * entero un tramo corto y lo deja como una cuenta suelta —el anillo parecía
+     * un collar. Se limita a una parte de lo que mide la porción: los tramos
+     * grandes lucen el aire de la referencia y los pequeños conservan su arco.
+     */
+    const propio = Math.min(hueco, barrido * 0.2);
+    const holgada = barrido > propio * 2 + 1.5;
+    const a0 = ang + (holgada ? propio : 0);
+    const a1 = ang + barrido - (holgada ? propio : 0);
     const sugerencia = `<strong>${d.nombre}</strong><br>${money(d.valor)} · ${(frac * 100).toFixed(1)}%`;
 
-    const arco = el('path', { d: caminoArco(cx, cy, r, a0, a1), fill: 'none' });
-    arco.setAttribute('stroke', colorSerie(i));
-    arco.setAttribute('stroke-width', grosor);
-    arco.setAttribute('stroke-linecap', redondas && holgada ? 'round' : 'butt');
+    const casiEntera = barrido > 359;
+    const arco = el('path', {
+      d: casiEntera
+        // Una sola categoría: el anillo entero, que como sector degenera.
+        ? `${caminoArco(cx, cy, r, 0, 180)} ${caminoArco(cx, cy, r, 180, 360)}`
+        : sectorRedondeado(cx, cy, r - grosor / 2, r + grosor / 2, a0, a1, 4),
+    });
+    if (casiEntera) {
+      arco.setAttribute('fill', 'none');
+      arco.setAttribute('stroke', colorSerie(i));
+      arco.setAttribute('stroke-width', grosor);
+    } else {
+      arco.setAttribute('fill', colorSerie(i));
+    }
     arco.setAttribute('class', 'viz-arco');
     conectar(arco, sugerencia);
     svg.appendChild(arco);
 
     /*
-     * Rótulos sobre el arco, como en el diseño de referencia: el NOMBRE pegado
-     * al principio del segmento y el IMPORTE al final, cada uno curvado con la
-     * cinta. En la mitad de abajo el camino se recorre al revés para que el
-     * texto no salga cabeza abajo; por eso el principio y el final cambian de
-     * extremo y hay que compensarlo con el `startOffset`.
+     * El IMPORTE al final de cada porción, curvado con la cinta, como en la
+     * referencia. Allí va dentro de la banda porque la banda es gruesa; con el
+     * anillo fino no cabe, así que se pone justo por fuera, a la misma altura
+     * del corte. El nombre no se repite: está en la leyenda de abajo.
+     *
+     * En la mitad de abajo el camino se recorre al revés para que el texto no
+     * salga cabeza abajo; por eso el final cambia de extremo y hay que
+     * compensarlo con el `startOffset`.
      */
     const medio = a0 + (a1 - a0) / 2;
-    const largoArco = ((a1 - a0) / 360) * circ;
+    const rEtq = r + grosor / 2 + 9;
+    const largoArco = ((a1 - a0) / 360) * 2 * Math.PI * rEtq;
 
-    if (largoArco > 44) {
+    if (largoArco > 30) {
       const invertido = medio > 90 && medio < 270;
       const id = `${idBase}-${i}`;
-      defs.appendChild(el('path', { id, d: caminoArco(cx, cy, r, a0, a1, invertido), fill: 'none' }));
-      const tinta = tintaSobre(colorResuelto(i));
+      defs.appendChild(el('path', {
+        id, d: caminoArco(cx, cy, rEtq, a0, a1, invertido), fill: 'none',
+      }));
+
+      const t = el('text', { class: 'viz-arco-etq viz-arco-fuera' });
+      const alFinal = invertido;   // con el camino invertido, el final es el 0 %
+      const tp = el('textPath', {
+        startOffset: alFinal ? '4%' : '96%',
+        'text-anchor': alFinal ? 'start' : 'end',
+      });
+      tp.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${id}`);
+      tp.setAttribute('href', `#${id}`);
+      tp.textContent = etiquetaEje(d.valor);
+      t.appendChild(tp);
+      svg.appendChild(t);
 
       /*
-       * Devuelve lo que mide el rótulo ya pintado, o lo borra y devuelve 0 si
-       * no cabe. Estimar el ancho por el número de letras no vale: cuando la
-       * cuenta se queda corta, el texto se sale del camino y el navegador
-       * simplemente no dibuja las letras sobrantes — «Mantenimiento» aparecía
-       * como «antenimiento», sin aviso. Medirlo es exacto.
+       * Si no cabe se borra. Estimar el ancho por el número de letras no vale:
+       * cuando la cuenta se queda corta el texto se sale del camino y el
+       * navegador deja de dibujar las letras sobrantes, sin aviso. Medirlo es
+       * exacto.
        */
-      const rotulo = (txt, alPrincipio, presupuesto) => {
-        const t = el('text', { class: 'viz-arco-etq', fill: tinta });
-        const aLaIzquierda = alPrincipio !== invertido;
-        const tp = el('textPath', {
-          startOffset: aLaIzquierda ? '7%' : '93%',
-          'text-anchor': aLaIzquierda ? 'start' : 'end',
-        });
-        tp.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${id}`);
-        tp.setAttribute('href', `#${id}`);
-        tp.textContent = txt;
-        t.appendChild(tp);
-        svg.appendChild(t);
-
-        const mide = t.getComputedTextLength?.() || txt.length * 7.1;
-        if (mide > presupuesto) {
-          t.remove();
-          return 0;
-        }
-        return mide;
-      };
-
-      // El nombre manda; el importe solo entra si sobra sitio de verdad.
-      const usado = rotulo(d.nombre, true, largoArco - 16);
-      if (usado) {
-        const importe = etiquetaEje(d.valor);
-        rotulo(importe, false, largoArco - usado - 34);
-      }
+      if ((t.getComputedTextLength?.() || 99) > largoArco - 8) t.remove();
     }
 
     ang += barrido;
@@ -2964,7 +3107,7 @@ function columnas(contenedor, etiquetas, series, { alto = 240, leyenda = true } 
       const x = centro - anchoGrupo / 2 + j * (grueso + 2);
       const barra = el('rect', {
         x, y: m.t + h - altura, width: grueso, height: altura,
-        rx: Math.min(4, grueso / 2), fill: colorSerie(j), class: 'viz-barra',
+        rx: Math.min(4, grueso / 2), fill: colorSerieDe(j, n), class: 'viz-barra',
       });
       conectar(barra, `<strong>${etq}</strong><br>${s.nombre}: ${money(s.valores[i] || 0)}`);
       svg.appendChild(barra);
@@ -3029,7 +3172,7 @@ function columnasApiladas(contenedor, etiquetas, series, { alto = 260 } = {}) {
       const top = m.t + h - ((acumulado + v) / techo) * h;
       const seg = el('rect', {
         x, y: top, width: grueso, height: Math.max(altura - 2, 1),
-        rx: j === series.length - 1 ? 4 : 0, fill: colorSerie(j), class: 'viz-barra',
+        rx: j === series.length - 1 ? 4 : 0, fill: colorSerieDe(j, series.length), class: 'viz-barra',
       });
       conectar(seg, `<strong>${etq}</strong><br>${s.nombre}: ${money(v)}
         <br><span class="viz-tt-tenue">Total ${money(totales[i])}</span>`);
@@ -3089,17 +3232,17 @@ function linea(contenedor, etiquetas, series, { alto = 230 } = {}) {
     const puntos = s.valores.map((v, i) => `${x(i)},${y(v)}`).join(' ');
     svg.appendChild(el('polygon', {
       points: `${m.l},${y(0)} ${puntos} ${x(s.valores.length - 1)},${y(0)}`,
-      fill: colorSerie(j), opacity: 0.1,
+      fill: colorSerieDe(j, series.length), opacity: 0.1,
     }));
     svg.appendChild(el('polyline', {
-      points: puntos, fill: 'none', stroke: colorSerie(j),
+      points: puntos, fill: 'none', stroke: colorSerieDe(j, series.length),
       'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round',
     }));
 
     const ultimo = s.valores.length - 1;
     svg.appendChild(el('circle', {
       cx: x(ultimo), cy: y(s.valores[ultimo]), r: 4.5,
-      fill: colorSerie(j), class: 'viz-punto-fin',
+      fill: colorSerieDe(j, series.length), class: 'viz-punto-fin',
     }));
     if (series.length <= 4) {
       svg.appendChild(el('text', {
@@ -3116,7 +3259,7 @@ function linea(contenedor, etiquetas, series, { alto = 230 } = {}) {
       fill: 'transparent', class: 'viz-zona',
     });
     const detalle = series
-      .map((s, j) => `<span class="viz-punto" style="background:${colorSerie(j)}"></span>
+      .map((s, j) => `<span class="viz-punto" style="background:${colorSerieDe(j, series.length)}"></span>
         ${s.nombre}: ${money(s.valores[i] || 0)}`)
       .join('<br>');
     conectar(zona, `<strong>${etq}</strong><br>${detalle}`);
@@ -3141,7 +3284,7 @@ function leyendaHorizontal(series) {
   ul.className = 'viz-leyenda viz-leyenda-h';
   series.forEach((s, i) => {
     const li = document.createElement('li');
-    li.innerHTML = `<span class="viz-punto" style="background:${colorSerie(i)}"></span>
+    li.innerHTML = `<span class="viz-punto" style="background:${colorSerieDe(i, series.length)}"></span>
       <span class="viz-leyenda-nombre">${s.nombre}</span>`;
     ul.appendChild(li);
   });
@@ -3189,7 +3332,7 @@ window.addEventListener('resize', () => {
   temporizador = setTimeout(() => { if (repintar) repintar(); }, 180);
 });
 
-return { MAX_SERIES, alRedimensionar, barrasHorizontales, colorSerie, columnas, columnasApiladas, dona, linea, medidor, ocultarTooltip, plegarOtros };
+return { MAX_SERIES, alRedimensionar, barrasHorizontales, colorSerie, colorSerieDe, columnas, columnasApiladas, dona, linea, medidor, ocultarTooltip, plegarOtros };
 })();
 
 M["ui"] = (function () {
@@ -6601,8 +6744,9 @@ function fechaCorta(fechaISO) {
 function barraReparto(partes, total) {
   if (total <= 0) return '';
   return `<div class="barra-jc" role="presentation">
-    ${partes.filter((p) => p.monto > 0).map((p, i) => `
-      <span style="flex:${p.monto};background:var(--serie-${(i % 8) + 1})"></span>`).join('')}
+    ${partes.filter((p) => p.monto > 0).map((p) => `
+      <span style="flex:${p.monto};background:var(--persona-${
+  esc(String(p.usuario).toLowerCase())}, var(--acento))"></span>`).join('')}
   </div>`;
 }
 
@@ -9005,6 +9149,7 @@ const {iniciarSync, empujarDiferido, alCambiarSync, estadoSync, configurado} = M
 const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta} = M["calc"];
 const archivoExcel = M["archivo"];
 const {crearCajon} = M["cajon"];
+const {alRedimensionar, ocultarTooltip} = M["charts"];
 const {$, crear, esc, ICONOS, modal, brindis, descargar} = M["ui"];
 const {formGastoTarjeta, formGastoEfectivo, formIngreso, formInversion, formMovimiento} = M["forms"];
 const resumen = M["views/resumen"];
@@ -9244,6 +9389,15 @@ function irA(id) {
   pintarCajon();
   $('#titulo-vista').textContent = vista.rotulo || vista.titulo;
   const raiz = $('#vista');
+  /*
+   * El repintado por redimensionado apunta a la vista que lo registró. Si la
+   * siguiente no registra ninguno —Datos y Cuentas no llevan gráficos— seguía
+   * activo el de la anterior, y al girar el teléfono intentaba dibujar dentro
+   * de un trozo de página que ya no existe. Se descuelga aquí y cada vista
+   * vuelve a colgar el suyo si lo necesita.
+   */
+  alRedimensionar(null);
+  ocultarTooltip();
   raiz.textContent = '';
   vista.modulo.render(raiz, { irA });
   const aviso = avisoAlmacenamiento();
