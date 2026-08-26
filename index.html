@@ -60,13 +60,13 @@
    * azules y las de abajo casi negras sin cambiar de estilo.
    */
   /*
-   * Casi opaca a propósito. Al 0,66 la tarjeta se componía con lo que tuviera
-   * detrás: arriba, sobre la franja clara, quedaba en un gris azulado lavado
-   * (#54657E) donde ningún azul llegaba al contraste mínimo y todo se veía
-   * igual de apagado. Al 0,90 la tarjeta es la misma arriba y abajo, y eso deja
-   * sitio para que el título tenga color propio.
+   * Casi opaca, y de un navy más claro de lo que parecería necesario. Dos
+   * razones: translúcida se componía con el degradado y arriba quedaba lavada,
+   * sin contraste para nada; y si la tarjeta es casi negra, el bloque oscuro de
+   * la esquina no tiene hacia dónde separarse. Aclararla es lo que deja sitio
+   * a las dos cosas: título con color propio y esquina que se distingue.
    */
-  --superficie: rgba(13, 31, 60, 0.90);
+  --superficie: rgba(34, 57, 95, 0.93);
   --superficie-2: rgba(255, 255, 255, 0.10);
   --superficie-3: rgba(255, 255, 255, 0.155);
 
@@ -137,10 +137,22 @@
   --persona-j: #dcecfd;
   --persona-c: #4f84d0;
 
-  /* Los tres tonos de la ficha: tapa (la más oscura), contenedor y panel. */
-  --ficha-tapa: rgba(5, 14, 32, 0.62);
-  --ficha-fuera: rgba(255, 255, 255, 0.05);
-  --ficha-dentro: rgba(255, 255, 255, 0.085);
+  /*
+   * Los tres tonos de la ficha: tapa (la más oscura), contenedor y panel.
+   *
+   * La tapa tenía tan poco contraste con lo que la rodea (1,2:1) que las tres
+   * capas se leían como una superficie plana: el bloque de la esquina no se
+   * distinguía. Oscurecerlo más no servía —la tarjeta ya estaba casi en negro y
+   * no quedaba recorrido hacia abajo—, así que la separación viene de aclarar
+   * la tarjeta. Medido sobre el resultado: 1,9:1 el bloque contra la ficha,
+   * frente a 1,2:1 de antes.
+   */
+  --ficha-tapa: rgba(3, 9, 22, 0.82);
+  --ficha-fuera: rgba(255, 255, 255, 0.06);
+  --ficha-dentro: rgba(255, 255, 255, 0.10);
+  /* Un filo de luz en el canto interior: define el bloque aunque el tono
+     apenas cambie, que es como se separan las capas en la referencia. */
+  --ficha-filo: rgba(255, 255, 255, 0.09);
 
   /* Estado: separado del acento, nunca hace de «serie 9». */
   --ok: #35c46a;
@@ -650,6 +662,8 @@ a { color: var(--acento); }
   padding: 12px 16px;
   border-radius: 0 0 0 20px;
   background: var(--ficha-tapa);
+  border-left: 1px solid var(--ficha-filo);
+  border-bottom: 1px solid var(--ficha-filo);
   /* Apagado: es el dato de contexto, no debe competir con el rótulo. */
   color: var(--tinta-3);
   font-size: 12px;
@@ -1082,6 +1096,8 @@ tr.detalle > td {
   padding: 9px 15px 10px;
   border-radius: 0 26px 0 20px;
   background: var(--ficha-tapa);
+  border-left: 1px solid var(--ficha-filo);
+  border-bottom: 1px solid var(--ficha-filo);
   font-size: 12px;
   font-weight: 560;
   color: var(--tinta-2);
