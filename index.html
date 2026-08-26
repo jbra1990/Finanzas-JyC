@@ -572,30 +572,63 @@ a { color: var(--acento); }
  * cambiar de estilo, y por eso lleva desenfoque —sin él el velo se ve plano.
  */
 .tarjeta {
+  position: relative;
   background: var(--superficie);
   -webkit-backdrop-filter: blur(18px) saturate(1.25);
   backdrop-filter: blur(18px) saturate(1.25);
   border: 1px solid var(--borde);
   border-radius: var(--radio-xl);
-  padding: 18px;
+  padding: 16px;
   margin: 14px 0;
   box-shadow: var(--sombra);
+  /* Recorta la esquina oscura contra el redondeo de la tarjeta. */
+  overflow: hidden;
 }
 
+/*
+ * La cabecera de la referencia: el rótulo a la izquierda y el dato de contexto
+ * ENCAJADO en la esquina de arriba a la derecha, en un bloque más oscuro. Se
+ * estira hasta los bordes con margen negativo para que el bloque llegue al filo
+ * de la tarjeta; el recorte de `overflow` le da la esquina redondeada.
+ *
+ * Solo se transforma el `.pista`, que es un dato. Las cabeceras que llevan un
+ * botón lo conservan como botón: encajarlo en la esquina lo disfrazaría de
+ * etiqueta y dejaría de invitar a pulsarlo.
+ */
 .tarjeta > header {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 8px 12px;
-  margin-bottom: 12px;
+  margin: -16px -16px 14px;
+  padding: 14px 16px 12px;
+  min-height: 46px;
 }
 .tarjeta > header > * { min-width: 0; max-width: 100%; }
 .tarjeta > header h2 {
   font-size: 15px;
   letter-spacing: -0.015em;
 }
-.tarjeta > header .pista { font-size: 12px; color: var(--tinta-3); }
+
+/* Deja libre la esquina donde se encaja el dato. */
+.tarjeta > header:has(.pista) { padding-right: 42%; }
+
+.tarjeta > header .pista {
+  position: absolute;
+  top: 0; right: 0;
+  max-width: 56%;
+  margin: 0;
+  padding: 13px 15px 13px 17px;
+  border-radius: 0 0 0 20px;
+  background: var(--ficha-tapa);
+  color: var(--tinta-2);
+  font-size: 12px;
+  font-weight: 560;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .rejilla { display: grid; gap: 12px; }
 .rejilla.dos { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
@@ -7042,7 +7075,7 @@ function render(raiz) {
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Ranking de gasto</h2><span class="pista">Top 10</span></header>
+        <header><h2>Ranking de gasto</h2><span class="pista">Todas</span></header>
         <div id="g-rank"></div>
       </div>
       <div class="tarjeta">
@@ -7359,7 +7392,7 @@ function render(raiz) {
         <div id="g-dona"></div>
       </div>
       <div class="tarjeta">
-        <header><h2>Ranking anual</h2><span class="pista">Top 10</span></header>
+        <header><h2>Ranking anual</h2><span class="pista">Todas</span></header>
         <div id="g-rank"></div>
       </div>
     </section>
