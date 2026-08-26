@@ -398,10 +398,16 @@ a { color: var(--acento); }
   bottom: calc(20px + env(safe-area-inset-bottom));
   z-index: 40;
   display: flex;
-  /* En la esquina de abajo a la izquierda: centrado se comía justo la fila
-     que uno está mirando. */
+  /*
+   * Pegado al filo de abajo a la izquierda, en la misma boca por donde sale la
+   * banda de opciones: los dos gestos viven en el mismo sitio. Centrado se
+   * comía justo la fila que uno está mirando.
+   *
+   * El `env()` es lo único que lo separa del borde, y solo cuando hace falta:
+   * en vertical vale cero, y en horizontal aparta el botón de la muesca.
+   */
   justify-content: flex-start;
-  padding-left: calc(18px + env(safe-area-inset-left));
+  padding-left: env(safe-area-inset-left);
   pointer-events: none;
 }
 
@@ -426,7 +432,7 @@ a { color: var(--acento); }
 .nav .nav-mas:hover { box-shadow: 0 16px 34px rgba(11, 31, 61, 0.55); }
 
 @media (min-width: 860px) {
-  .nav { right: auto; left: 26px; bottom: 26px; padding-left: 0; }
+  .nav { right: auto; left: 0; bottom: 26px; }
   .app { padding-bottom: 48px; }
 }
 
