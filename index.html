@@ -260,6 +260,8 @@
  */
 html {
   min-height: 100%;
+  /* Ayuda a que el deslizamiento horizontal no se convierta en «atrás». */
+  overscroll-behavior-x: contain;
   background-color: var(--fondo-4);
   background-image: var(--degradado);
   background-repeat: no-repeat;
@@ -9498,7 +9500,28 @@ function avisoAlmacenamiento() {
 function irA(id) {
   const vista = VISTAS.find((v) => v.id === id) || VISTAS[0];
   vistaActual = vista.id;
-  if (location.hash !== `#${vista.id}`) location.hash = vista.id;
+  /*
+   * La dirección se REEMPLAZA, no se apila.
+   *
+   * Asignar `location.hash` deja una entrada de historial por cada sección
+   * visitada. En el iPhone eso es un problema serio, porque deslizar desde el
+   * borde izquierdo —el gesto con el que se abre el cajón— es también el gesto
+   * de «atrás» del sistema: si el sistema se queda con el gesto, la app
+   * retrocede por esa pila y acaba en Inicio, que es lo que hay en el fondo
+   * desde que se arranca siempre ahí. Se veía como un parpadeo y un salto a
+   * Resumen sin haberlo pedido.
+   *
+   * Con `replaceState` solo existe una entrada: el gesto no tiene adónde ir y
+   * el cajón se queda con él.
+   */
+  if (location.hash !== `#${vista.id}`) {
+    try {
+      history.replaceState(null, '', `#${vista.id}`);
+    } catch {
+      // Abierta como archivo local, donde `replaceState` no está permitido.
+      location.hash = vista.id;
+    }
+  }
   pintarNav();
   pintarCajon();
   $('#titulo-vista').textContent = vista.rotulo || vista.titulo;
