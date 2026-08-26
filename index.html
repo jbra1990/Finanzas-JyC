@@ -398,7 +398,10 @@ a { color: var(--acento); }
   bottom: calc(20px + env(safe-area-inset-bottom));
   z-index: 40;
   display: flex;
-  justify-content: center;
+  /* En la esquina de abajo a la izquierda: centrado se comía justo la fila
+     que uno está mirando. */
+  justify-content: flex-start;
+  padding-left: calc(18px + env(safe-area-inset-left));
   pointer-events: none;
 }
 
@@ -423,7 +426,7 @@ a { color: var(--acento); }
 .nav .nav-mas:hover { box-shadow: 0 16px 34px rgba(11, 31, 61, 0.55); }
 
 @media (min-width: 860px) {
-  .nav { left: auto; right: 26px; bottom: 26px; }
+  .nav { right: auto; left: 26px; bottom: 26px; padding-left: 0; }
   .app { padding-bottom: 48px; }
 }
 
@@ -5400,6 +5403,13 @@ function crearCajon({ etiqueta = 'Menú' } = {}) {
      * porque detrás no hay nada que desplazar, y limitarlo al interior del
      * panel dejaba fuera justo el gesto de devolverlo empujando el velo.
      */
+    /*
+     * El botón de registrar vive en esa misma esquina de abajo a la izquierda,
+     * dentro de la franja del borde. Sin esta salvedad, tocarlo armaba el
+     * gesto: bastaba mover el dedo un poco al levantarlo para abrir el cajón
+     * además de abrir el menú.
+     */
+    if (!abierto && t.target?.closest?.('.nav')) return;
     if (!abierto && t.clientX > BORDE) return;
     x0 = t.clientX;
     y0 = t.clientY;
