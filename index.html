@@ -399,15 +399,15 @@ a { color: var(--acento); }
   z-index: 40;
   display: flex;
   /*
-   * Pegado al filo de abajo a la izquierda, en la misma boca por donde sale la
-   * banda de opciones: los dos gestos viven en el mismo sitio. Centrado se
-   * comía justo la fila que uno está mirando.
+   * Abajo a la izquierda, en la misma boca por donde sale la banda de opciones:
+   * los dos gestos viven en el mismo sitio. Centrado se comía justo la fila que
+   * uno está mirando, y a ras del filo quedaba apretado contra el borde.
    *
-   * El `env()` es lo único que lo separa del borde, y solo cuando hace falta:
-   * en vertical vale cero, y en horizontal aparta el botón de la muesca.
+   * El `env()` se suma al margen para apartarlo de la muesca en horizontal; en
+   * vertical vale cero y manda el margen.
    */
   justify-content: flex-start;
-  padding-left: env(safe-area-inset-left);
+  padding-left: calc(14px + env(safe-area-inset-left));
   pointer-events: none;
 }
 
@@ -415,7 +415,7 @@ a { color: var(--acento); }
   pointer-events: auto;
   display: grid;
   place-items: center;
-  width: 62px; height: 62px;
+  width: 54px; height: 54px;
   padding: 0;
   border-radius: 50%;
   background: var(--panel-plano);
@@ -423,16 +423,16 @@ a { color: var(--acento); }
   color: #fff;
   line-height: 0;
   cursor: pointer;
-  box-shadow: 0 14px 30px rgba(11, 31, 61, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.28);
-  border: 3px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 12px 26px rgba(11, 31, 61, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  border: 2.5px solid rgba(255, 255, 255, 0.22);
   transition: transform 0.12s, box-shadow 0.12s;
 }
-.nav .nav-mas svg { width: 28px; height: 28px; display: block; }
+.nav .nav-mas svg { width: 25px; height: 25px; display: block; }
 .nav .nav-mas:active { transform: scale(0.92); }
 .nav .nav-mas:hover { box-shadow: 0 16px 34px rgba(11, 31, 61, 0.55); }
 
 @media (min-width: 860px) {
-  .nav { right: auto; left: 0; bottom: 26px; }
+  .nav { right: auto; left: 12px; bottom: 26px; }
   .app { padding-bottom: 48px; }
 }
 
