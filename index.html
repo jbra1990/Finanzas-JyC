@@ -59,7 +59,14 @@
    * propio: son un velo de luz sobre el fondo, y por eso las de arriba se ven
    * azules y las de abajo casi negras sin cambiar de estilo.
    */
-  --superficie: rgba(13, 31, 60, 0.66);
+  /*
+   * Casi opaca a propósito. Al 0,66 la tarjeta se componía con lo que tuviera
+   * detrás: arriba, sobre la franja clara, quedaba en un gris azulado lavado
+   * (#54657E) donde ningún azul llegaba al contraste mínimo y todo se veía
+   * igual de apagado. Al 0,90 la tarjeta es la misma arriba y abajo, y eso deja
+   * sitio para que el título tenga color propio.
+   */
+  --superficie: rgba(13, 31, 60, 0.90);
   --superficie-2: rgba(255, 255, 255, 0.10);
   --superficie-3: rgba(255, 255, 255, 0.155);
 
@@ -116,6 +123,15 @@
   --serie-7: #315699;
   --serie-8: #27447c;
 
+  /*
+   * El título de cada sección va en azul claro, no en blanco. El blanco lo
+   * llevan los datos: así el encabezado se lee como rótulo y no se confunde con
+   * la primera fila de dentro, que es lo que pasaba —«Cupos de las tarjetas» y
+   * «Pichincha» eran el mismo blanco, casi el mismo peso y el mismo tamaño.
+   * Medido: 8,4:1 sobre la tarjeta arriba del todo y 11,2:1 abajo (AAA).
+   */
+  --titulo-seccion: #b9d7f6;
+
   /* J y C no son «serie 1 y 2»: son dos extremos de la escala, para que se
      distingan de un vistazo aunque todo lo demás sea del mismo azul. */
   --persona-j: #dcecfd;
@@ -163,7 +179,7 @@
     --tinta-cabecera: #eaf3ff;
     --tinta-cabecera-2: #9fbcda;
 
-    --superficie: rgba(255, 255, 255, 0.055);
+    --superficie: rgba(255, 255, 255, 0.075);
     --superficie-2: rgba(255, 255, 255, 0.095);
     --superficie-3: rgba(255, 255, 255, 0.15);
 
@@ -217,7 +233,7 @@
     #14294e 0, #102142 180px, #0a1832 400px, #061224 640px, #040d1c 804px);
   --tinta-cabecera: #eaf3ff;
   --tinta-cabecera-2: #9fbcda;
-  --superficie: rgba(255, 255, 255, 0.055);
+  --superficie: rgba(255, 255, 255, 0.075);
   --superficie-2: rgba(255, 255, 255, 0.095);
   --superficie-3: rgba(255, 255, 255, 0.15);
   --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
@@ -593,43 +609,60 @@ a { color: var(--acento); }
  * estira hasta los bordes con margen negativo para que el bloque llegue al filo
  * de la tarjeta; el recorte de `overflow` le da la esquina redondeada.
  *
+ * El bloque va en FLUJO, no posicionado en absoluto. Colocado en absoluto no
+ * podía crecer: los rótulos largos se recortaban con puntos suspensivos y, si
+ * el título también era largo, uno se metía por debajo del otro —el `padding`
+ * en porcentaje de la cabecera y el `max-width` del bloque se resuelven contra
+ * anchos distintos y nunca cuadraban. En flujo, una nota de dos líneas
+ * simplemente hace más alta la cabecera.
+ *
  * Solo se transforma el `.pista`, que es un dato. Las cabeceras que llevan un
  * botón lo conservan como botón: encajarlo en la esquina lo disfrazaría de
  * etiqueta y dejaría de invitar a pulsarlo.
  */
 .tarjeta > header {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-wrap: nowrap;
+  align-items: stretch;
   justify-content: space-between;
-  gap: 8px 12px;
+  gap: 0;
   margin: -16px -16px 14px;
-  padding: 14px 16px 12px;
+  padding: 0;
   min-height: 46px;
 }
-.tarjeta > header > * { min-width: 0; max-width: 100%; }
 .tarjeta > header h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: center;
+  padding: 13px 12px 13px 16px;
+  color: var(--titulo-seccion);
   font-size: 15px;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
 }
 
-/* Deja libre la esquina donde se encaja el dato. */
-.tarjeta > header:has(.pista) { padding-right: 42%; }
-
 .tarjeta > header .pista {
-  position: absolute;
-  top: 0; right: 0;
-  max-width: 56%;
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  max-width: 52%;
   margin: 0;
-  padding: 13px 15px 13px 17px;
+  padding: 12px 16px;
   border-radius: 0 0 0 20px;
   background: var(--ficha-tapa);
-  color: var(--tinta-2);
+  /* Apagado: es el dato de contexto, no debe competir con el rótulo. */
+  color: var(--tinta-3);
   font-size: 12px;
   font-weight: 560;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.35;
+  text-align: right;
+}
+
+/* Lo que no es rótulo ni dato —botones— se queda como estaba. */
+.tarjeta > header > *:not(h2):not(.pista) {
+  align-self: center;
+  flex: none;
+  margin-right: 16px;
 }
 
 .rejilla { display: grid; gap: 12px; }
