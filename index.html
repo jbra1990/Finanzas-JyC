@@ -121,6 +121,11 @@
   --persona-j: #dcecfd;
   --persona-c: #4f84d0;
 
+  /* Los tres tonos de la ficha: tapa (la más oscura), contenedor y panel. */
+  --ficha-tapa: rgba(5, 14, 32, 0.62);
+  --ficha-fuera: rgba(255, 255, 255, 0.05);
+  --ficha-dentro: rgba(255, 255, 255, 0.085);
+
   /* Estado: separado del acento, nunca hace de «serie 9». */
   --ok: #35c46a;
   --ok-texto: #4ade80;
@@ -986,19 +991,42 @@ tr.detalle > td {
  * arriba el tipo y la fecha, en medio de qué se trata, y abajo una franja con
  * las dos cifras que resumen el asunto.
  */
+/*
+ * La forma de la referencia: un contenedor redondeado, un bloque oscuro
+ * ENCAJADO en la esquina de arriba a la derecha con la fecha, y el contenido
+ * en un panel interior más claro. Lo que hace el efecto es la media luna del
+ * contenedor que asoma entre la esquina redondeada del bloque oscuro y la del
+ * panel: parece que el panel esté mordido, sin recortar nada.
+ */
 .ficha {
-  background: var(--superficie-2);
-  border-radius: var(--radio);
-  overflow: hidden;
-  margin: 0 0 10px;
+  position: relative;
+  background: var(--ficha-fuera);
+  border-radius: 26px;
+  padding: 0 5px 5px;
+  margin: 0 0 12px;
 }
 .ficha:last-child { margin-bottom: 0; }
+
+.ficha-meta {
+  position: absolute;
+  top: 0; right: 0;
+  max-width: 62%;
+  padding: 9px 15px 10px;
+  border-radius: 0 26px 0 20px;
+  background: var(--ficha-tapa);
+  font-size: 12px;
+  font-weight: 560;
+  color: var(--tinta-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .ficha-cab {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 15px 6px;
+  /* Deja libre la esquina donde se encaja la fecha. */
+  padding: 11px 42% 10px 13px;
   font-size: 12px;
   color: var(--tinta-3);
 }
@@ -1006,8 +1034,16 @@ tr.detalle > td {
   font-weight: 640;
   color: var(--tinta);
   letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.ficha-cuerpo { padding: 2px 15px 12px; }
+
+.ficha-panel {
+  background: var(--ficha-dentro);
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+.ficha-cuerpo { padding: 13px 14px 12px; }
 
 /* Reparto entre J y C dentro de una ficha. */
 /* Proporción J | C de una tarjeta: los mismos colores que los chips y que las
@@ -1064,7 +1100,7 @@ tr.detalle > td {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 6px 14px;
-  padding: 10px 15px;
+  padding: 10px 14px 11px;
   border-top: 1px solid var(--borde);
   font-size: 12.5px;
   color: var(--tinta-3);
@@ -1171,6 +1207,22 @@ tr.detalle > td {
   width: 36px; text-align: right; color: var(--tinta-3);
   font-variant-numeric: tabular-nums;
 }
+/* Las categorías que el anillo agrupa en «Otros»: se sangran y el punto se
+   afina, para que se vea que cuelgan de esa porción y no son una propia. */
+.viz-leyenda-agrupada { padding-left: 14px; }
+.viz-leyenda-agrupada .viz-punto {
+  width: 7px; height: 7px;
+  opacity: 0.72;
+}
+.viz-leyenda-agrupada .viz-leyenda-nombre { color: var(--tinta-2); }
+.viz-leyenda-nota {
+  display: block;
+  padding: 7px 0 0 14px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--tinta-3);
+}
+
 .viz-leyenda-h { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; }
 .viz-leyenda-h li { padding: 0; }
 .viz-leyenda-h .viz-leyenda-nombre { flex: 0 0 auto; }
@@ -3012,24 +3064,53 @@ function dona(contenedor, datos, { titulo = 'Total' } = {}) {
     style: `font-size:${tam}px`,
   })).textContent = textoCentro;
 
+  /*
+   * La leyenda lista TODAS las categorías, no solo las que tienen porción
+   * propia. El anillo agrupa las pequeñas en «Otros» porque con veinte tramos
+   * no se lee, pero esconder ahí dentro en qué se fue el dinero deja el gráfico
+   * sin servir para lo único que importa: saber en qué se gasta.
+   *
+   * Las que caen dentro de «Otros» comparten su color y van marcadas, para que
+   * la correspondencia con el anillo siga siendo cierta.
+   */
+  const completa = datos.filter((d) => d.valor > 0);
+  const conPorcion = serie.length - 1;   // la última porción es «Otros»
+  const agrupadas = completa.length > serie.length;
+
   const leyenda = document.createElement('ul');
   leyenda.className = 'viz-leyenda';
-  serie.forEach((d, i) => {
+  completa.forEach((d, i) => {
+    const dentroDeOtros = agrupadas && i >= conPorcion;
     const li = document.createElement('li');
-    li.innerHTML = `<span class="viz-punto" style="background:${colorSerie(i)}"></span>
+    if (dentroDeOtros) li.className = 'viz-leyenda-agrupada';
+    li.innerHTML = `<span class="viz-punto" style="background:${
+  colorSerie(dentroDeOtros ? conPorcion : i)}"></span>
       <span class="viz-leyenda-nombre">${d.nombre}</span>
       <span class="viz-leyenda-valor">${money(d.valor)}</span>
       <span class="viz-leyenda-pct">${((d.valor / total) * 100).toFixed(0)}%</span>`;
     leyenda.appendChild(li);
   });
+  if (agrupadas) {
+    const pie = document.createElement('li');
+    pie.className = 'viz-leyenda-nota';
+    pie.textContent = `Las ${completa.length - conPorcion} últimas van juntas `
+      + 'en la porción «Otros» del anillo.';
+    leyenda.appendChild(pie);
+  }
   envoltura.appendChild(leyenda);
   return undefined;
 }
 
 // --- Barras horizontales -----------------------------------------------------
 
-/** Ranking. Una sola serie: sin leyenda, con el valor al final de la barra. */
-function barrasHorizontales(contenedor, datos, { max = 10 } = {}) {
+/*
+ * Ranking. Una sola serie: sin leyenda, con el valor al final de la barra.
+ *
+ * Sin tope por defecto. Cortaba en diez, y con veinte categorías eso dejaba la
+ * mitad del gasto fuera de la vista sin decirlo: la lista se alarga, pero es
+ * una lista y se recorre — el objetivo es saber en qué se va TODO.
+ */
+function barrasHorizontales(contenedor, datos, { max = Infinity } = {}) {
   const serie = datos.filter((d) => d.valor > 0).slice(0, max);
   if (!serie.length) return vacio(contenedor);
 
@@ -3045,7 +3126,7 @@ function barrasHorizontales(contenedor, datos, { max = 10 } = {}) {
       <span class="viz-ranking-nombre" title="${d.nombre}">${d.nombre}</span>
       <span class="viz-ranking-pista">
         <span class="viz-ranking-barra" style="width:${(d.valor / tope) * 100}%;
-              background:${colorSerie(i)}"></span>
+              background:${colorSerieDe(i, serie.length)}"></span>
       </span>
       <span class="viz-ranking-valor">${money(d.valor)}</span>`;
     conectar(fila, `<strong>${d.nombre}</strong><br>${money(d.valor)}`);
@@ -6772,7 +6853,7 @@ function seccionProximos(mes) {
         .filter((x) => x.monto > 0);
       filas.push({
         tipo: 'Pago de tarjeta',
-        cuando: vence ? textoFecha(vence) : nombreMes(mes),
+        cuando: vence ? fechaCorta(vence) : nombreMes(mes),
         titulo: t.nombre,
         reparto,
         pieEtq: `Consumo de ${nombreMes(mes)}`,
@@ -6790,7 +6871,7 @@ function seccionProximos(mes) {
       const dias = diasEntre(hoy, p.fecha_vencimiento);
       filas.push({
         tipo: 'Vence póliza',
-        cuando: p.fecha_vencimiento,
+        cuando: fechaCorta(p.fecha_vencimiento),
         titulo: p.institucion,
         pieEtq: dias >= 0 ? `En ${dias} días · regresa a la cuenta` : `Venció hace ${-dias} días`,
         monto: Number(p.valor_final) || 0,
@@ -6805,10 +6886,9 @@ function seccionProximos(mes) {
   return `<header><h2>Próximos movimientos</h2></header>
     ${filas.map((f) => `
       <div class="ficha">
-        <div class="ficha-cab">
-          <span class="rotulo">${esc(f.tipo)}</span>
-          <span>${esc(f.cuando)}</span>
-        </div>
+        <div class="ficha-meta">${esc(f.cuando)}</div>
+        <div class="ficha-cab"><span class="rotulo">${esc(f.tipo)}</span></div>
+        <div class="ficha-panel">
         <div class="ficha-cuerpo">
           <h3>${esc(f.titulo)}</h3>
           ${f.reparto?.length ? `
@@ -6824,6 +6904,7 @@ function seccionProximos(mes) {
           <span>${esc(f.pieEtq)}</span>
           <span><strong class="${f.monto < 0 ? 'monto neg' : 'monto pos'}">
             ${money(Math.abs(f.monto))}</strong></span>
+        </div>
         </div>
       </div>`).join('')}`;
 }
