@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-yyK8s5VaHY5wSfRYIvOpWrhbn720QSoR4+zinmuRw+Y='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-wCymPHPzyvbMeKEZWnQeNeCId+Aq5Nr8GLTFMq7z1yY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -5657,7 +5657,7 @@ M["plan"] = (function () {
  */
 
 const {db} = M["store"];
-const {claveMes, mesActual, redondear, sumarDias, diasEntre, sumarMeses, rangoMeses} = M["calc"];
+const {claveMes, mesActual, redondear, sumarDias, diasEntre, sumarMeses, rangoMeses, nombreMes} = M["calc"];
 /** Con menos de tres apariciones no hay periodicidad, hay casualidad. */
 const MIN_OCURRENCIAS = 3;
 
@@ -5986,6 +5986,19 @@ function recurrencias() {
         const cuotas = Math.max(1, Math.round(Number(f.cuotas) || 1));
         const desde = f.desdeMes || claveMes(hoy);
         const hasta = sumarMeses(desde, cuotas - 1);
+        const pagos = new Set(f.pagos || []);
+        /*
+         * Cuántas cuotas van. Un préstamo se da de alta a mitad de camino —el
+         * mío lleva pagándose desde enero— y contar solo las marcadas con el
+         * botón diría «0 de 120» con siete ya pagadas. Una cuota de un mes que
+         * ya pasó está pagada, la marque uno o no: el banco la cobró igual.
+         */
+        const mesHoy = claveMes(hoy);
+        let hechas = 0;
+        for (let i = 0; i < cuotas; i += 1) {
+          const m = sumarMeses(desde, i);
+          if (m < mesHoy || pagos.has(m)) hechas += 1;
+        }
         return {
           ...f,
           clave: f.id,
@@ -5995,7 +6008,7 @@ function recurrencias() {
           hastaMes: hasta,
           detalle: f.detalle,
           cadencia: 30,
-          cadenciaTexto: `${cuotas} cuotas · hasta ${hasta}`,
+          cadenciaTexto: `${cuotas} cuotas · hasta ${nombreMes(hasta)}`,
           veces: 0,
           fechas: [],
           mesesConRegistro: new Set(),
@@ -6006,8 +6019,10 @@ function recurrencias() {
           reparto: { [f.medio || 'Préstamo']: 1 },
           fiable: true,
           pagos: f.pagos || [],
-          pagadas: (f.pagos || []).length,
-          vigente: f.activo !== false && hasta >= claveMes(hoy),
+          pagadas: hechas,
+          // Las marcadas a mano, para saber si toca el botón de este mes.
+          marcadas: pagos.size,
+          vigente: f.activo !== false && hasta >= mesHoy,
           mensual: true,
           montoAuto: f.monto,
           // Mientras dure, pesa su cuota cada mes.
@@ -9551,8 +9566,9 @@ function listaRecurrencias(filas, fuera) {
     // la última fue «hace -98 días» no lo entiende nadie.
     : `apuntado hasta ${esc(nombreMes(r.ultima.slice(0, 7)))}`}`}</div>
         ${r.clase === 'plazos' ? `<div class="meta sitios">${
-  r.pagadas || 0} de ${r.cuotas} cuotas pagadas${
-  r.pagadas ? ` · quedan ${money(r.monto * (r.cuotas - r.pagadas))}` : ''}</div>` : ''}
+  r.pagadas || 0} de ${r.cuotas} cuotas · quedan ${
+  r.cuotas - (r.pagadas || 0)} por ${money(r.monto * (r.cuotas - (r.pagadas || 0)))}
+  · termina en ${esc(nombreMes(r.hastaMes))}</div>` : ''}
         ${r.sitios?.length ? `<div class="meta sitios">En: ${
   esc(r.sitios.slice(0, 3).map((x) => x.nombre).join(' · '))}${
   r.sitios.length > 3 ? ` y ${r.sitios.length - 3} más` : ''}</div>` : ''}
