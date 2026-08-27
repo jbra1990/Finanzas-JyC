@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-2cTe0hnn0D8sHftGZnYvQKOSeMOhNv4UuwXfPwIaoks='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-6DIkmCFPCy56Gh0WjEPnOmzB0BCl4Gw0s8K8UMuQjks='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -9589,18 +9589,22 @@ function listaRecurrencias(filas, fuera) {
     // la última fue «hace -98 días» no lo entiende nadie.
     : `apuntado hasta ${esc(nombreMes(r.ultima.slice(0, 7)))}`}`}</div>
         ${r.clase === 'plazos' ? `<div class="meta sitios">${
-  r.pagadas || 0} de ${r.cuotas} cuotas · quedan ${
-  r.cuotas - (r.pagadas || 0)} por ${money(r.restante)}
-  · de ${money(r.total)} · termina en ${esc(nombreMes(r.hastaMes))}</div>` : ''}
+  r.pagadas || 0} de ${r.cuotas} cuotas pagadas · quedan ${money(r.restante)}
+  · termina en ${esc(nombreMes(r.hastaMes))}</div>` : ''}
         ${r.sitios?.length ? `<div class="meta sitios">En: ${
   esc(r.sitios.slice(0, 3).map((x) => x.nombre).join(' · '))}${
   r.sitios.length > 3 ? ` y ${r.sitios.length - 3} más` : ''}</div>` : ''}
         <div class="cifras">
-          <span>${r.tipo === 'Fijo' ? 'Cobra' : 'Suele ser'}
-            <strong>${money(r.monto)}</strong></span>
-          ${r.mensual
+          ${r.clase === 'plazos'
+    // En un gasto a plazos «cobra» y «al mes» son la misma cifra por
+    // definición; lo que no se ve por ningún lado es cuánto costó entero.
+    ? `<span>Cuota <strong>${money(r.monto)}</strong></span>
+       <span>Total <strong>${money(r.total)}</strong></span>`
+    : `<span>${r.tipo === 'Fijo' ? 'Cobra' : 'Suele ser'}
+         <strong>${money(r.monto)}</strong></span>
+       ${r.mensual
     ? `<span>Al mes <strong>${money(r.porMes)}</strong></span>`
-    : `<span>Próxima <strong>${esc(textoFecha(r.proxima))}</strong></span>`}
+    : `<span>Próxima <strong>${esc(textoFecha(r.proxima))}</strong></span>`}`}
         </div>
       </div>
       <div class="monto">${money(r.porMes)}<span class="pie">al mes</span></div>
