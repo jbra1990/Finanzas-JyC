@@ -156,6 +156,16 @@
      apenas cambie, que es como se separan las capas en la referencia. */
   --ficha-filo: rgba(255, 255, 255, 0.09);
 
+  /*
+   * El mismo color de la tarjeta pero OPACO, para lo que debe tapar: la primera
+   * columna y la cabecera de las tablas se quedan fijas mientras el resto se
+   * desplaza por detrás. Con el fondo translúcido de la tarjeta, los importes
+   * se transparentaban encima del nombre de la categoría y no se entendía ni
+   * una cosa ni la otra. Calculado como la tarjeta compuesta sobre el fondo
+   * profundo, que es donde caen las tablas: así no se nota el parche.
+   */
+  --superficie-solida: #20365b;
+
   /* Estado: separado del acento, nunca hace de «serie 9». */
   --ok: #35c46a;
   --ok-texto: #4ade80;
@@ -194,6 +204,7 @@
     --tinta-cabecera-2: #9fbcda;
 
     --superficie: rgba(255, 255, 255, 0.075);
+    --superficie-solida: #171f2d;
     --superficie-2: rgba(255, 255, 255, 0.095);
     --superficie-3: rgba(255, 255, 255, 0.15);
 
@@ -248,6 +259,7 @@
   --tinta-cabecera: #eaf3ff;
   --tinta-cabecera-2: #9fbcda;
   --superficie: rgba(255, 255, 255, 0.075);
+  --superficie-solida: #171f2d;
   --superficie-2: rgba(255, 255, 255, 0.095);
   --superficie-3: rgba(255, 255, 255, 0.15);
   --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
@@ -859,23 +871,40 @@ textarea { min-height: 66px; resize: vertical; }
 
 /* --- Tablas -------------------------------------------------------------- */
 
+/*
+ * Sin relleno a la IZQUIERDA: con él, la columna fija se anclaba por dentro y
+ * quedaba una rendija por la que asomaban los importes al desplazar. El hueco
+ * visual lo pone ahora la propia celda, que es lo que se queda anclado. (La
+ * sombra no servía: con `border-collapse: collapse` el navegador la ignora en
+ * las celdas.)
+ */
 .tabla-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   margin: 0 -16px;
-  padding: 0 16px;
+  padding: 0 16px 0 0;
 }
 table { border-collapse: collapse; width: 100%; font-size: 13px; }
 th, td { padding: 9px 10px; text-align: right; white-space: nowrap; }
 th:first-child, td:first-child {
   text-align: left;
   position: sticky; left: 0;
-  background: var(--superficie);
+  /* Opaco: por debajo pasan los importes al desplazar la tabla de lado. */
+  background: var(--superficie-solida);
   z-index: 1;
+  /*
+   * El contenedor con scroll lleva 16 px de relleno, así que la columna se
+   * ancla POR DENTRO de él y quedaba una rendija a la izquierda por la que
+   * asomaban los importes. La primera sombra pinta esa franja del mismo color;
+   * la segunda es un filo que indica que la columna está anclada y que hay más
+   * tabla a la derecha.
+   */
+  /* El hueco del borde de la tarjeta va aquí dentro, no en el contenedor. */
+  padding-left: 26px;
 }
 thead th {
   position: sticky; top: 0;
-  background: var(--superficie);
+  background: var(--superficie-solida);
   color: var(--tinta-3);
   font-weight: 600;
   font-size: 10.5px;
