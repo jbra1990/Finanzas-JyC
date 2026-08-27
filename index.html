@@ -2,6 +2,8 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-aXaMiou2iC6KfDmH8R16rtBqYXUTSqBnfpnv9krWOOw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
 <meta name="theme-color" content="#091a33" media="(prefers-color-scheme: dark)">
@@ -1945,19 +1947,69 @@ async function cargar() {
 
 /** Reemplaza toda la base (importación / restauración de respaldo). */
 function reemplazar(datos) {
+  /*
+   * Los ajustes propios del aparato —tema, y sobre todo la dirección y la clave
+   * de sincronización— no viajan en el respaldo, así que restaurar uno no debe
+   * borrarlos: se conservan los de este teléfono. Sin esto, cargar un respaldo
+   * dejaba el aparato desconectado y había que volver a escribir la clave.
+   */
+  const propios = {};
+  CONFIG_LOCAL.forEach((k) => { propios[k] = db.config?.[k]; });
   adoptar(datos);
+  CONFIG_LOCAL.forEach((k) => {
+    if (propios[k] !== undefined && propios[k] !== '') db.config[k] = propios[k];
+  });
   guardar();
 }
 
-function limpiarTodo() {
+/**
+ * Borra TODO lo que la app haya podido dejar en este navegador, no solo la
+ * clave principal: el identificador del archivo de Excel vinculado vive en
+ * IndexedDB y el armazón en la caché del service worker, y ninguno de los dos
+ * se iba al «borrar todos los datos». Se creía el aparato limpio y no lo estaba.
+ *
+ * La copia remota NO se toca desde aquí: eso se pregunta aparte, porque borrarla
+ * afecta también al otro teléfono.
+ */
+async function limpiarTodo() {
   seguro.borrar(CLAVE);
   adoptar({});
   guardar();
+
+  try {
+    const bds = (await indexedDB.databases?.()) || [];
+    await Promise.all(bds
+      .filter((b) => b.name)
+      .map((b) => new Promise((res) => {
+        const req = indexedDB.deleteDatabase(b.name);
+        req.onsuccess = res; req.onerror = res; req.onblocked = res;
+      })));
+  } catch { /* el navegador no deja enumerar: se sigue */ }
+
+  try {
+    const claves = await caches.keys();
+    await Promise.all(claves.map((k) => caches.delete(k)));
+  } catch { /* sin caché que borrar */ }
 }
 
 /** Exporta una copia serializable del estado. */
 function instantanea() {
   return JSON.parse(JSON.stringify(db));
+}
+
+/**
+ * La misma copia, pero SIN los secretos de este aparato.
+ *
+ * El respaldo se guarda en iCloud y se manda por Archivos o por correo. Con la
+ * dirección y la clave de Supabase dentro, cualquiera que consiguiera ese
+ * archivo tendría acceso remoto a toda la base. Lo que se comparte no lleva
+ * credenciales; al restaurar, cada aparato conserva las suyas.
+ */
+function instantaneaSinSecretos() {
+  const copia = instantanea();
+  copia.config = { ...copia.config };
+  CONFIG_LOCAL.forEach((k) => { delete copia.config[k]; });
+  return copia;
 }
 
 // --- Identificadores ---------------------------------------------------------
@@ -2062,7 +2114,7 @@ function usuarios() {
     .filter(Boolean);
 }
 
-return { CLAVES, COLECCIONES, CONFIG_LOCAL, alCambiar, almacenamiento, cargar, categoriasGasto, categoriasIngreso, codigoDispositivo, comprobarAlmacenamiento, cuenta, cuentasBancarias, db, eliminar, guardar, instantanea, limpiarTodo, nuevoId, reemplazar, tarjetas, tocar, upsert, usuarios };
+return { CLAVES, COLECCIONES, CONFIG_LOCAL, alCambiar, almacenamiento, cargar, categoriasGasto, categoriasIngreso, codigoDispositivo, comprobarAlmacenamiento, cuenta, cuentasBancarias, db, eliminar, guardar, instantanea, instantaneaSinSecretos, limpiarTodo, nuevoId, reemplazar, tarjetas, tocar, upsert, usuarios };
 })();
 
 M["calc"] = (function () {
@@ -2718,6 +2770,18 @@ const el = (nombre, attrs = {}) => {
   return n;
 };
 
+/*
+ * Escapa antes de escribir en `innerHTML`.
+ *
+ * Los nombres de categoría y de serie los escribe el usuario, o llegan de un
+ * .xlsx, de un respaldo JSON o de la fila sincronizada: los tres son entrada
+ * externa y hay que tratarlos como hostiles. Sin esto, un nombre con HTML
+ * dentro se ejecutaba al pintar los gráficos —comprobado con prueba de
+ * concepto— y desde ahí se podía leer todo lo guardado en el navegador.
+ */
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 const colorSerie = (i) => `var(--serie-${(i % SLOTS) + 1})`;
 
 /*
@@ -2908,7 +2972,7 @@ function lienzo(contenedor, alto) {
 
 function vacio(contenedor, mensaje = 'Sin datos para este filtro') {
   limpiar(contenedor);
-  contenedor.innerHTML = `<p class="viz-vacio">${mensaje}</p>`;
+  contenedor.innerHTML = `<p class="viz-vacio">${esc(mensaje)}</p>`;
 }
 
 // --- Dona --------------------------------------------------------------------
@@ -3077,7 +3141,7 @@ function dona(contenedor, datos, { titulo = 'Total' } = {}) {
     const holgada = barrido > propio * 2 + 1.5;
     const a0 = ang + (holgada ? propio : 0);
     const a1 = ang + barrido - (holgada ? propio : 0);
-    const sugerencia = `<strong>${d.nombre}</strong><br>${money(d.valor)} · ${(frac * 100).toFixed(1)}%`;
+    const sugerencia = `<strong>${esc(d.nombre)}</strong><br>${money(d.valor)} · ${(frac * 100).toFixed(1)}%`;
 
     const casiEntera = barrido > 359;
     const arco = el('path', {
@@ -3181,7 +3245,7 @@ function dona(contenedor, datos, { titulo = 'Total' } = {}) {
     if (dentroDeOtros) li.className = 'viz-leyenda-agrupada';
     li.innerHTML = `<span class="viz-punto" style="background:${
   colorSerie(dentroDeOtros ? conPorcion : i)}"></span>
-      <span class="viz-leyenda-nombre">${d.nombre}</span>
+      <span class="viz-leyenda-nombre">${esc(d.nombre)}</span>
       <span class="viz-leyenda-valor">${money(d.valor)}</span>
       <span class="viz-leyenda-pct">${((d.valor / total) * 100).toFixed(0)}%</span>`;
     leyenda.appendChild(li);
@@ -3219,13 +3283,13 @@ function barrasHorizontales(contenedor, datos, { max = Infinity } = {}) {
     const fila = document.createElement('div');
     fila.className = 'viz-ranking-fila';
     fila.innerHTML = `
-      <span class="viz-ranking-nombre" title="${d.nombre}">${d.nombre}</span>
+      <span class="viz-ranking-nombre" title="${esc(d.nombre)}">${esc(d.nombre)}</span>
       <span class="viz-ranking-pista">
         <span class="viz-ranking-barra" style="width:${(d.valor / tope) * 100}%;
               background:${colorSerieDe(i, serie.length)}"></span>
       </span>
       <span class="viz-ranking-valor">${money(d.valor)}</span>`;
-    conectar(fila, `<strong>${d.nombre}</strong><br>${money(d.valor)}`);
+    conectar(fila, `<strong>${esc(d.nombre)}</strong><br>${money(d.valor)}`);
     lista.appendChild(fila);
   });
   contenedor.appendChild(lista);
@@ -3286,7 +3350,7 @@ function columnas(contenedor, etiquetas, series, { alto = 240, leyenda = true } 
         x, y: m.t + h - altura, width: grueso, height: altura,
         rx: Math.min(4, grueso / 2), fill: colorSerieDe(j, n), class: 'viz-barra',
       });
-      conectar(barra, `<strong>${etq}</strong><br>${s.nombre}: ${money(s.valores[i] || 0)}`);
+      conectar(barra, `<strong>${esc(etq)}</strong><br>${esc(s.nombre)}: ${money(s.valores[i] || 0)}`);
       svg.appendChild(barra);
     });
 
@@ -3351,7 +3415,7 @@ function columnasApiladas(contenedor, etiquetas, series, { alto = 260 } = {}) {
         x, y: top, width: grueso, height: Math.max(altura - 2, 1),
         rx: j === series.length - 1 ? 4 : 0, fill: colorSerieDe(j, series.length), class: 'viz-barra',
       });
-      conectar(seg, `<strong>${etq}</strong><br>${s.nombre}: ${money(v)}
+      conectar(seg, `<strong>${esc(etq)}</strong><br>${esc(s.nombre)}: ${money(v)}
         <br><span class="viz-tt-tenue">Total ${money(totales[i])}</span>`);
       svg.appendChild(seg);
       acumulado += v;
@@ -3437,9 +3501,9 @@ function linea(contenedor, etiquetas, series, { alto = 230 } = {}) {
     });
     const detalle = series
       .map((s, j) => `<span class="viz-punto" style="background:${colorSerieDe(j, series.length)}"></span>
-        ${s.nombre}: ${money(s.valores[i] || 0)}`)
+        ${esc(s.nombre)}: ${money(s.valores[i] || 0)}`)
       .join('<br>');
-    conectar(zona, `<strong>${etq}</strong><br>${detalle}`);
+    conectar(zona, `<strong>${esc(etq)}</strong><br>${detalle}`);
     svg.appendChild(zona);
 
     const salto = Math.ceil(etiquetas.length / Math.max(3, Math.floor(w / 46)));
@@ -3462,7 +3526,7 @@ function leyendaHorizontal(series) {
   series.forEach((s, i) => {
     const li = document.createElement('li');
     li.innerHTML = `<span class="viz-punto" style="background:${colorSerieDe(i, series.length)}"></span>
-      <span class="viz-leyenda-nombre">${s.nombre}</span>`;
+      <span class="viz-leyenda-nombre">${esc(s.nombre)}</span>`;
     ul.appendChild(li);
   });
   return ul;
@@ -3479,7 +3543,7 @@ function medidor(contenedor, { usado, total, etiqueta = '', sinPie = false }) {
   const estado = pct >= 90 ? 'critico' : pct >= 70 ? 'alerta' : 'bien';
   const pie = sinPie ? '' : `
       <div class="medidor-pie">
-        <span>${etiqueta}</span>
+        <span>${esc(etiqueta)}</span>
         <span><strong>${money(usado)}</strong> de ${money(total)} · ${pct.toFixed(0)}%</span>
       </div>`;
   contenedor.innerHTML = `
@@ -4155,7 +4219,7 @@ function fusionar(local, remoto) {
 
   const lapidas = new Map();
   for (const t of [...(local.borrados || []), ...(remoto.borrados || [])]) {
-    const k = `${t.c} ${t.k}`;
+    const k = `${t.c}\u0000${t.k}`;
     if (!lapidas.has(k) || t.t > lapidas.get(k).t) lapidas.set(k, t);
   }
 
@@ -4167,7 +4231,7 @@ function fusionar(local, remoto) {
       if (!previo || (fila._ts || 0) > (previo._ts || 0)) fusion.set(k, fila);
     }
     for (const [k, fila] of [...fusion]) {
-      const lapida = lapidas.get(`${col} ${k}`);
+      const lapida = lapidas.get(`${col}\u0000${k}`);
       if (lapida && lapida.t >= (fila._ts || 0)) fusion.delete(k);
     }
     salida[col] = [...fusion.values()];
@@ -4196,10 +4260,31 @@ function paraSubir(datos) {
 
 // --- Transporte --------------------------------------------------------------
 
+/*
+ * Error legible, sin la respuesta literal del servidor.
+ *
+ * Antes se metía `await resp.text()` en el mensaje y ese mensaje acaba a la
+ * vista en Avisos: enseñaba detalles internos de Supabase a quien tuviera el
+ * teléfono delante y no ayudaba a quien lo lee. El detalle crudo se queda en la
+ * consola, que es donde sirve para depurar.
+ */
+async function fallo(resp) {
+  let crudo = '';
+  try { crudo = (await resp.text()).slice(0, 400); } catch { /* sin cuerpo */ }
+  console.error('Sync: respuesta', resp.status, crudo);
+  const texto = {
+    401: 'La clave de sincronización no es válida.',
+    403: 'La clave no tiene permiso sobre esa tabla. Revisa la política en Supabase.',
+    404: 'No se encuentra la tabla «finanzas» en ese proyecto.',
+    409: 'Choque al guardar. Se reintenta en la siguiente sincronización.',
+  }[resp.status] || `El servidor respondió ${resp.status}.`;
+  return new Error(texto);
+}
+
 async function traer() {
   const url = `${base()}?id=eq.${encodeURIComponent(db.config.sync_id || 'jc')}&select=datos`;
   const resp = await fetch(url, { headers: cabeceras() });
-  if (!resp.ok) throw new Error(`Supabase respondió ${resp.status}: ${await resp.text()}`);
+  if (!resp.ok) throw await fallo(resp);
   const filas = await resp.json();
   return filas[0]?.datos || null;
 }
@@ -4213,7 +4298,7 @@ async function subir(datos) {
     headers: { ...cabeceras(), Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: cuerpo,
   });
-  if (!resp.ok) throw new Error(`Supabase respondió ${resp.status}: ${await resp.text()}`);
+  if (!resp.ok) throw await fallo(resp);
 }
 
 /**
@@ -4292,8 +4377,40 @@ function iniciarSync() {
   window.addEventListener('online', () => sincronizar());
 }
 
-/** SQL que el usuario debe correr una vez en su proyecto de Supabase. */
-const SQL_TABLA = `create table if not exists finanzas (
+/**
+ * Identificador del documento. Largo y aleatorio, no «jc».
+ *
+ * Con la política nueva, este identificador es lo que decide a qué fila se
+ * puede llegar: hace de contraseña. «jc» se acierta a la primera, así que se
+ * genera uno de 32 caracteres al conectar. Los que ya estaban puestos se
+ * respetan —cambiarlo dejaría la fila anterior huérfana y al otro teléfono sin
+ * encontrarla.
+ */
+function idNuevo() {
+  const b = new Uint8Array(16);
+  crypto.getRandomValues(b);
+  return `jc-${[...b].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * SQL que el usuario debe correr una vez en su proyecto de Supabase.
+ *
+ * La política anterior era `using (true) with check (true)`: autorizaba TODO a
+ * cualquiera con la clave `anon`, que es pública por diseño —viaja en cada
+ * petición y vive en el navegador. Cualquiera que la consiguiera podía leer,
+ * cambiar o borrar la base entera, y también crear y borrar filas ajenas.
+ *
+ * Ahora la política se ata al identificador del documento, que es un secreto
+ * largo y aleatorio: aunque alguien tenga la clave, sin ese identificador no
+ * llega a ninguna fila, no puede enumerar las que hay ni vaciar la tabla.
+ *
+ * Conviene ser claro sobre hasta dónde llega esto: no equivale a autenticar.
+ * Siguen siendo dos secretos guardados en el teléfono en vez de uno. La
+ * protección de verdad es Supabase Auth con una política por usuario; esto es
+ * lo más sólido que se puede hacer sin añadir una pantalla de acceso.
+ */
+const SQL_TABLA = `-- 1. La tabla (si aún no existe).
+create table if not exists finanzas (
   id text primary key,
   datos jsonb not null default '{}'::jsonb,
   actualizado timestamptz not null default now()
@@ -4301,11 +4418,18 @@ const SQL_TABLA = `create table if not exists finanzas (
 
 alter table finanzas enable row level security;
 
-create policy "acceso con la clave anon"
-  on finanzas for all
-  using (true) with check (true);`;
+-- 2. Fuera la política abierta, si la creaste antes.
+drop policy if exists "acceso con la clave anon" on finanzas;
+drop policy if exists "solo el documento de esta casa" on finanzas;
 
-return { SQL_TABLA, alCambiarSync, configurado, empujarDiferido, estadoSync, fusionar, iniciarSync, probarConexion, sincronizar };
+-- 3. Solo se llega a la fila cuyo identificador se conoce.
+--    Sustituye AQUI_TU_IDENTIFICADOR por el que muestra la app en Datos.
+create policy "solo el documento de esta casa"
+  on finanzas for all
+  using (id = 'AQUI_TU_IDENTIFICADOR')
+  with check (id = 'AQUI_TU_IDENTIFICADOR');`;
+
+return { SQL_TABLA, alCambiarSync, configurado, empujarDiferido, estadoSync, fusionar, idNuevo, iniciarSync, probarConexion, sincronizar };
 })();
 
 M["esquema"] = (function () {
@@ -8466,14 +8590,14 @@ M["views/datos"] = (function () {
  * y ajustes generales.
  */
 
-const {db, guardar, reemplazar, limpiarTodo, instantanea, tocar, CLAVES} = M["store"];
+const {db, guardar, reemplazar, limpiarTodo, instantanea, instantaneaSinSecretos, tocar, CLAVES} = M["store"];
 const {money, redondear, nombreMes} = M["calc"];
 const {aNumero, esc, $, $$, brindis, modal, confirmar, descargar, pedirArchivo, opciones} = M["ui"];
 const {escribirLibro, leerLibro} = M["xlsx"];
 const {ESQUEMA, construirLibro, libroADatos} = M["esquema"];
 const archivoExcel = M["archivo"];
 const {libroTarjetasAEntidades, esLibroDeTarjetas, NOTA_IMPORTADO: NOTA} = M["importar_libro"];
-const {estadoSync, configurado, sincronizar, probarConexion, iniciarSync, SQL_TABLA} = M["sync"];
+const {estadoSync, configurado, sincronizar, probarConexion, iniciarSync, SQL_TABLA, idNuevo} = M["sync"];
 // --- Excel -------------------------------------------------------------------
 
 function exportarExcel() {
@@ -8642,7 +8766,7 @@ function aplicarImportacion(conv, modo) {
 // --- Respaldo JSON -----------------------------------------------------------
 
 function exportarJSON() {
-  const blob = new Blob([JSON.stringify(instantanea(), null, 1)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(instantaneaSinSecretos(), null, 1)], { type: 'application/json' });
   descargar(blob, `respaldo_finanzas_${new Date().toISOString().slice(0, 10)}.json`);
   brindis('Respaldo descargado');
 }
@@ -8677,6 +8801,9 @@ function estadoTexto() {
 }
 
 function render(raiz) {
+  // Se propone uno aleatorio para quien aún no ha conectado; el que ya tenga
+  // sync puesto conserva el suyo, porque cambiarlo desengancharía la fila.
+  const idSugerido = idNuevo();
   const conteos = ESQUEMA.filter(([, c]) => c)
     .map(([hoja, c]) => ({ hoja, n: (db[c] || []).length }));
 
@@ -8737,8 +8864,13 @@ function render(raiz) {
                  placeholder="eyJhbGciOi..." autocomplete="off"></div>
       </div>
       <div class="filtros">
-        <div class="campo"><label for="sy-id">Nombre de la base compartida</label>
-          <input id="sy-id" value="${esc(db.config.sync_id || 'jc')}"></div>
+        <div class="campo ancho"><label for="sy-id">Identificador del documento</label>
+          <input id="sy-id" value="${esc(db.config.sync_id || idSugerido)}" autocomplete="off">
+          <p class="pista" style="margin:4px 0 0">Hace de contraseña: la política
+            de Supabase solo deja llegar a la fila con este identificador. Tiene
+            que ser el mismo en los dos teléfonos.</p></div>
+        <div class="campo" style="flex:0 0 auto;justify-content:flex-end">
+          <button class="btn" id="btn-sy-id" type="button">Generar otro</button></div>
         <div class="campo" style="flex:0 0 auto;justify-content:flex-end">
           <button class="btn primario" id="btn-sy-guardar">Conectar</button></div>
         <div class="campo" style="flex:0 0 auto;justify-content:flex-end">
@@ -8746,13 +8878,19 @@ function render(raiz) {
       </div>
       ${estadoSync.error ? `<div class="aviso critico"><span class="icono">✕</span>
         <span>${esc(estadoSync.error)}</span></div>` : ''}
+      ${db.config.sync_id === 'jc' && configurado() ? `
+        <div class="aviso alerta"><span class="icono">⚠</span>
+          <span class="crece">El identificador «jc» se adivina a la primera. Genera
+            otro, ponlo igual en el otro teléfono y vuelve a ejecutar el SQL de
+            abajo con el nuevo.</span></div>` : ''}
       <details style="margin-top:8px">
         <summary style="cursor:pointer;color:var(--tinta-2);font-size:13px">
           Cómo obtener esos dos datos (una sola vez)</summary>
         <ol style="color:var(--tinta-2);font-size:13px;line-height:1.7;padding-left:18px">
           <li>Entra a <strong>supabase.com</strong>, crea una cuenta gratis y un proyecto nuevo.</li>
           <li>En el menú <em>SQL Editor</em>, pega y ejecuta esto:
-            <pre style="overflow-x:auto;background:var(--superficie-2);padding:9px;border-radius:8px;font-size:11.5px">${esc(SQL_TABLA)}</pre></li>
+            <pre style="overflow-x:auto;background:var(--superficie-2);padding:9px;border-radius:8px;font-size:11.5px">${
+  esc(SQL_TABLA.replaceAll('AQUI_TU_IDENTIFICADOR', db.config.sync_id || idSugerido))}</pre></li>
           <li>En <em>Project Settings → API</em> copia la <strong>Project URL</strong> y la
             clave <strong>anon public</strong>, y pégalas arriba.</li>
           <li>Repite el mismo pegado en el otro teléfono. Listo.</li>
@@ -8891,10 +9029,15 @@ function render(raiz) {
     }, { aceptar: 'Desvincular' });
   });
 
+  $('#btn-sy-id', raiz).addEventListener('click', () => {
+    $('#sy-id', raiz).value = idNuevo();
+    brindis('Identificador nuevo. Ponlo igual en el otro teléfono.');
+  });
+
   $('#btn-sy-guardar', raiz).addEventListener('click', async () => {
     const url = $('#sy-url', raiz).value.trim();
     const clave = $('#sy-clave', raiz).value.trim();
-    const id = $('#sy-id', raiz).value.trim() || 'jc';
+    const id = $('#sy-id', raiz).value.trim() || idSugerido;
     if (!url || !clave) {
       brindis('Faltan la URL y la clave');
       return;
@@ -8947,9 +9090,16 @@ function render(raiz) {
   });
 
   $('#btn-borrar', raiz).addEventListener('click', () => {
-    confirmar('Se borrarán todos los registros de este dispositivo. '
-      + '¿Descargaste antes un respaldo?', () => {
-      limpiarTodo();
+    const remoto = configurado()
+      ? ' La copia del servidor NO se borra: sigue ahí y volverá a bajar si '
+        + 'vuelves a conectar la sincronización.'
+      : '';
+    confirmar('Se borrarán todos los registros de este dispositivo, el archivo '
+      + 'de Excel vinculado y la caché.'
+      + `${remoto} ¿Descargaste antes un respaldo?`, async () => {
+      // Se espera: borrar IndexedDB y la caché es asíncrono, y recargar antes
+      // de tiempo dejaba a medias justo lo que se quería limpiar.
+      await limpiarTodo();
       location.reload();
     }, { aceptar: 'Borrar todo' });
   });
@@ -9464,7 +9614,7 @@ return { render };
 M["app"] = (function () {
 /** Arranque, navegación y botón de registro rápido. */
 
-const {db, cargar, alCambiar, almacenamiento, instantanea, guardar, tarjetas} = M["store"];
+const {db, cargar, alCambiar, almacenamiento, instantanea, instantaneaSinSecretos, guardar, tarjetas} = M["store"];
 const {iniciarSync, empujarDiferido, alCambiarSync, estadoSync, configurado} = M["sync"];
 const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta} = M["calc"];
 const archivoExcel = M["archivo"];
@@ -9695,7 +9845,7 @@ function avisoAlmacenamiento() {
       <button class="btn pequeno" id="btn-respaldo-urgente">Descargar respaldo</button>
     </div>`);
   nodo.querySelector('#btn-respaldo-urgente').addEventListener('click', () => {
-    descargar(new Blob([JSON.stringify(instantanea(), null, 1)], { type: 'application/json' }),
+    descargar(new Blob([JSON.stringify(instantaneaSinSecretos(), null, 1)], { type: 'application/json' }),
       `respaldo_finanzas_${new Date().toISOString().slice(0, 10)}.json`);
   });
   return nodo;
