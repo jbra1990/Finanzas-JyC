@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-I4ErWSikhpfx2Lg0naH/gPgYZbl4zSCpu6hNGZY6024='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-yyK8s5VaHY5wSfRYIvOpWrhbn720QSoR4+zinmuRw+Y='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -5768,6 +5768,23 @@ function guardarManual(fila) {
   db.config[CLAVE_MANUALES] = JSON.stringify(lista);
 }
 
+/**
+ * Anota que un gasto previsto ya se pagó este mes, o deshace la marca.
+ *
+ * Sirve para dos cosas a la vez: que la previsión deje de contarlo en ese mes
+ * —el importe pasa de «previsto» a «apuntado»— y que quede constancia de qué
+ * cuotas del préstamo van saldadas.
+ */
+function marcarPago(id, mes, pagado = true) {
+  const lista = fijosManuales();
+  const f = lista.find((x) => x.id === id);
+  if (!f) return;
+  const pagos = new Set(f.pagos || []);
+  if (pagado) pagos.add(mes); else pagos.delete(mes);
+  f.pagos = [...pagos].sort();
+  db.config[CLAVE_MANUALES] = JSON.stringify(lista);
+}
+
 function borrarManual(id) {
   db.config[CLAVE_MANUALES] = JSON.stringify(fijosManuales().filter((x) => x.id !== id));
 }
@@ -5988,6 +6005,8 @@ function recurrencias() {
           tipoAuto: 'Fijo',
           reparto: { [f.medio || 'Préstamo']: 1 },
           fiable: true,
+          pagos: f.pagos || [],
+          pagadas: (f.pagos || []).length,
           vigente: f.activo !== false && hasta >= claveMes(hoy),
           mensual: true,
           montoAuto: f.monto,
@@ -6011,6 +6030,7 @@ function recurrencias() {
         dispersion: 0,
         variacion: 0,
         tipoAuto: f.tipo,
+        pagos: f.pagos || [],
         reparto: { [f.medio || 'Efectivo']: 1 },
         fiable: true,
         vigente: f.activo !== false,
@@ -6098,9 +6118,12 @@ function proyeccion(meses, { excluidas = null } = {}) {
     if (!r.fiable || !r.vigente || fuera.has(r.clave)) continue;
     let aporta = false;
 
+    const pagados = new Set(r.pagos || []);
     const sumar = (mes, monto, cuando) => {
       const casilla = porMes.get(mes);
-      if (!casilla || mes < ahora || r.mesesConRegistro.has(mes)) return;
+      // Un mes ya pagado no se prevé: su importe ya está apuntado como gasto
+      // real, y volver a preverlo lo contaría dos veces.
+      if (!casilla || mes < ahora || r.mesesConRegistro.has(mes) || pagados.has(mes)) return;
       casilla.previsto += monto;
       // Se reparte por medio en la misma proporción que el historial.
       Object.entries(r.reparto || { Efectivo: 1 }).forEach(([medio, parte]) => {
@@ -6255,7 +6278,7 @@ function mesesProyectados(n = 6) {
   return Array.from({ length: n }, (_, i) => sumarMeses(base, i));
 }
 
-return { MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, estaExcluida, fijosManuales, guardarAjuste, guardarManual, medioDe, mesesProyectados, presupuestoSugerido, proyeccion, recurrencias };
+return { MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, estaExcluida, fijosManuales, guardarAjuste, guardarManual, marcarPago, medioDe, mesesProyectados, presupuestoSugerido, proyeccion, recurrencias };
 })();
 
 M["forms"] = (function () {
@@ -9262,11 +9285,11 @@ M["views/plan"] = (function () {
  * comprometido más lo previsto, y la suma de los dos es el presupuesto.
  */
 
-const {db, guardar, categoriasGasto} = M["store"];
+const {db, guardar, categoriasGasto, cuentasBancarias, upsert, nuevoId} = M["store"];
 const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha} = M["calc"];
 const {columnasApiladas, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones} = M["ui"];
-const {MEDIOS, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual} = M["plan"];
+const {MEDIOS, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago} = M["plan"];
 const estado = { horizonte: 6, mesAbierto: null };
 
 function render(raiz) {
@@ -9282,15 +9305,27 @@ function render(raiz) {
   const promedio = realPrevio.length
     ? redondear(realPrevio.reduce((s, x) => s + x.gasto, 0) / realPrevio.length) : 0;
 
+  /*
+   * Sin historial la app no deduce nada, pero escribir un gasto a mano tiene que
+   * seguir siendo posible: es justo el caso de un préstamo recién estrenado, que
+   * no tiene pasado del que deducirlo. Así que el botón de añadir va también aquí.
+   */
   if (!todas.length) {
     raiz.innerHTML = `
       <section class="panel">
-        <span class="etiqueta">Presupuesto automático</span>
+        <span class="etiqueta">Presupuesto</span>
         <span class="cifra">${moneyHTML(0)}</span>
         <span class="nota">Todavía no hay historial suficiente.</span>
       </section>
-      <p class="vacio">Para reconocer un gasto que se repite hacen falta al menos
-        tres apariciones suyas. Sigue registrando y esta pantalla se irá llenando sola.</p>`;
+      <div class="barra-accion">
+        <span class="pista crece">Puedes escribir tú mismo un gasto que ya sabes
+          que viene: una cuota, una suscripción, un préstamo.</span>
+        <button class="btn primario pequeno" id="btn-fijo">+ Añadir gasto</button>
+      </div>
+      <p class="vacio">Para reconocer un gasto que se repite solo, hacen falta al
+        menos tres apariciones suyas. Sigue registrando y esta pantalla se irá
+        llenando sola.</p>`;
+    $('#btn-fijo', raiz).addEventListener('click', () => formFijo(null, () => render(raiz)));
     return;
   }
 
@@ -9307,9 +9342,21 @@ function render(raiz) {
    * vuelve no está en ninguna de las dos: eso es el gasto real y se apunta
    * como siempre.
    */
-  const fijos = fiables.filter((r) => r.tipo === 'Fijo');
-  const variables = fiables.filter((r) => r.tipo !== 'Fijo');
   const suma = (lista) => redondear(lista.reduce((t, r) => t + r.porMes, 0));
+
+  // Para los totales de arriba da igual de dónde salga cada gasto.
+  const totalFijos = suma(fiables.filter((r) => r.tipo === 'Fijo'));
+  const totalVariables = suma(fiables.filter((r) => r.tipo !== 'Fijo'));
+
+  /*
+   * Lo escrito a mano va en su propia caja, y la primera. Mezclado entre lo
+   * deducido se perdía: hacía falta buscar la etiqueta «a mano» gasto por gasto
+   * para saber cuál había escrito uno. Aquí se ve de un vistazo qué se metió a
+   * mano, cuánto suma y dónde tocar para añadir otro.
+   */
+  const mios = fiables.filter((r) => r.manual);
+  const fijos = fiables.filter((r) => !r.manual && r.tipo === 'Fijo');
+  const variables = fiables.filter((r) => !r.manual && r.tipo !== 'Fijo');
 
   raiz.innerHTML = `
     <section class="panel">
@@ -9327,9 +9374,9 @@ function render(raiz) {
       </div>
       <div class="panel-datos">
         <div><div class="etq">Fijos al mes</div>
-          <div class="val">${money(suma(fijos))}</div></div>
+          <div class="val">${money(totalFijos)}</div></div>
         <div><div class="etq">Variables al mes</div>
-          <div class="val">${money(suma(variables))}</div></div>
+          <div class="val">${money(totalVariables)}</div></div>
         <div><div class="etq">Promedio real previo</div>
           <div class="val">${money(promedio)}</div></div>
       </div>
@@ -9372,14 +9419,25 @@ function render(raiz) {
       </div>
     </section>
 
-    <div class="barra-accion">
-      <span class="pista crece">Corrige el importe si cambió, o añade uno que
-        todavía no tiene historial.</span>
-      <button class="btn primario pequeno" id="btn-fijo">+ Fijo</button>
-    </div>
+    <section class="tarjeta">
+      <header><h2>Los que escribo yo</h2>
+        <span class="pista">${mios.length
+    ? `${money(suma(mios))} al mes · ${mios.length} ${mios.length === 1 ? 'gasto' : 'gastos'}`
+    : 'Todavía ninguno'}</span></header>
+      ${mios.length ? listaRecurrencias(mios, false) : `
+        <p class="vacio">Aquí van los gastos que sabes que vienen aunque no estén
+          en el historial: una cuota de préstamo, un curso diferido, una
+          suscripción que acabas de contratar. Entran en la previsión de cada mes
+          igual que los que la app deduce sola.</p>`}
+      <div class="barra-accion">
+        <span class="pista crece">Se escribe el concepto, el importe y cómo se
+          paga: efectivo, tarjeta o préstamo.</span>
+        <button class="btn primario pequeno" id="btn-fijo">+ Añadir gasto</button>
+      </div>
+    </section>
 
     <section class="tarjeta">
-      <header><h2>Fijos</h2>
+      <header><h2>Fijos que deduce la app</h2>
         <span class="pista">${money(suma(fijos))} al mes · importe conocido</span></header>
       ${listaRecurrencias(fijos, false)}
     </section>
@@ -9459,6 +9517,13 @@ function render(raiz) {
   });
 
   // Dentro / fuera del presupuesto.
+  $$('[data-pagar]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const r = recurrencias().find((x) => x.clave === btn.dataset.pagar);
+      if (r) formPagar(r, recargar);
+    });
+  });
+
   $$('[data-alternar]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => {
       const clave = btn.dataset.alternar;
@@ -9485,6 +9550,9 @@ function listaRecurrencias(filas, fuera) {
     // Un cargo recurrente ya tiene cuotas apuntadas por delante: decir que
     // la última fue «hace -98 días» no lo entiende nadie.
     : `apuntado hasta ${esc(nombreMes(r.ultima.slice(0, 7)))}`}`}</div>
+        ${r.clase === 'plazos' ? `<div class="meta sitios">${
+  r.pagadas || 0} de ${r.cuotas} cuotas pagadas${
+  r.pagadas ? ` · quedan ${money(r.monto * (r.cuotas - r.pagadas))}` : ''}</div>` : ''}
         ${r.sitios?.length ? `<div class="meta sitios">En: ${
   esc(r.sitios.slice(0, 3).map((x) => x.nombre).join(' · '))}${
   r.sitios.length > 3 ? ` y ${r.sitios.length - 3} más` : ''}</div>` : ''}
@@ -9499,6 +9567,9 @@ function listaRecurrencias(filas, fuera) {
       <div class="monto">${money(r.porMes)}<span class="pie">al mes</span></div>
       ${fuera === null ? '' : `
         <div class="acciones">
+          ${r.manual ? `<button class="btn pequeno${
+  (r.pagos || []).includes(mesActual()) ? '' : ' primario'}" data-pagar="${esc(r.clave)}">
+            ${(r.pagos || []).includes(mesActual()) ? 'Pagado ✓' : 'Pagar'}</button>` : ''}
           <button class="btn pequeno" data-editar="${esc(r.clave)}">Editar</button>
           <button class="btn pequeno${fuera ? ' primario' : ''}" data-alternar="${esc(r.clave)}">
             ${fuera ? 'Devolver' : 'Dejar fuera'}</button>
@@ -9740,6 +9811,81 @@ function detalleMes(fila) {
       ${fila.lineas.length === 1 ? 'gasto previsto' : 'gastos previstos'} ·
       <strong>${money(fila.previsto)}</strong> sobre
       ${money(fila.comprometido)} ya comprometidos</div>`;
+}
+
+
+/**
+ * Registrar el pago de un gasto previsto.
+ *
+ * Hace dos cosas de una vez: apunta el gasto de verdad —con lo que el dinero
+ * sale de la cuenta que se elija y el saldo baja— y marca ese mes como pagado,
+ * para que la previsión deje de contarlo ahí. Sin la marca, el mes tendría el
+ * gasto apuntado Y previsto, contándolo dos veces.
+ */
+function formPagar(r, alTerminar) {
+  const mes = mesActual();
+  const yaPagado = (r.pagos || []).includes(mes);
+  const cuentas = cuentasBancarias();
+
+  if (yaPagado) {
+    modal({
+      titulo: `Pago de ${r.detalle}`,
+      cuerpo: `<p>Este mes ya está marcado como pagado.</p>
+        <p class="pista">Quitar la marca lo devuelve a la previsión de
+        ${esc(nombreMes(mes))}. El gasto que se registró NO se borra: si te
+        equivocaste, bórralo desde Cuentas.</p>`,
+      aceptar: 'Quitar la marca',
+      alEnviar() {
+        marcarPago(r.clave, mes, false);
+        guardar();
+        brindis('Marca quitada');
+        alTerminar?.();
+      },
+    });
+    return;
+  }
+
+  modal({
+    titulo: `Pagar ${r.detalle}`,
+    cuerpo: `
+      <div class="filtros">
+        ${campoMonto('pg-monto', 'monto', {
+    etiqueta: 'Importe', valor: String(r.monto).replace('.', ','), requerido: true,
+  })}
+        <div class="campo"><label for="pg-cuenta">Sale de</label>
+          <select id="pg-cuenta" name="cuenta" required>${
+  opciones(cuentas.map((c) => ({ valor: c.id, texto: c.nombre })), 'PACIFICO-1')}</select></div>
+      </div>
+      <div class="filtros">
+        <div class="campo"><label for="pg-fecha">Fecha</label>
+          <input id="pg-fecha" name="fecha" type="date"
+                 value="${new Date().toISOString().slice(0, 10)}" required></div>
+        <div class="campo"><label for="pg-usuario">Usuario</label>
+          <select id="pg-usuario" name="usuario">${
+  opciones(['J', 'C'], 'J')}</select></div>
+      </div>
+      <p class="pista">Se apunta como gasto de ${esc(nombreMes(mes))} y el importe
+        sale del saldo de la cuenta elegida.${r.clase === 'plazos'
+    ? ` Sería la cuota ${(r.pagadas || 0) + 1} de ${r.cuotas}.` : ''}</p>`,
+    aceptar: 'Registrar el pago',
+    alEnviar(d) {
+      upsert('gastosEfectivo', {
+        id: nuevoId('gastosEfectivo'),
+        fecha: d.fecha,
+        usuario: d.usuario,
+        cuenta: d.cuenta,
+        detalle: r.detalle,
+        proposito: r.clase === 'plazos' ? `Cuota ${(r.pagadas || 0) + 1} de ${r.cuotas}` : '',
+        categoria: r.categoria,
+        monto: redondear(aNumero(d.monto)),
+        notas: 'Pago registrado desde Presupuesto',
+      });
+      marcarPago(r.clave, mes, true);
+      guardar();
+      brindis('Pago registrado');
+      alTerminar?.();
+    },
+  });
 }
 
 return { render };
