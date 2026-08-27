@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xXQVp9LiMG2zArBV6zvQ3G+YE1/GmTTAktio5uz8nec='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-I4ErWSikhpfx2Lg0naH/gPgYZbl4zSCpu6hNGZY6024='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -5790,6 +5790,20 @@ const estaExcluida = (clave) => ajustes()[clave]?.activo === false
  * una compra grande suelta o un mes que se saltó desplazan la estimación
  * entera.
  */
+/** Medios de pago que distingue el presupuesto. */
+const MEDIOS = ['Efectivo', 'Tarjeta', 'Préstamo'];
+
+/**
+ * De qué bolsillo sale un gasto, según de dónde venga el apunte.
+ *
+ * Un gasto de tarjeta trae el identificador de la tarjeta; uno de efectivo, el
+ * de la cuenta. Basta con mirar el tipo de esa cuenta.
+ */
+function medioDe(origen) {
+  const c = db.cuentas.find((x) => x.id === origen);
+  return c?.tipo === 'Tarjeta' ? 'Tarjeta' : 'Efectivo';
+}
+
 function recurrencias() {
   const mios = ajustes();
   const grupos = new Map();
@@ -5815,7 +5829,7 @@ function recurrencias() {
     if (!grupos.has(clave)) {
       grupos.set(clave, {
         clave, detalle: cat, categoria: cat, origen,
-        fechas: [], montos: [], sitios: new Map(),
+        fechas: [], montos: [], sitios: new Map(), porMedio: new Map(),
       });
     }
     const g = grupos.get(clave);
@@ -5823,6 +5837,8 @@ function recurrencias() {
     g.montos.push(monto);
     const sitio = String(detalle ?? '').trim();
     if (sitio) g.sitios.set(sitio, (g.sitios.get(sitio) || 0) + 1);
+    const medio = medioDe(origen);
+    g.porMedio.set(medio, (g.porMedio.get(medio) || 0) + monto);
   };
 
   /*
@@ -5903,6 +5919,13 @@ function recurrencias() {
         detalle: g.detalle,
         categoria: aj.categoria || g.categoria,
         origen: g.origen,
+        /*
+         * En qué proporción se ha pagado por cada medio. No se elige uno solo
+         * porque una categoría se reparte de verdad: combustible se carga a la
+         * tarjeta casi siempre, pero alguna vez en efectivo. La previsión se
+         * reparte igual que el historial, en vez de mandarlo todo a un lado.
+         */
+        reparto: repartoDe(g.porMedio),
         // De qué se compone: los sitios donde se gastó, del más frecuente al
         // menos, para poder desplegarlo y comprobar que el grupo tiene sentido.
         sitios: [...g.sitios.entries()].sort((a, b) => b[1] - a[1])
@@ -5963,6 +5986,7 @@ function recurrencias() {
           variacion: 0,
           tipo: 'Fijo',
           tipoAuto: 'Fijo',
+          reparto: { [f.medio || 'Préstamo']: 1 },
           fiable: true,
           vigente: f.activo !== false && hasta >= claveMes(hoy),
           mensual: true,
@@ -5987,6 +6011,7 @@ function recurrencias() {
         dispersion: 0,
         variacion: 0,
         tipoAuto: f.tipo,
+        reparto: { [f.medio || 'Efectivo']: 1 },
         fiable: true,
         vigente: f.activo !== false,
         mensual: f.cadencia <= UMBRAL_MENSUAL,
@@ -6008,6 +6033,15 @@ function recurrencias() {
  * diciembre»: vuelve en enero, que es cuando de verdad habrá que pagarlo otra
  * vez y donde lo pone la previsión.
  */
+/** Mapa medio → importe convertido en proporciones que suman 1. */
+function repartoDe(porMedio) {
+  const total = [...porMedio.values()].reduce((a, b) => a + b, 0);
+  if (!total) return { Efectivo: 1 };
+  const out = {};
+  porMedio.forEach((v, k) => { out[k] = v / total; });
+  return out;
+}
+
 function siguienteLibre(ultima, cadencia, meses) {
   let f = ultima;
   for (let i = 0; i < 400; i += 1) {
@@ -6036,17 +6070,27 @@ function proyeccion(meses, { excluidas = null } = {}) {
     .filter((r) => estaExcluida(r.clave)).map((r) => r.clave));
 
   const ahora = mesActual();
+  const cero = () => Object.fromEntries(MEDIOS.map((x) => [x, 0]));
   const porMes = new Map(meses.map((m) => [m, {
     mes: m, comprometido: 0, previsto: 0, lineas: [],
+    // Lo mismo, visto por bolsillo en vez de por «ya apuntado o no».
+    medios: cero(),
   }]));
 
+  // Lo ya apuntado: las cuotas son de tarjeta y los gastos sueltos, de efectivo.
   for (const c of db.cuotas) {
     const m = porMes.get(c.mes);
-    if (m) m.comprometido += Number(c.monto) || 0;
+    if (!m) continue;
+    const v = Number(c.monto) || 0;
+    m.comprometido += v;
+    m.medios.Tarjeta += v;
   }
   for (const g of db.gastosEfectivo) {
     const m = porMes.get(claveMes(g.fecha));
-    if (m) m.comprometido += Number(g.monto) || 0;
+    if (!m) continue;
+    const v = Number(g.monto) || 0;
+    m.comprometido += v;
+    m.medios[medioDe(g.cuenta)] += v;
   }
 
   const usadas = [];
@@ -6058,7 +6102,11 @@ function proyeccion(meses, { excluidas = null } = {}) {
       const casilla = porMes.get(mes);
       if (!casilla || mes < ahora || r.mesesConRegistro.has(mes)) return;
       casilla.previsto += monto;
-      casilla.lineas.push({ clave: r.clave, detalle: r.detalle, monto, cuando });
+      // Se reparte por medio en la misma proporción que el historial.
+      Object.entries(r.reparto || { Efectivo: 1 }).forEach(([medio, parte]) => {
+        if (casilla.medios[medio] !== undefined) casilla.medios[medio] += monto * parte;
+      });
+      casilla.lineas.push({ clave: r.clave, detalle: r.detalle, monto, cuando, reparto: r.reparto });
       aporta = true;
     };
 
@@ -6088,6 +6136,7 @@ function proyeccion(meses, { excluidas = null } = {}) {
     x.comprometido = redondear(x.comprometido);
     x.previsto = redondear(x.previsto);
     x.simulado = redondear(x.comprometido + x.previsto);
+    MEDIOS.forEach((k) => { x.medios[k] = redondear(x.medios[k]); });
     x.lineas.sort((a, b) => b.monto - a.monto);
     return x;
   });
@@ -6099,6 +6148,8 @@ function proyeccion(meses, { excluidas = null } = {}) {
       comprometido: redondear(filas.reduce((s, x) => s + x.comprometido, 0)),
       previsto: redondear(filas.reduce((s, x) => s + x.previsto, 0)),
       simulado: redondear(filas.reduce((s, x) => s + x.simulado, 0)),
+      medios: Object.fromEntries(MEDIOS.map((k) => [k,
+        redondear(filas.reduce((s, x) => s + x.medios[k], 0))])),
     },
   };
 }
@@ -6204,7 +6255,7 @@ function mesesProyectados(n = 6) {
   return Array.from({ length: n }, (_, i) => sumarMeses(base, i));
 }
 
-return { ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, estaExcluida, fijosManuales, guardarAjuste, guardarManual, mesesProyectados, presupuestoSugerido, proyeccion, recurrencias };
+return { MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, estaExcluida, fijosManuales, guardarAjuste, guardarManual, medioDe, mesesProyectados, presupuestoSugerido, proyeccion, recurrencias };
 })();
 
 M["forms"] = (function () {
@@ -9215,7 +9266,7 @@ const {db, guardar, categoriasGasto} = M["store"];
 const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha} = M["calc"];
 const {columnasApiladas, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones} = M["ui"];
-const {recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual} = M["plan"];
+const {MEDIOS, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual} = M["plan"];
 const estado = { horizonte: 6, mesAbierto: null };
 
 function render(raiz) {
@@ -9291,7 +9342,7 @@ function render(raiz) {
 
     <section class="tarjeta">
       <header><h2>Simulación mes a mes</h2>
-        <span class="pista">Comprometido + previsto</span></header>
+        <span class="pista">Por bolsillo · lo apuntado más lo previsto</span></header>
       <div class="aviso"><span class="icono">i</span>
         <span class="crece">Solo se proyecta lo que se repite con un ritmo
         reconocible. Lo que se compra una vez y no vuelve no entra, así que esta
@@ -9300,20 +9351,21 @@ function render(raiz) {
       <div id="g-plan"></div>
       <div class="tabla-scroll">
         <table>
-          <thead><tr><th>Mes</th><th>Comprometido</th><th>Previsto</th><th>Simulado</th></tr></thead>
+          <thead><tr><th>Mes</th>${MEDIOS.map((m) => `<th>${m}</th>`).join('')}
+            <th>Total</th></tr></thead>
           <tbody>${plan.filas.map((f) => `
             <tr class="desplegable" data-mes="${esc(f.mes)}" aria-expanded="false" tabindex="0">
               <td><span class="flecha" aria-hidden="true">›</span>${esc(nombreMes(f.mes))}</td>
-              <td>${money(f.comprometido)}</td>
-              <td class="${f.previsto ? '' : 'cero'}">${f.previsto ? money(f.previsto) : '—'}</td>
+              ${MEDIOS.map((m) => `<td class="${f.medios[m] ? '' : 'cero'}">${
+  f.medios[m] ? money(f.medios[m]) : '—'}</td>`).join('')}
               <td><strong>${money(f.simulado)}</strong></td>
             </tr>
-            <tr class="detalle" data-detalle="${esc(f.mes)}" hidden><td colspan="4"></td></tr>`).join('')}
+            <tr class="detalle" data-detalle="${esc(f.mes)}" hidden>
+              <td colspan="${MEDIOS.length + 2}"></td></tr>`).join('')}
           </tbody>
           <tfoot><tr>
             <td>TOTAL</td>
-            <td>${money(plan.totales.comprometido)}</td>
-            <td>${money(plan.totales.previsto)}</td>
+            ${MEDIOS.map((m) => `<td>${money(plan.totales.medios[m])}</td>`).join('')}
             <td>${money(plan.totales.simulado)}</td>
           </tr></tfoot>
         </table>
@@ -9474,9 +9526,15 @@ const CADENCIAS = [
  */
 function formFijo(r, alTerminar) {
   const nuevo = !r;
+  const clasePrevia = r?.clase === 'plazos' ? 'plazos' : 'periodico';
   const cats = categoriasGasto();
   const editaDeducido = r && !r.manual;
   const mesHoy = new Date().toISOString().slice(0, 7);
+  // Para un gasto deducido se propone el medio con más peso en su historial;
+  // para uno a plazos, préstamo, que es el caso típico.
+  const medioPorDefecto = r?.medio
+    || (r?.reparto ? Object.entries(r.reparto).sort((a, b) => b[1] - a[1])[0]?.[0] : null)
+    || (clasePrevia === 'plazos' ? 'Préstamo' : 'Efectivo');
   const cuerpo = `
     ${editaDeducido ? '' : `
       <div class="campo ancho"><label>Qué es</label><div id="pf-clase"></div></div>`}
@@ -9508,6 +9566,10 @@ function formFijo(r, alTerminar) {
     <div class="filtros">
       <div class="campo"><label for="pf-cat">Categoría</label>
         <select id="pf-cat" name="categoria">${opciones(cats, r?.categoria)}</select></div>
+      <div class="campo"><label for="pf-medio">Cómo se paga</label>
+        <select id="pf-medio" name="medio">${opciones(MEDIOS, medioPorDefecto)}</select></div>
+    </div>
+    <div class="filtros">
       <div class="campo" data-solo="periodico"><label>Tipo de importe</label>
         <div id="pf-tipo"></div></div>
     </div>
@@ -9546,11 +9608,27 @@ function formFijo(r, alTerminar) {
         if (c) c.required = clase === 'plazos';
       };
 
+      /*
+       * Si se elige «a plazos» y nadie ha tocado el medio, se propone Préstamo:
+       * es el caso típico, y dejarlo en Efectivo obligaba a corregirlo siempre.
+       * En cuanto se elige uno a mano, deja de proponerse nada.
+       */
+      const selMedio = $('#pf-medio', form);
+      let medioTocado = false;
+      selMedio?.addEventListener('change', () => { medioTocado = true; });
+
       const cajaClase = $('#pf-clase', form);
       if (cajaClase) {
         cajaClase.appendChild(segmentado(
           [{ valor: 'periodico', texto: 'Se repite' }, { valor: 'plazos', texto: 'A plazos' }],
-          clase, (v) => { clase = v; mostrarClase(); refrescar(); },
+          clase, (v) => {
+            clase = v;
+            if (selMedio && !medioTocado) {
+              selMedio.value = v === 'plazos' ? 'Préstamo' : medioPorDefecto;
+            }
+            mostrarClase();
+            refrescar();
+          },
         ));
       }
 
@@ -9587,6 +9665,7 @@ function formFijo(r, alTerminar) {
           cuotas: Math.max(1, Math.round(Number(d.cuotas) || 1)),
           desdeMes: d.desdeMes || mesHoy,
           categoria: d.categoria,
+          medio: d.medio,
           tipo: 'Fijo',
           cadencia: 30,
         }
@@ -9596,6 +9675,7 @@ function formFijo(r, alTerminar) {
           monto: redondear(aNumero(d.monto)),
           cadencia: Number(d.cadencia) || 30,
           categoria: d.categoria,
+          medio: d.medio,
           tipo,
         };
       if (nuevo) {
