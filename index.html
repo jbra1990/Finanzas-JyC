@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-aXaMiou2iC6KfDmH8R16rtBqYXUTSqBnfpnv9krWOOw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xXQVp9LiMG2zArBV6zvQ3G+YE1/GmTTAktio5uz8nec='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -8341,7 +8341,7 @@ M["views/cuentas"] = (function () {
 const {db, cuentasBancarias, eliminar, upsert, cuenta} = M["store"];
 const {money, moneyHTML, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes} = M["calc"];
 const {dona, linea, alRedimensionar} = M["charts"];
-const {esc, $, $$, confirmar, modal, brindis} = M["ui"];
+const {esc, $, $$, confirmar, modal, brindis, aNumero} = M["ui"];
 const {formMovimiento, formIngreso, formGastoEfectivo} = M["forms"];
 function render(raiz) {
   const cuentas = cuentasBancarias();
@@ -8549,9 +8549,28 @@ function listaSimple(filas, mapear, vacio) {
   }).join('')}</ul>`;
 }
 
-/** Alta o edición de una cuenta (banco, efectivo o tarjeta). */
+/** Número listo para escribir en un campo: con coma, como en el resto. */
+const paraEditar = (n) => (n === undefined || n === null || n === ''
+  ? '' : String(redondear(n)).replace('.', ','));
+
+/**
+ * Alta o edición de una cuenta (banco, efectivo o tarjeta).
+ *
+ * El formulario pide el SALDO DE HOY, no el de partida.
+ *
+ * El campo guardaba `saldo_inicial`, que es lo que había antes de todo lo
+ * registrado, pero nadie piensa en eso: uno mira el banco y ve una cifra. Con
+ * Pichincha la diferencia era enorme —tiene sueldos registrados y ningún pago
+ * de salida, así que escribir «18,21» mostraba casi siete mil. Ahora se escribe
+ * lo que dice el banco y la app despeja el saldo de partida restando lo que ya
+ * tiene apuntado.
+ */
 function formCuenta(id, alTerminar) {
   const c = id ? cuenta(id) : null;
+  // Lo que aportan los movimientos ya registrados en esta cuenta: la diferencia
+  // entre lo que se muestra y el saldo de partida.
+  const movimiento = c ? redondear(saldoCuenta(c.id) - (Number(c.saldo_inicial) || 0)) : 0;
+
   const cuerpo = `
     <div class="filtros">
       <div class="campo"><label for="cu-nombre">Nombre</label>
@@ -8564,10 +8583,13 @@ function formCuenta(id, alTerminar) {
     <div class="filtros">
       <div class="campo"><label for="cu-banco">Banco</label>
         <input id="cu-banco" name="banco" value="${esc(c?.banco || '')}"></div>
-      <div class="campo"><label for="cu-saldo">Saldo inicial</label>
-        <input id="cu-saldo" name="saldo_inicial" type="text"
-               value="${Number(c?.saldo_inicial) || 0}" inputmode="decimal"></div>
+      <div class="campo"><label for="cu-saldo">Saldo de hoy</label>
+        <input id="cu-saldo" name="saldo_hoy" type="text"
+               value="${paraEditar(c ? saldoCuenta(c.id) : 0)}" inputmode="decimal"></div>
     </div>
+    ${movimiento ? `<p class="pista">Se pide el saldo que tiene la cuenta <strong>hoy</strong>,
+      no el de partida. La app ya tiene ${money(movimiento)} registrados de movimientos aquí,
+      así que resta esa parte sola: si escribes el saldo de tu banco, es el que verás.</p>` : ''}
     <div class="filtros">
       <div class="campo"><label for="cu-cupo">Cupo (solo tarjetas)</label>
         <input id="cu-cupo" name="cupo" type="text"
@@ -8590,6 +8612,9 @@ function formCuenta(id, alTerminar) {
     titulo: c ? `Editar ${c.nombre}` : 'Nueva cuenta',
     cuerpo,
     alEnviar(d) {
+      // Lo que aportan los movimientos ya apuntados en esta cuenta. Se resta
+      // del saldo de hoy para despejar el de partida.
+      const aporte = c ? redondear(saldoCuenta(c.id) - (Number(c.saldo_inicial) || 0)) : 0;
       const nuevoIdCuenta = c?.id || d.nombre.trim().toUpperCase()
         .replace(/[^A-Z0-9]+/g, '-').slice(0, 14);
       upsert('cuentas', {
@@ -8597,7 +8622,7 @@ function formCuenta(id, alTerminar) {
         nombre: d.nombre.trim(),
         tipo: d.tipo,
         banco: d.banco.trim(),
-        saldo_inicial: redondear(d.saldo_inicial),
+        saldo_inicial: redondear(aNumero(d.saldo_hoy) - aporte),
         cupo: redondear(d.cupo),
         usuarios: d.usuarios.trim(),
         dia_corte: d.dia_corte,
