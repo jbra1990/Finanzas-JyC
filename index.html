@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-wCymPHPzyvbMeKEZWnQeNeCId+Aq5Nr8GLTFMq7z1yY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-2cTe0hnn0D8sHftGZnYvQKOSeMOhNv4UuwXfPwIaoks='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -5999,6 +5999,23 @@ function recurrencias() {
           const m = sumarMeses(desde, i);
           if (m < mesHoy || pagos.has(m)) hechas += 1;
         }
+
+        /*
+         * El total manda, y las cuotas salen de dividirlo. Repartir $1.000 en 6
+         * da $166,67, que por seis son $1.000,02: dos centavos que no se deben
+         * a nadie. Así que la ÚLTIMA cuota carga con la diferencia, como hace
+         * cualquier tabla de amortización, y la suma de las cuotas es exacta.
+         *
+         * Los gastos dados de alta antes de que se pudiera escribir el total no
+         * lo tienen guardado: para ellos el total es la cuota por las veces.
+         */
+        const total = redondear(Number(f.total) || (Number(f.monto) || 0) * cuotas);
+        const cuota = redondear(total / cuotas);
+        const ultimaCuota = redondear(total - cuota * (cuotas - 1));
+        // Lo que falta por pagar, contando que la última cuota es distinta.
+        const restante = hechas >= cuotas
+          ? 0 : redondear(cuota * (cuotas - 1 - hechas) + ultimaCuota);
+
         return {
           ...f,
           clave: f.id,
@@ -6024,9 +6041,13 @@ function recurrencias() {
           marcadas: pagos.size,
           vigente: f.activo !== false && hasta >= mesHoy,
           mensual: true,
-          montoAuto: f.monto,
+          monto: cuota,
+          montoAuto: cuota,
+          total,
+          ultimaCuota,
+          restante,
           // Mientras dure, pesa su cuota cada mes.
-          porMes: redondear(Number(f.monto) || 0),
+          porMes: cuota,
           ultima: `${desde}-01`,
           diasDesde: 0,
           proxima: `${desde}-01`,
@@ -6149,9 +6170,11 @@ function proyeccion(meses, { excluidas = null } = {}) {
     };
 
     if (r.clase === 'plazos') {
-      // Cuotas contadas: se colocan en sus meses y se acaban.
+      // Cuotas contadas: se colocan en sus meses y se acaban. La última lleva
+      // los centavos que la división no repartió.
       for (let i = 0; i < r.cuotas; i += 1) {
-        sumar(sumarMeses(r.desdeMes, i), r.monto, `cuota ${i + 1} de ${r.cuotas}`);
+        const importe = i === r.cuotas - 1 ? (r.ultimaCuota ?? r.monto) : r.monto;
+        sumar(sumarMeses(r.desdeMes, i), importe, `cuota ${i + 1} de ${r.cuotas}`);
       }
     } else if (r.mensual) {
       // Varias veces al mes: se presupuesta el importe mensual completo.
@@ -9567,8 +9590,8 @@ function listaRecurrencias(filas, fuera) {
     : `apuntado hasta ${esc(nombreMes(r.ultima.slice(0, 7)))}`}`}</div>
         ${r.clase === 'plazos' ? `<div class="meta sitios">${
   r.pagadas || 0} de ${r.cuotas} cuotas · quedan ${
-  r.cuotas - (r.pagadas || 0)} por ${money(r.monto * (r.cuotas - (r.pagadas || 0)))}
-  · termina en ${esc(nombreMes(r.hastaMes))}</div>` : ''}
+  r.cuotas - (r.pagadas || 0)} por ${money(r.restante)}
+  · de ${money(r.total)} · termina en ${esc(nombreMes(r.hastaMes))}</div>` : ''}
         ${r.sitios?.length ? `<div class="meta sitios">En: ${
   esc(r.sitios.slice(0, 3).map((x) => x.nombre).join(' · '))}${
   r.sitios.length > 3 ? ` y ${r.sitios.length - 3} más` : ''}</div>` : ''}
@@ -9639,9 +9662,6 @@ function formFijo(r, alTerminar) {
     </div>
 
     <div class="filtros" data-solo="plazos" hidden>
-      ${campoMonto('pf-cuota', 'cuota', {
-    etiqueta: 'Cuota de cada mes', valor: String(r?.monto ?? '').replace('.', ','),
-  })}
       <div class="campo"><label for="pf-cuotas">Nº de cuotas</label>
         <input id="pf-cuotas" name="cuotas" type="number" inputmode="numeric"
                min="1" max="120" step="1" value="${esc(String(r?.cuotas ?? 12))}"></div>
@@ -9649,6 +9669,16 @@ function formFijo(r, alTerminar) {
         <input id="pf-desde" name="desdeMes" type="month"
                value="${esc(r?.desdeMes || mesHoy)}"></div>
     </div>
+    <div class="filtros" data-solo="plazos" hidden>
+      ${campoMonto('pf-total', 'total', {
+    etiqueta: 'Total del gasto', valor: String(r?.total ?? '').replace('.', ','),
+  })}
+      ${campoMonto('pf-cuota', 'cuota', {
+    etiqueta: 'Cuota de cada mes', valor: String(r?.monto ?? '').replace('.', ','),
+  })}
+    </div>
+    <p class="pista" data-solo="plazos" hidden>Escribe el que sepas: el otro se
+      calcula solo.</p>
 
     <div class="filtros">
       <div class="campo"><label for="pf-cat">Categoría</label>
@@ -9719,15 +9749,49 @@ function formFijo(r, alTerminar) {
         ));
       }
 
+      /*
+       * Total y cuota son la misma cifra vista de dos maneras, y unas veces se
+       * sabe una y otras la otra: del préstamo se conoce la cuota que cobra el
+       * banco; de un diferido de tarjeta, lo que costó la compra. Se escribe la
+       * que se tenga y la app calcula la otra, sin obligar a sacar la
+       * calculadora. El último campo tocado es el que manda.
+       */
+      const inCuota = $('#pf-cuota', form);
+      const inTotal = $('#pf-total', form);
+      const inN = $('#pf-cuotas', form);
+      // Al abrir uno ya guardado manda el total, que es el dato exacto: al
+      // revés, la cuota redondeada volvería a multiplicarse y movería el total.
+      let mandaTotal = !!r?.total;
+      inCuota?.addEventListener('input', () => { mandaTotal = false; });
+      inTotal?.addEventListener('input', () => { mandaTotal = true; });
+      const comaDe = (n) => (Number.isFinite(n) ? n.toFixed(2).replace('.', ',') : '');
+
+      const sincronizar = () => {
+        const n = Math.max(1, Math.round(Number(inN.value) || 1));
+        if (mandaTotal) {
+          const t = aNumero(inTotal.value);
+          inCuota.value = t ? comaDe(redondear(t / n)) : '';
+        } else {
+          const c = aNumero(inCuota.value);
+          inTotal.value = c ? comaDe(redondear(c * n)) : '';
+        }
+      };
+
       const refrescar = () => {
         if (clase === 'plazos') {
-          const cuota = aNumero($('#pf-cuota', form).value);
-          const n = Math.max(1, Math.round(Number($('#pf-cuotas', form).value) || 1));
+          sincronizar();
+          const n = Math.max(1, Math.round(Number(inN.value) || 1));
+          const total = redondear(aNumero(inTotal.value));
+          const cuota = redondear(total / n);
+          // La última carga con los centavos que la división dejó sueltos.
+          const ultima = redondear(total - cuota * (n - 1));
           const desde = $('#pf-desde', form).value || mesHoy;
           const hasta = sumarMeses(desde, n - 1);
-          preview.innerHTML = `<strong>${money(cuota)}</strong> al mes durante
-            ${n} ${n === 1 ? 'mes' : 'meses'}, de ${esc(nombreMes(desde))} a
-            ${esc(nombreMes(hasta))}. En total <strong>${money(cuota * n)}</strong>.`;
+          preview.innerHTML = `${n} ${n === 1 ? 'cuota' : 'cuotas'} de
+            <strong>${money(cuota)}</strong>${
+  Math.abs(ultima - cuota) >= 0.005 ? ` (la última, ${money(ultima)})` : ''},
+            de ${esc(nombreMes(desde))} a ${esc(nombreMes(hasta))}.
+            En total <strong>${money(total)}</strong>.`;
           return;
         }
         const monto = aNumero($('#pf-monto', form).value);
@@ -9748,6 +9812,10 @@ function formFijo(r, alTerminar) {
         ? {
           detalle: d.detalle.trim(),
           clase: 'plazos',
+          // Se guarda el total, que es el dato exacto; la cuota se deriva de él
+          // cada vez. Guardar solo la cuota perdería los centavos del reparto.
+          total: redondear(aNumero(d.total) || aNumero(d.cuota)
+            * Math.max(1, Math.round(Number(d.cuotas) || 1))),
           monto: redondear(aNumero(d.cuota)),
           cuotas: Math.max(1, Math.round(Number(d.cuotas) || 1)),
           desdeMes: d.desdeMes || mesHoy,
@@ -9861,12 +9929,16 @@ function formPagar(r, alTerminar) {
     return;
   }
 
+  // Si toca la última cuota, la que lleva los centavos del reparto.
+  const cuotaAhora = r.clase === 'plazos' && (r.pagadas || 0) + 1 >= r.cuotas
+    ? (r.ultimaCuota ?? r.monto) : r.monto;
+
   modal({
     titulo: `Pagar ${r.detalle}`,
     cuerpo: `
       <div class="filtros">
         ${campoMonto('pg-monto', 'monto', {
-    etiqueta: 'Importe', valor: String(r.monto).replace('.', ','), requerido: true,
+    etiqueta: 'Importe', valor: String(cuotaAhora).replace('.', ','), requerido: true,
   })}
         <div class="campo"><label for="pg-cuenta">Sale de</label>
           <select id="pg-cuenta" name="cuenta" required>${
