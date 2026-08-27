@@ -981,6 +981,9 @@ tr.detalle > td {
   font-size: 11.5px; color: var(--tinta-3); margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* De qué comercios se compone una categoría: se agrupa por concepto, así que
+   conviene poder comprobar de un vistazo qué ha entrado en cada saco. */
+.lista .meta.sitios { color: var(--tinta-2); opacity: 0.72; font-size: 11px; }
 .lista .monto {
   font-weight: 640;
   font-variant-numeric: tabular-nums;
@@ -5637,27 +5640,36 @@ const estaExcluida = (clave) => ajustes()[clave]?.activo === false
 function recurrencias() {
   const mios = ajustes();
   const grupos = new Map();
+  /*
+   * Se agrupa por CATEGORÍA, no por comercio.
+   *
+   * Agrupando por el nombre del sitio, repostar en dos gasolineras distintas
+   * salían como dos gastos periódicos independientes —y con suerte uno caía en
+   * «fijos» y el otro en «variables», que es justo lo que no tiene sentido. Lo
+   * que se repite no es el establecimiento, es el CONCEPTO: combustible se
+   * gasta todos los meses, dé igual dónde se cargue.
+   *
+   * Los establecimientos no se pierden: se guardan para poder enseñar de qué se
+   * compone cada línea.
+   */
   const anota = (detalle, fecha, monto, categoria, origen) => {
-    const clave = claveGasto(detalle);
+    const cat = String(categoria ?? '').trim() || 'Sin categoría';
+    const clave = claveGasto(cat);
     // Una fecha con mala pinta se descarta aquí y no más adelante: todo lo que
     // sigue resta días, y una sola fecha imposible tumbaba el módulo entero.
     const iso = String(fecha ?? '').slice(0, 10);
     if (!clave || !(monto > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
     if (!grupos.has(clave)) {
-      grupos.set(clave, { clave, detalle, origen, fechas: [], montos: [], categorias: [] });
+      grupos.set(clave, {
+        clave, detalle: cat, categoria: cat, origen,
+        fechas: [], montos: [], sitios: new Map(),
+      });
     }
     const g = grupos.get(clave);
     g.fechas.push(iso);
     g.montos.push(monto);
-    if (categoria) g.categorias.push(categoria);
-  };
-
-  // La categoría del grupo es la que más se repite, no la del último apunte:
-  // un solo gasto mal clasificado cambiaba la etiqueta de todo el conjunto.
-  const categoriaDominante = (lista) => {
-    const cuenta = new Map();
-    lista.forEach((c) => cuenta.set(c, (cuenta.get(c) || 0) + 1));
-    return [...cuenta.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'Sin categoría';
+    const sitio = String(detalle ?? '').trim();
+    if (sitio) g.sitios.set(sitio, (g.sitios.get(sitio) || 0) + 1);
   };
 
   /*
@@ -5736,8 +5748,12 @@ function recurrencias() {
       return {
         clave: g.clave,
         detalle: g.detalle,
-        categoria: aj.categoria || categoriaDominante(g.categorias),
+        categoria: aj.categoria || g.categoria,
         origen: g.origen,
+        // De qué se compone: los sitios donde se gastó, del más frecuente al
+        // menos, para poder desplegarlo y comprobar que el grupo tiene sentido.
+        sitios: [...g.sitios.entries()].sort((a, b) => b[1] - a[1])
+          .map(([nombre, veces]) => ({ nombre, veces })),
         veces: fechas.length,
         fechas,
         mesesConRegistro: new Set(fechas.map(claveMes)),
@@ -5762,30 +5778,74 @@ function recurrencias() {
         proxima: siguienteLibre(ultima, cad, new Set(fechas.map(claveMes))),
         ajustado: Object.keys(aj).length > 0,
         manual: false,
+        clase: 'periodico',
       };
     })
     .filter(Boolean)
-    .concat(fijosManuales().map((f) => ({
-      ...f,
-      clave: f.id,
-      veces: 0,
-      fechas: [],
-      mesesConRegistro: new Set(),
-      cadenciaTexto: nombreCadencia(f.cadencia),
-      dispersion: 0,
-      variacion: 0,
-      tipoAuto: f.tipo,
-      fiable: true,
-      vigente: f.activo !== false,
-      mensual: f.cadencia <= UMBRAL_MENSUAL,
-      montoAuto: f.monto,
-      porMes: f.cadencia > 0 ? porMesDe(f.monto, f.cadencia) : 0,
-      ultima: f.desde || hoy,
-      diasDesde: 0,
-      proxima: sumarDias(f.desde || hoy, f.cadencia),
-      ajustado: true,
-      manual: true,
-    })))
+    .concat(fijosManuales().map((f) => {
+      /*
+       * Un gasto A PLAZOS —un préstamo, un curso diferido— no es periódico: no
+       * se repite para siempre, son N cuotas que empiezan un mes concreto y se
+       * acaban. Se le calcula el mes final para saber si sigue vivo y para que
+       * la proyección lo reparta solo donde toca.
+       */
+      if (f.clase === 'plazos') {
+        const cuotas = Math.max(1, Math.round(Number(f.cuotas) || 1));
+        const desde = f.desdeMes || claveMes(hoy);
+        const hasta = sumarMeses(desde, cuotas - 1);
+        return {
+          ...f,
+          clave: f.id,
+          clase: 'plazos',
+          cuotas,
+          desdeMes: desde,
+          hastaMes: hasta,
+          detalle: f.detalle,
+          cadencia: 30,
+          cadenciaTexto: `${cuotas} cuotas · hasta ${hasta}`,
+          veces: 0,
+          fechas: [],
+          mesesConRegistro: new Set(),
+          dispersion: 0,
+          variacion: 0,
+          tipo: 'Fijo',
+          tipoAuto: 'Fijo',
+          fiable: true,
+          vigente: f.activo !== false && hasta >= claveMes(hoy),
+          mensual: true,
+          montoAuto: f.monto,
+          // Mientras dure, pesa su cuota cada mes.
+          porMes: redondear(Number(f.monto) || 0),
+          ultima: `${desde}-01`,
+          diasDesde: 0,
+          proxima: `${desde}-01`,
+          ajustado: true,
+          manual: true,
+        };
+      }
+      return {
+        ...f,
+        clave: f.id,
+        clase: 'periodico',
+        veces: 0,
+        fechas: [],
+        mesesConRegistro: new Set(),
+        cadenciaTexto: nombreCadencia(f.cadencia),
+        dispersion: 0,
+        variacion: 0,
+        tipoAuto: f.tipo,
+        fiable: true,
+        vigente: f.activo !== false,
+        mensual: f.cadencia <= UMBRAL_MENSUAL,
+        montoAuto: f.monto,
+        porMes: f.cadencia > 0 ? porMesDe(f.monto, f.cadencia) : 0,
+        ultima: f.desde || hoy,
+        diasDesde: 0,
+        proxima: sumarDias(f.desde || hoy, f.cadencia),
+        ajustado: true,
+        manual: true,
+      };
+    }))
     .sort((a, b) => b.porMes - a.porMes);
 }
 
@@ -5849,7 +5909,12 @@ function proyeccion(meses, { excluidas = null } = {}) {
       aporta = true;
     };
 
-    if (r.mensual) {
+    if (r.clase === 'plazos') {
+      // Cuotas contadas: se colocan en sus meses y se acaban.
+      for (let i = 0; i < r.cuotas; i += 1) {
+        sumar(sumarMeses(r.desdeMes, i), r.monto, `cuota ${i + 1} de ${r.cuotas}`);
+      }
+    } else if (r.mensual) {
       // Varias veces al mes: se presupuesta el importe mensual completo.
       meses.forEach((m) => sumar(m, r.porMes, `~${(DIAS_MES / r.cadencia).toFixed(1)} al mes`));
     } else {
@@ -6091,13 +6156,13 @@ function formGastoTarjeta(alTerminar, existente = null) {
     etiqueta: 'Monto total (USD)', valor: paraEditar(g?.monto_total), requerido: true,
   })}
     </div>
-    <div class="campo ancho"><label for="f-detalle">Detalle (establecimiento)</label>
+    <div class="campo ancho"><label for="f-detalle">Comercio o proveedor</label>
       <input id="f-detalle" name="detalle" required placeholder="MI COMISARIATO"
              value="${esc(g?.detalle || '')}"></div>
+    <div class="campo ancho"><label for="f-proposito">Qué se compró</label>
+      <input id="f-proposito" name="proposito" placeholder="Víveres de la semana"
+             value="${esc(g?.proposito || '')}"></div>
     <div class="filtros">
-      <div class="campo"><label for="f-proposito">Propósito</label>
-        <input id="f-proposito" name="proposito" placeholder="VIVERES"
-               value="${esc(g?.proposito || '')}"></div>
       ${campoCategoria('f-categoria', categoriasGasto(), g?.categoria || 'Viveres')}
     </div>
     <div class="filtros">
@@ -6282,12 +6347,13 @@ function formGastoEfectivo(alTerminar, existente = null) {
           ${opciones(cuentas.map((c) => ({ valor: c.id, texto: c.nombre })), g?.cuenta || 'EFECTIVO')}
         </select></div>
     </div>
-    <div class="campo ancho"><label for="e-detalle">Detalle</label>
+    <div class="campo ancho"><label for="e-detalle">Comercio o proveedor</label>
       <input id="e-detalle" name="detalle" required placeholder="Feria, taxi, taller..."
              value="${esc(g?.detalle || '')}"></div>
+    <div class="campo ancho"><label for="e-proposito">Qué se compró</label>
+      <input id="e-proposito" name="proposito" placeholder="Fruta y verdura"
+             value="${esc(g?.proposito || '')}"></div>
     <div class="filtros">
-      <div class="campo"><label for="e-proposito">Propósito</label>
-        <input id="e-proposito" name="proposito" value="${esc(g?.proposito || '')}"></div>
       ${campoCategoria('e-categoria', categoriasGasto(), g?.categoria)}
     </div>`;
 
@@ -9157,12 +9223,15 @@ function listaRecurrencias(filas, fuera) {
         <div class="titulo">${esc(r.detalle)}
           ${r.manual ? '<span class="chip">a mano</span>' : ''}
           ${r.ajustado && !r.manual ? '<span class="chip">corregido</span>' : ''}</div>
-        <div class="meta">${esc(r.cadenciaTexto)} · ${esc(r.categoria)}${r.manual ? ''
-    : ` · ${r.veces} veces · ${r.diasDesde >= 0
-      ? `última hace ${r.diasDesde} días`
-      // Un cargo recurrente ya tiene cuotas apuntadas por delante: decir que
-      // la última fue «hace -98 días» no lo entiende nadie.
-      : `apuntado hasta ${esc(nombreMes(r.ultima.slice(0, 7)))}`}`}</div>
+        <div class="meta">${esc(r.cadenciaTexto)}${r.manual ? '' : ` · ${r.veces} veces · ${
+  r.diasDesde >= 0
+    ? `última hace ${r.diasDesde} días`
+    // Un cargo recurrente ya tiene cuotas apuntadas por delante: decir que
+    // la última fue «hace -98 días» no lo entiende nadie.
+    : `apuntado hasta ${esc(nombreMes(r.ultima.slice(0, 7)))}`}`}</div>
+        ${r.sitios?.length ? `<div class="meta sitios">En: ${
+  esc(r.sitios.slice(0, 3).map((x) => x.nombre).join(' · '))}${
+  r.sitios.length > 3 ? ` y ${r.sitios.length - 3} más` : ''}</div>` : ''}
         <div class="cifras">
           <span>${r.tipo === 'Fijo' ? 'Cobra' : 'Suele ser'}
             <strong>${money(r.monto)}</strong></span>
@@ -9202,11 +9271,16 @@ const CADENCIAS = [
 function formFijo(r, alTerminar) {
   const nuevo = !r;
   const cats = categoriasGasto();
+  const editaDeducido = r && !r.manual;
+  const mesHoy = new Date().toISOString().slice(0, 7);
   const cuerpo = `
+    ${editaDeducido ? '' : `
+      <div class="campo ancho"><label>Qué es</label><div id="pf-clase"></div></div>`}
     <div class="campo ancho"><label for="pf-detalle">Concepto</label>
-      <input id="pf-detalle" name="detalle" required placeholder="iCloud"
+      <input id="pf-detalle" name="detalle" required placeholder="Préstamo del carro"
              value="${esc(r?.detalle || '')}" ${nuevo ? '' : 'readonly'}></div>
-    <div class="filtros">
+
+    <div class="filtros" data-solo="periodico">
       ${campoMonto('pf-monto', 'monto', {
     etiqueta: 'Importe de cada vez', valor: String(r?.monto ?? '').replace('.', ','), requerido: true,
   })}
@@ -9214,16 +9288,31 @@ function formFijo(r, alTerminar) {
         <select id="pf-cada" name="cadencia">
           ${opciones(CADENCIAS, cercana(r?.cadencia ?? 30))}</select></div>
     </div>
+
+    <div class="filtros" data-solo="plazos" hidden>
+      ${campoMonto('pf-cuota', 'cuota', {
+    etiqueta: 'Cuota de cada mes', valor: String(r?.monto ?? '').replace('.', ','),
+  })}
+      <div class="campo"><label for="pf-cuotas">Nº de cuotas</label>
+        <input id="pf-cuotas" name="cuotas" type="number" inputmode="numeric"
+               min="1" max="120" step="1" value="${esc(String(r?.cuotas ?? 12))}"></div>
+      <div class="campo"><label for="pf-desde">Empieza en</label>
+        <input id="pf-desde" name="desdeMes" type="month"
+               value="${esc(r?.desdeMes || mesHoy)}"></div>
+    </div>
+
     <div class="filtros">
       <div class="campo"><label for="pf-cat">Categoría</label>
         <select id="pf-cat" name="categoria">${opciones(cats, r?.categoria)}</select></div>
-      <div class="campo"><label>Tipo de importe</label><div id="pf-tipo"></div></div>
+      <div class="campo" data-solo="periodico"><label>Tipo de importe</label>
+        <div id="pf-tipo"></div></div>
     </div>
     <div class="previsualizacion" id="pf-preview"></div>
-    ${r && !r.manual ? `<p class="pista">La app calculó ${money(r.montoAuto)}
+    ${editaDeducido ? `<p class="pista">La app calculó ${money(r.montoAuto)}
       a partir de ${r.veces} apariciones. Lo que escribas aquí manda sobre eso.</p>` : ''}`;
 
   let tipo = r?.tipo || 'Fijo';
+  let clase = r?.clase === 'plazos' ? 'plazos' : 'periodico';
   const dlg = modal({
     titulo: nuevo ? 'Nuevo gasto periódico' : `Corregir «${r.detalle}»`,
     cuerpo,
@@ -9234,7 +9323,44 @@ function formFijo(r, alTerminar) {
         tipo, (v) => { tipo = v; },
       ));
       const preview = $('#pf-preview', form);
+
+      /*
+       * Los campos que no son de la clase elegida se ESCONDEN Y SE DESACTIVAN.
+       * Escondidos a secas seguirían validándose, y un `required` invisible deja
+       * el formulario sin enviar y sin explicar por qué.
+       */
+      const mostrarClase = () => {
+        form.querySelectorAll('[data-solo]').forEach((n) => {
+          const suyo = n.dataset.solo === clase;
+          n.hidden = !suyo;
+          n.querySelectorAll('input, select').forEach((c) => { c.disabled = !suyo; });
+        });
+        // El importe es obligatorio, pero solo el de la clase que se está usando.
+        const m = $('#pf-monto', form);
+        const c = $('#pf-cuota', form);
+        if (m) m.required = clase === 'periodico';
+        if (c) c.required = clase === 'plazos';
+      };
+
+      const cajaClase = $('#pf-clase', form);
+      if (cajaClase) {
+        cajaClase.appendChild(segmentado(
+          [{ valor: 'periodico', texto: 'Se repite' }, { valor: 'plazos', texto: 'A plazos' }],
+          clase, (v) => { clase = v; mostrarClase(); refrescar(); },
+        ));
+      }
+
       const refrescar = () => {
+        if (clase === 'plazos') {
+          const cuota = aNumero($('#pf-cuota', form).value);
+          const n = Math.max(1, Math.round(Number($('#pf-cuotas', form).value) || 1));
+          const desde = $('#pf-desde', form).value || mesHoy;
+          const hasta = sumarMeses(desde, n - 1);
+          preview.innerHTML = `<strong>${money(cuota)}</strong> al mes durante
+            ${n} ${n === 1 ? 'mes' : 'meses'}, de ${esc(nombreMes(desde))} a
+            ${esc(nombreMes(hasta))}. En total <strong>${money(cuota * n)}</strong>.`;
+          return;
+        }
         const monto = aNumero($('#pf-monto', form).value);
         const cada = Number($('#pf-cada', form).value) || 30;
         // Los mismos factores de calendario que usa el plan, para que la
@@ -9245,20 +9371,33 @@ function formFijo(r, alTerminar) {
           y al año <strong>${money(monto * factor * 12)}</strong>.`;
       };
       ['input', 'change'].forEach((e) => form.addEventListener(e, refrescar));
+      mostrarClase();
       refrescar();
     },
     alEnviar(d) {
-      const fila = {
-        detalle: d.detalle.trim(),
-        monto: redondear(aNumero(d.monto)),
-        cadencia: Number(d.cadencia) || 30,
-        categoria: d.categoria,
-        tipo,
-      };
+      const fila = clase === 'plazos'
+        ? {
+          detalle: d.detalle.trim(),
+          clase: 'plazos',
+          monto: redondear(aNumero(d.cuota)),
+          cuotas: Math.max(1, Math.round(Number(d.cuotas) || 1)),
+          desdeMes: d.desdeMes || mesHoy,
+          categoria: d.categoria,
+          tipo: 'Fijo',
+          cadencia: 30,
+        }
+        : {
+          detalle: d.detalle.trim(),
+          clase: 'periodico',
+          monto: redondear(aNumero(d.monto)),
+          cadencia: Number(d.cadencia) || 30,
+          categoria: d.categoria,
+          tipo,
+        };
       if (nuevo) {
         guardarManual({
           ...fila,
-          id: `fijo-${Date.now().toString(36)}`,
+          id: `${clase === 'plazos' ? 'plazo' : 'fijo'}-${Date.now().toString(36)}`,
           desde: new Date().toISOString().slice(0, 10),
           activo: true,
         });
@@ -9268,7 +9407,7 @@ function formFijo(r, alTerminar) {
         guardarAjuste(r.clave, fila);
       }
       guardar();
-      brindis(nuevo ? 'Gasto periódico añadido' : 'Actualizado');
+      brindis(nuevo ? (clase === 'plazos' ? 'Gasto a plazos añadido' : 'Gasto periódico añadido') : 'Actualizado');
       alTerminar?.();
     },
   });
