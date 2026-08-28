@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-0XszK1/pmtXU36h5MX+yLwhVw2I5wJGFU9VBDmQ7QTE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Xmx+ILp+D7Ae03UETGA9lylAieGf1aIwoVy8+zv34jk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -5891,7 +5891,19 @@ function medioDe(origen) {
   return c?.tipo === 'Tarjeta' ? 'Tarjeta' : 'Efectivo';
 }
 
-function recurrencias() {
+/**
+ * ¿Este apunte es de quien se está mirando? `null` o 'Ambos' no filtra nada.
+ *
+ * Un apunte sin usuario —los hay, de importaciones viejas— cuenta para los dos:
+ * esconderlo de ambas vistas lo haría desaparecer del presupuesto sin avisar.
+ */
+function esDe(usuario, quien) {
+  if (!quien || quien === 'Ambos') return true;
+  const u = String(usuario ?? '').trim();
+  return !u || u === quien;
+}
+
+function recurrencias(quien = null) {
   const mios = ajustes();
   const grupos = new Map();
   /*
@@ -5944,6 +5956,7 @@ function recurrencias() {
   });
 
   db.gastosTarjeta.forEach((g) => {
+    if (!esDe(g.usuario, quien)) return;
     if (g.tipo === 'Corriente') {
       anota(g.detalle, g.fecha, Number(g.monto_total) || 0, g.categoria, g.tarjeta);
     } else if (g.tipo === 'Recurrente') {
@@ -5953,6 +5966,7 @@ function recurrencias() {
     }
   });
   db.gastosEfectivo.forEach((g) => {
+    if (!esDe(g.usuario, quien)) return;
     anota(g.detalle, g.fecha, Number(g.monto) || 0, g.categoria, g.cuenta);
   });
 
@@ -6045,7 +6059,7 @@ function recurrencias() {
       };
     })
     .filter(Boolean)
-    .concat(fijosManuales().map((f) => {
+    .concat(fijosManuales().filter((f) => esDe(f.usuario, quien)).map((f) => {
       /*
        * Un gasto A PLAZOS —un préstamo, un curso diferido— no es periódico: no
        * se repite para siempre, son N cuotas que empiezan un mes concreto y se
@@ -6194,8 +6208,8 @@ function finDeMes(mes) {
  * septiembre, septiembre se queda con lo real; la previsión solo rellena los
  * meses donde todavía no hay nada de ese gasto.
  */
-function proyeccion(meses, { excluidas = null } = {}) {
-  const fuera = excluidas || new Set(recurrencias()
+function proyeccion(meses, { excluidas = null, quien = null } = {}) {
+  const fuera = excluidas || new Set(recurrencias(quien)
     .filter((r) => estaExcluida(r.clave)).map((r) => r.clave));
 
   const ahora = mesActual();
@@ -6236,7 +6250,7 @@ function proyeccion(meses, { excluidas = null } = {}) {
 
   for (const c of db.cuotas) {
     const m = porMes.get(c.mes);
-    if (!m) continue;
+    if (!m || !esDe(c.usuario, quien)) continue;
     const compra = db.gastosTarjeta.find((g) => g.id === c.gasto_id);
     const enCuotas = Number(compra?.cuotas) > 1;
     apuntar(m, 'Tarjeta', Number(c.monto) || 0,
@@ -6247,7 +6261,7 @@ function proyeccion(meses, { excluidas = null } = {}) {
   }
   for (const g of db.gastosEfectivo) {
     const m = porMes.get(claveMes(g.fecha));
-    if (!m) continue;
+    if (!m || !esDe(g.usuario, quien)) continue;
     const medio = medioManual.get(claveGasto(g.detalle)) || medioDe(g.cuenta);
     apuntar(m, MEDIOS.includes(medio) ? medio : 'Efectivo',
       Number(g.monto) || 0, g.detalle || g.categoria || 'Gasto', g.fecha,
@@ -6255,7 +6269,7 @@ function proyeccion(meses, { excluidas = null } = {}) {
   }
 
   const usadas = [];
-  for (const r of recurrencias()) {
+  for (const r of recurrencias(quien)) {
     if (!r.fiable || !r.vigente || fuera.has(r.clave)) continue;
     let aporta = false;
 
@@ -9468,18 +9482,27 @@ const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses
 const {columnasApiladas, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones} = M["ui"];
 const {MEDIOS, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago} = M["plan"];
-const estado = { horizonte: 6, mesAbierto: null };
+/*
+ * `quien` arranca en J: el presupuesto es una herramienta de decisión personal
+ * y mezclar dos bolsillos daba una cifra que no es de nadie. Se puede cambiar
+ * en cualquier momento, y la elección se recuerda mientras dure la sesión.
+ */
+const estado = { horizonte: 6, mesAbierto: null, quien: 'J' };
 
 function render(raiz) {
   const meses = mesesProyectados(estado.horizonte);
-  const plan = proyeccion(meses);
-  const todas = recurrencias();
+  const plan = proyeccion(meses, { quien: estado.quien });
+  const todas = recurrencias(estado.quien);
   const mes = mesActual();
   const primero = plan.filas[0];
 
   // Con qué comparar: lo que de verdad se gastó en los meses ya cerrados.
+  // Filtrado por la misma persona: comparar el presupuesto de J contra el gasto
+  // de los dos daba un «68 % por debajo del promedio» que no significaba nada.
   const previos = rangoMeses(sumarMeses(mes, -3), sumarMeses(mes, -1));
-  const realPrevio = serieMensual(previos, {});
+  const realPrevio = serieMensual(previos, {
+    usuario: estado.quien === 'Ambos' ? 'ambos' : estado.quien,
+  });
   const promedio = realPrevio.length
     ? redondear(realPrevio.reduce((s, x) => s + x.gasto, 0) / realPrevio.length) : 0;
 
@@ -9491,10 +9514,11 @@ function render(raiz) {
   if (!todas.length) {
     raiz.innerHTML = `
       <section class="panel">
-        <span class="etiqueta">Presupuesto</span>
+        <span class="etiqueta">Presupuesto de ${esc(estado.quien === 'Ambos' ? 'los dos' : estado.quien)}</span>
         <span class="cifra">${moneyHTML(0)}</span>
         <span class="nota">Todavía no hay historial suficiente.</span>
       </section>
+      <div class="barra-accion"><div id="seg-quien"></div></div>
       <div class="barra-accion">
         <span class="pista crece">Puedes escribir tú mismo un gasto que ya sabes
           que viene: una cuota, una suscripción, un préstamo.</span>
@@ -9503,6 +9527,12 @@ function render(raiz) {
       <p class="vacio">Para reconocer un gasto que se repite solo, hacen falta al
         menos tres apariciones suyas. Sigue registrando y esta pantalla se irá
         llenando sola.</p>`;
+    $('#seg-quien', raiz).appendChild(segmentado(
+      [{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' },
+        { valor: 'Ambos', texto: 'Ambos' }],
+      estado.quien,
+      (v) => { estado.quien = v; render(raiz); },
+    ));
     $('#btn-fijo', raiz).addEventListener('click', () => formFijo(null, () => render(raiz)));
     return;
   }
@@ -9538,7 +9568,8 @@ function render(raiz) {
 
   raiz.innerHTML = `
     <section class="panel">
-      <span class="etiqueta">Presupuesto de ${esc(nombreMes(primero.mes))}</span>
+      <span class="etiqueta">${esc(nombreMes(primero.mes))} · ${
+  esc(estado.quien === 'Ambos' ? 'J y C' : estado.quien)}</span>
       <span class="cifra">${moneyHTML(primero.simulado)}</span>
       <span class="nota">Lo ya comprometido más lo que suele repetirse</span>
       <div class="chips-panel">
@@ -9561,8 +9592,12 @@ function render(raiz) {
     </section>
 
     <div class="barra-accion">
-      <div id="seg-horizonte"></div>
+      <div id="seg-quien"></div>
       <span class="pista" style="white-space:nowrap">${fiables.length} periódicos</span>
+    </div>
+
+    <div class="barra-accion">
+      <div id="seg-horizonte"></div>
     </div>
 
     <section class="tarjeta">
@@ -9651,6 +9686,13 @@ function render(raiz) {
           <span class="pista">No entran en la previsión</span></header>
         ${listaRecurrencias(irregulares, null)}
       </section>` : ''}`;
+
+  $('#seg-quien', raiz).appendChild(segmentado(
+    [{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' },
+      { valor: 'Ambos', texto: 'Ambos' }],
+    estado.quien,
+    (v) => { estado.quien = v; render(raiz); },
+  ));
 
   $('#seg-horizonte', raiz).appendChild(segmentado(
     [{ valor: 3, texto: '3 meses' }, { valor: 6, texto: '6 meses' }, { valor: 12, texto: '12 meses' }],
@@ -9933,6 +9975,10 @@ function formFijo(r, alTerminar) {
         <select id="pf-cat" name="categoria">${opciones(cats, r?.categoria)}</select></div>
       <div class="campo"><label for="pf-medio">Cómo se paga</label>
         <select id="pf-medio" name="medio">${opciones(MEDIOS, medioPorDefecto)}</select></div>
+      <div class="campo"><label for="pf-quien">De quién es</label>
+        <select id="pf-quien" name="usuario">${
+  opciones([{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' },
+    { valor: '', texto: 'De los dos' }], r?.usuario ?? estado.quien)}</select></div>
     </div>
     <div class="filtros">
       <div class="campo" data-solo="periodico"><label>Tipo de importe</label>
@@ -10069,6 +10115,7 @@ function formFijo(r, alTerminar) {
           desdeMes: d.desdeMes || mesHoy,
           categoria: d.categoria,
           medio: d.medio,
+          usuario: d.usuario,
           tipo: 'Fijo',
           cadencia: 30,
         }
@@ -10079,6 +10126,7 @@ function formFijo(r, alTerminar) {
           cadencia: Number(d.cadencia) || 30,
           categoria: d.categoria,
           medio: d.medio,
+          usuario: d.usuario,
           tipo,
         };
       if (nuevo) {
@@ -10198,7 +10246,7 @@ function formPagar(r, alTerminar) {
                  value="${new Date().toISOString().slice(0, 10)}" required></div>
         <div class="campo"><label for="pg-usuario">Usuario</label>
           <select id="pg-usuario" name="usuario">${
-  opciones(['J', 'C'], 'J')}</select></div>
+  opciones(['J', 'C'], r.usuario || 'J')}</select></div>
       </div>
       <p class="pista">Se apunta como gasto de ${esc(nombreMes(mes))} y el importe
         sale del saldo de la cuenta elegida.${r.clase === 'plazos'
