@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-6DIkmCFPCy56Gh0WjEPnOmzB0BCl4Gw0s8K8UMuQjks='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-DWyN40Ov5Z4DUsKNWiZrPupWJCHJy49JGf1zHpfJEjk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -531,6 +531,68 @@ a { color: var(--acento); }
   font-weight: 620;
   letter-spacing: -0.02em;
   margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Contador de un gasto a plazos: por qué cuota va, cuánto lleva pagado y
+   cuánto le queda. La barra da la lectura de un vistazo; las cifras, la
+   exacta. */
+.plazos { margin: 9px 0 3px; }
+.plazos-cab {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.plazos-cuota {
+  font-size: 12.5px;
+  font-weight: 630;
+  color: var(--tinta);
+  letter-spacing: -0.01em;
+}
+.plazos-pct {
+  font-size: 11px;
+  font-weight: 640;
+  color: var(--tinta-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.plazos-barra {
+  height: 7px;
+  border-radius: var(--radio-pill);
+  background: var(--superficie-2);
+  overflow: hidden;
+}
+.plazos-barra > span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radio-pill);
+  background: var(--serie-2);
+  /* Una cuota de 120 es un 0,8 %: sin mínimo no se vería nada. */
+  min-width: 3px;
+}
+.plazos-datos {
+  /* Rejilla y no flex: así las cuatro cifras caen 2×2 alineadas en el móvil
+     —tres y una suelta quedaba descuadrado— y en cuatro columnas si cabe. */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 9px 16px;
+  margin-top: 10px;
+}
+.plazos-datos > div { min-width: 0; }
+.plazos-datos .etq {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--tinta-2);
+}
+.plazos-datos .val {
+  font-size: 14px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+  margin-top: 1px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1079,6 +1141,10 @@ tr.detalle > td {
    en vez de cortarse: la fecha de pago quedaba en «se paga el 1…». */
 .lista li.con-acciones .titulo,
 .lista li.con-acciones .meta { white-space: normal; }
+/* El contador de un gasto a plazos ocupa el ancho entero de la ficha: son
+   cuatro cifras y compartir línea con el importe las apretaba. */
+.lista li.con-acciones .plazos { flex: 1 0 100%; }
+
 .lista li.con-acciones .acciones {
   flex: 1 0 100%;
   display: flex; justify-content: flex-end; gap: 8px;
@@ -6015,6 +6081,7 @@ function recurrencias() {
         // Lo que falta por pagar, contando que la última cuota es distinta.
         const restante = hechas >= cuotas
           ? 0 : redondear(cuota * (cuotas - 1 - hechas) + ultimaCuota);
+        const pagado = redondear(total - restante);
 
         return {
           ...f,
@@ -6025,7 +6092,8 @@ function recurrencias() {
           hastaMes: hasta,
           detalle: f.detalle,
           cadencia: 30,
-          cadenciaTexto: `${cuotas} cuotas · hasta ${nombreMes(hasta)}`,
+          // El contador de abajo ya dice en qué cuota va y hasta cuándo.
+          cadenciaTexto: 'Cuota mensual',
           veces: 0,
           fechas: [],
           mesesConRegistro: new Set(),
@@ -6046,6 +6114,7 @@ function recurrencias() {
           total,
           ultimaCuota,
           restante,
+          pagado,
           // Mientras dure, pesa su cuota cada mes.
           porMes: cuota,
           ultima: `${desde}-01`,
@@ -9588,26 +9657,20 @@ function listaRecurrencias(filas, fuera) {
     // Un cargo recurrente ya tiene cuotas apuntadas por delante: decir que
     // la última fue «hace -98 días» no lo entiende nadie.
     : `apuntado hasta ${esc(nombreMes(r.ultima.slice(0, 7)))}`}`}</div>
-        ${r.clase === 'plazos' ? `<div class="meta sitios">${
-  r.pagadas || 0} de ${r.cuotas} cuotas pagadas · quedan ${money(r.restante)}
-  · termina en ${esc(nombreMes(r.hastaMes))}</div>` : ''}
         ${r.sitios?.length ? `<div class="meta sitios">En: ${
   esc(r.sitios.slice(0, 3).map((x) => x.nombre).join(' · '))}${
   r.sitios.length > 3 ? ` y ${r.sitios.length - 3} más` : ''}</div>` : ''}
-        <div class="cifras">
-          ${r.clase === 'plazos'
-    // En un gasto a plazos «cobra» y «al mes» son la misma cifra por
-    // definición; lo que no se ve por ningún lado es cuánto costó entero.
-    ? `<span>Cuota <strong>${money(r.monto)}</strong></span>
-       <span>Total <strong>${money(r.total)}</strong></span>`
-    : `<span>${r.tipo === 'Fijo' ? 'Cobra' : 'Suele ser'}
-         <strong>${money(r.monto)}</strong></span>
-       ${r.mensual
+        ${r.clase === 'plazos' ? '' : `
+          <div class="cifras">
+            <span>${r.tipo === 'Fijo' ? 'Cobra' : 'Suele ser'}
+              <strong>${money(r.monto)}</strong></span>
+            ${r.mensual
     ? `<span>Al mes <strong>${money(r.porMes)}</strong></span>`
-    : `<span>Próxima <strong>${esc(textoFecha(r.proxima))}</strong></span>`}`}
-        </div>
+    : `<span>Próxima <strong>${esc(textoFecha(r.proxima))}</strong></span>`}
+          </div>`}
       </div>
       <div class="monto">${money(r.porMes)}<span class="pie">al mes</span></div>
+      ${r.clase === 'plazos' ? contadorPlazos(r) : ''}
       ${fuera === null ? '' : `
         <div class="acciones">
           ${r.manual ? `<button class="btn pequeno${
@@ -9618,6 +9681,43 @@ function listaRecurrencias(filas, fuera) {
             ${fuera ? 'Devolver' : 'Dejar fuera'}</button>
         </div>`}
     </li>`).join('')}</ul>`;
+}
+
+/**
+ * Contador de un gasto a plazos: por qué cuota va, cuánto lleva pagado y
+ * cuánto le queda.
+ *
+ * Un préstamo a diez años son 120 cobros iguales, y de un vistazo no se
+ * distingue el mes 8 del mes 80: lo único que cambia es cuánto falta. Esto lo
+ * dice de una vez, y lo dice para cualquier gasto a plazos, no solo para el
+ * préstamo: todo lo que se dé de alta «a plazos» de aquí en adelante —un
+ * diferido de tarjeta, un curso, un electrodoméstico— sale con su contador.
+ */
+function contadorPlazos(r) {
+  const hechas = r.pagadas || 0;
+  const terminado = hechas >= r.cuotas;
+  const parte = r.total > 0 ? Math.min(1, r.pagado / r.total) : 0;
+  return `
+    <div class="plazos">
+      <div class="plazos-cab">
+        <span class="plazos-cuota">${terminado
+    ? 'Terminado de pagar'
+    : `Vas por la cuota ${hechas + 1} de ${r.cuotas}`}</span>
+        <span class="plazos-pct">${(parte * 100).toFixed(0)} %</span>
+      </div>
+      <div class="plazos-barra" role="presentation">
+        <span style="width:${(parte * 100).toFixed(2)}%"></span></div>
+      <div class="plazos-datos">
+        <div><div class="etq">Pagado</div>
+          <div class="val">${money(r.pagado)}</div></div>
+        <div><div class="etq">Queda</div>
+          <div class="val">${money(r.restante)}</div></div>
+        <div><div class="etq">De un total de</div>
+          <div class="val">${money(r.total)}</div></div>
+        <div><div class="etq">${terminado ? 'Terminó' : 'Termina'}</div>
+          <div class="val">${esc(nombreMes(r.hastaMes))}</div></div>
+      </div>
+    </div>`;
 }
 
 /** Opciones de periodicidad, en días. */
