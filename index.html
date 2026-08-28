@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-DWyN40Ov5Z4DUsKNWiZrPupWJCHJy49JGf1zHpfJEjk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-NNyGQx/6Mir/Lmdv7A5ycJg0w4nm5Yx0jXIEl4eCgnY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -6200,22 +6200,54 @@ function proyeccion(meses, { excluidas = null } = {}) {
     mes: m, comprometido: 0, previsto: 0, lineas: [],
     // Lo mismo, visto por bolsillo en vez de por «ya apuntado o no».
     medios: cero(),
+    /*
+     * Y otra vez, pero contando SOLO lo real: lo que ya está registrado, sin
+     * una sola cifra estimada. Las cuotas de tarjeta de una compra ya hecha
+     * cuentan aunque venzan dentro de seis meses —el importe se conoce, no se
+     * adivina—; lo que la app supone que se repetirá, no.
+     */
+    reales: cero(),
+    realLineas: [],
   }]));
 
+  /*
+   * Una cuota de préstamo pagada sale del banco, así que por la cuenta parece
+   * efectivo. Pero es un préstamo, y en la lectura por bolsillo tiene que
+   * seguir siéndolo: si no, la columna Préstamo solo enseñaría lo que falta por
+   * pagar y nunca lo pagado. Se reconoce por el concepto, que es el que la
+   * ficha del gasto a plazos puso al registrarlo.
+   */
+  const medioManual = new Map();
+  for (const f of fijosManuales()) {
+    if (f.medio && f.detalle) medioManual.set(claveGasto(f.detalle), f.medio);
+  }
+
   // Lo ya apuntado: las cuotas son de tarjeta y los gastos sueltos, de efectivo.
+  const apuntar = (m, medio, monto, detalle, fecha, nota) => {
+    m.comprometido += monto;
+    m.medios[medio] += monto;
+    m.reales[medio] += monto;
+    m.realLineas.push({ detalle, monto, medio, fecha, nota });
+  };
+
   for (const c of db.cuotas) {
     const m = porMes.get(c.mes);
     if (!m) continue;
-    const v = Number(c.monto) || 0;
-    m.comprometido += v;
-    m.medios.Tarjeta += v;
+    const compra = db.gastosTarjeta.find((g) => g.id === c.gasto_id);
+    const enCuotas = Number(compra?.cuotas) > 1;
+    apuntar(m, 'Tarjeta', Number(c.monto) || 0,
+      compra?.detalle || c.categoria || 'Cuota de tarjeta',
+      // La fecha que interesa es la de la compra: el mes de la cuota ya lo
+      // dice la fila que se ha desplegado.
+      compra?.fecha, enCuotas ? `cuota ${c.n_cuota} de ${compra.cuotas}` : '');
   }
   for (const g of db.gastosEfectivo) {
     const m = porMes.get(claveMes(g.fecha));
     if (!m) continue;
-    const v = Number(g.monto) || 0;
-    m.comprometido += v;
-    m.medios[medioDe(g.cuenta)] += v;
+    const medio = medioManual.get(claveGasto(g.detalle)) || medioDe(g.cuenta);
+    apuntar(m, MEDIOS.includes(medio) ? medio : 'Efectivo',
+      Number(g.monto) || 0, g.detalle || g.categoria || 'Gasto', g.fecha,
+      g.proposito || '');
   }
 
   const usadas = [];
@@ -6266,8 +6298,12 @@ function proyeccion(meses, { excluidas = null } = {}) {
     x.comprometido = redondear(x.comprometido);
     x.previsto = redondear(x.previsto);
     x.simulado = redondear(x.comprometido + x.previsto);
-    MEDIOS.forEach((k) => { x.medios[k] = redondear(x.medios[k]); });
+    MEDIOS.forEach((k) => {
+      x.medios[k] = redondear(x.medios[k]);
+      x.reales[k] = redondear(x.reales[k]);
+    });
     x.lineas.sort((a, b) => b.monto - a.monto);
+    x.realLineas.sort((a, b) => b.monto - a.monto);
     return x;
   });
 
@@ -6280,6 +6316,8 @@ function proyeccion(meses, { excluidas = null } = {}) {
       simulado: redondear(filas.reduce((s, x) => s + x.simulado, 0)),
       medios: Object.fromEntries(MEDIOS.map((k) => [k,
         redondear(filas.reduce((s, x) => s + x.medios[k], 0))])),
+      reales: Object.fromEntries(MEDIOS.map((k) => [k,
+        redondear(filas.reduce((s, x) => s + x.reales[k], 0))])),
     },
   };
 }
@@ -9503,27 +9541,30 @@ function render(raiz) {
         cifra es un piso, no un techo: el gasto real de los últimos meses
         promedia ${money(promedio)}.</span></div>
       <div id="g-plan"></div>
-      <div class="tabla-scroll">
-        <table>
-          <thead><tr><th>Mes</th>${MEDIOS.map((m) => `<th>${m}</th>`).join('')}
-            <th>Total</th></tr></thead>
-          <tbody>${plan.filas.map((f) => `
-            <tr class="desplegable" data-mes="${esc(f.mes)}" aria-expanded="false" tabindex="0">
-              <td><span class="flecha" aria-hidden="true">›</span>${esc(nombreMes(f.mes))}</td>
-              ${MEDIOS.map((m) => `<td class="${f.medios[m] ? '' : 'cero'}">${
-  f.medios[m] ? money(f.medios[m]) : '—'}</td>`).join('')}
-              <td><strong>${money(f.simulado)}</strong></td>
-            </tr>
-            <tr class="detalle" data-detalle="${esc(f.mes)}" hidden>
-              <td colspan="${MEDIOS.length + 2}"></td></tr>`).join('')}
-          </tbody>
-          <tfoot><tr>
-            <td>TOTAL</td>
-            ${MEDIOS.map((m) => `<td>${money(plan.totales.medios[m])}</td>`).join('')}
-            <td>${money(plan.totales.simulado)}</td>
-          </tr></tfoot>
-        </table>
-      </div>
+      ${tablaMeses(plan.filas, {
+    grupo: 'sim',
+    celda: (f) => f.medios,
+    total: (f) => f.simulado,
+    totales: plan.totales.medios,
+    granTotal: plan.totales.simulado,
+  })}
+    </section>
+
+    <section class="tarjeta">
+      <header><h2>Solo lo real</h2>
+        <span class="pista">Sin estimar nada · lo que ya está registrado</span></header>
+      <div class="aviso"><span class="icono">i</span>
+        <span class="crece">Aquí no hay ni una cifra supuesta: las cuotas de
+        tarjeta de compras ya hechas —aunque venzan meses adelante, el importe
+        se conoce—, el efectivo ya gastado y las cuotas de préstamo ya pagadas.
+        Tócale a un mes para ver de qué se compone.</span></div>
+      ${tablaMeses(plan.filas, {
+    grupo: 'real',
+    celda: (f) => f.reales,
+    total: (f) => f.comprometido,
+    totales: plan.totales.reales,
+    granTotal: plan.totales.comprometido,
+  })}
     </section>
 
     <section class="tarjeta">
@@ -9591,19 +9632,24 @@ function render(raiz) {
   pintar();
   alRedimensionar(pintar);
 
-  // Desplegar un mes para ver qué compone la previsión.
+  // Desplegar un mes para ver de qué se compone: en la tabla simulada, lo
+  // previsto; en la real, los gastos concretos que ya están apuntados.
   $$('.desplegable', raiz).forEach((fila) => {
     const abrir = () => {
       const m = fila.dataset.mes;
-      const det = $(`[data-detalle="${CSS.escape(m)}"]`, raiz);
+      const grupo = fila.dataset.grupo;
+      const det = $(`[data-detalle="${CSS.escape(`${grupo}:${m}`)}"]`, raiz);
       const abierta = fila.getAttribute('aria-expanded') === 'true';
+      const datos = plan.filas.find((f) => f.mes === m);
       if (!abierta && !det.dataset.pintado) {
         det.firstElementChild.innerHTML = `<div class="caja-desglose">${
-          detalleMes(plan.filas.find((f) => f.mes === m))}</div>`;
+          grupo === 'real' ? detalleReal(datos) : detalleMes(datos)}</div>`;
         det.dataset.pintado = 'si';
       }
       const caja = det.querySelector('.caja-desglose');
-      const scroll = raiz.querySelector('.tabla-scroll');
+      // El ancho se mide en la tabla a la que pertenece la fila, no en la
+      // primera de la pantalla: con dos tablas ya no son la misma.
+      const scroll = fila.closest('.tabla-scroll');
       if (caja && scroll) caja.style.width = `${Math.max(240, scroll.clientWidth - 32)}px`;
       det.hidden = abierta;
       fila.setAttribute('aria-expanded', String(!abierta));
@@ -9640,6 +9686,38 @@ function render(raiz) {
       render(raiz);
     });
   });
+}
+
+/**
+ * La tabla de meses por bolsillo. Se dibuja dos veces con los mismos huesos:
+ * una con lo simulado —lo apuntado más lo que la app supone— y otra con lo
+ * real pelado. El `grupo` separa las filas desplegables de las dos, que si no
+ * comparten el `data-mes` y abrir un mes en una abriría el de la otra.
+ */
+function tablaMeses(filas, { grupo, celda, total, totales, granTotal }) {
+  return `
+    <div class="tabla-scroll">
+      <table>
+        <thead><tr><th>Mes</th>${MEDIOS.map((m) => `<th>${m}</th>`).join('')}
+          <th>Total</th></tr></thead>
+        <tbody>${filas.map((f) => `
+          <tr class="desplegable" data-grupo="${grupo}" data-mes="${esc(f.mes)}"
+              aria-expanded="false" tabindex="0">
+            <td><span class="flecha" aria-hidden="true">›</span>${esc(nombreMes(f.mes))}</td>
+            ${MEDIOS.map((m) => `<td class="${celda(f)[m] ? '' : 'cero'}">${
+  celda(f)[m] ? money(celda(f)[m]) : '—'}</td>`).join('')}
+            <td><strong>${money(total(f))}</strong></td>
+          </tr>
+          <tr class="detalle" data-detalle="${grupo}:${esc(f.mes)}" hidden>
+            <td colspan="${MEDIOS.length + 2}"></td></tr>`).join('')}
+        </tbody>
+        <tfoot><tr>
+          <td>TOTAL</td>
+          ${MEDIOS.map((m) => `<td>${money(totales[m])}</td>`).join('')}
+          <td>${money(granTotal)}</td>
+        </tr></tfoot>
+      </table>
+    </div>`;
 }
 
 function listaRecurrencias(filas, fuera) {
@@ -9681,6 +9759,32 @@ function listaRecurrencias(filas, fuera) {
             ${fuera ? 'Devolver' : 'Dejar fuera'}</button>
         </div>`}
     </li>`).join('')}</ul>`;
+}
+
+/**
+ * Desglose de lo REAL de un mes: los gastos concretos que lo componen, con su
+ * importe y de qué bolsillo salen. Sin esto la tabla dice «$1.132,09 en
+ * tarjeta» y no hay manera de saber de qué.
+ */
+function detalleReal(fila) {
+  if (!fila) return '';
+  if (!fila.realLineas.length) {
+    return `<p class="vacio">Todavía no hay nada registrado en
+      ${esc(nombreMes(fila.mes))}.</p>`;
+  }
+  return `<ul class="desglose">${fila.realLineas.map((l) => `
+    <li>
+      <div class="principal">
+        <div class="titulo">${esc(l.detalle)}</div>
+        <div class="meta">${esc(l.medio)}${l.nota ? ` · ${esc(l.nota)}` : ''}${
+  l.fecha ? ` · ${esc(textoFecha(l.fecha))}` : ''}</div>
+      </div>
+      <div class="monto">${money(l.monto)}</div>
+    </li>`).join('')}
+    </ul>
+    <div class="pie-desglose">${fila.realLineas.length}
+      ${fila.realLineas.length === 1 ? 'gasto' : 'gastos'} ya registrados ·
+      <strong>${money(fila.comprometido)}</strong></div>`;
 }
 
 /**
