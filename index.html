@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-NNyGQx/6Mir/Lmdv7A5ycJg0w4nm5Yx0jXIEl4eCgnY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-0XszK1/pmtXU36h5MX+yLwhVw2I5wJGFU9VBDmQ7QTE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -1141,6 +1141,10 @@ tr.detalle > td {
    en vez de cortarse: la fecha de pago quedaba en «se paga el 1…». */
 .lista li.con-acciones .titulo,
 .lista li.con-acciones .meta { white-space: normal; }
+/* La columna que va acumulando pesa menos que el mes: es contexto, no el
+   dato que se lee primero. */
+td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
+
 /* El contador de un gasto a plazos ocupa el ancho entero de la ficha: son
    cuatro cifras y compartir línea con el importe las apretaba. */
 .lista li.con-acciones .plazos { flex: 1 0 100%; }
@@ -6256,7 +6260,14 @@ function proyeccion(meses, { excluidas = null } = {}) {
     let aporta = false;
 
     const pagados = new Set(r.pagos || []);
-    const sumar = (mes, monto, cuando) => {
+    /*
+     * `conocido` distingue lo que se ESTIMA de lo que se SABE. Una cuota de
+     * préstamo no es una suposición: el importe y el mes están firmados, igual
+     * que la cuota de una tarjeta por una compra ya hecha. Así que pesa en la
+     * tabla de lo real aunque todavía no se haya pagado. Lo que la app deduce
+     * del historial —la gasolina, el súper— sigue siendo solo previsión.
+     */
+    const sumar = (mes, monto, cuando, conocido = false) => {
       const casilla = porMes.get(mes);
       // Un mes ya pagado no se prevé: su importe ya está apuntado como gasto
       // real, y volver a preverlo lo contaría dos veces.
@@ -6265,8 +6276,19 @@ function proyeccion(meses, { excluidas = null } = {}) {
       // Se reparte por medio en la misma proporción que el historial.
       Object.entries(r.reparto || { Efectivo: 1 }).forEach(([medio, parte]) => {
         if (casilla.medios[medio] !== undefined) casilla.medios[medio] += monto * parte;
+        if (conocido && casilla.reales[medio] !== undefined) {
+          casilla.reales[medio] += monto * parte;
+        }
       });
       casilla.lineas.push({ clave: r.clave, detalle: r.detalle, monto, cuando, reparto: r.reparto });
+      if (conocido) {
+        casilla.realLineas.push({
+          detalle: r.detalle,
+          monto,
+          medio: Object.keys(r.reparto || { Efectivo: 1 })[0],
+          nota: cuando,
+        });
+      }
       aporta = true;
     };
 
@@ -6275,7 +6297,7 @@ function proyeccion(meses, { excluidas = null } = {}) {
       // los centavos que la división no repartió.
       for (let i = 0; i < r.cuotas; i += 1) {
         const importe = i === r.cuotas - 1 ? (r.ultimaCuota ?? r.monto) : r.monto;
-        sumar(sumarMeses(r.desdeMes, i), importe, `cuota ${i + 1} de ${r.cuotas}`);
+        sumar(sumarMeses(r.desdeMes, i), importe, `cuota ${i + 1} de ${r.cuotas}`, true);
       }
     } else if (r.mensual) {
       // Varias veces al mes: se presupuesta el importe mensual completo.
@@ -6302,10 +6324,20 @@ function proyeccion(meses, { excluidas = null } = {}) {
       x.medios[k] = redondear(x.medios[k]);
       x.reales[k] = redondear(x.reales[k]);
     });
+    /*
+     * El total de lo real NO es «comprometido»: eso solo cuenta lo ya
+     * registrado, y aquí entran además las cuotas de préstamo, que están
+     * firmadas aunque no se hayan pagado todavía.
+     */
+    x.real = redondear(MEDIOS.reduce((s, k) => s + x.reales[k], 0));
     x.lineas.sort((a, b) => b.monto - a.monto);
     x.realLineas.sort((a, b) => b.monto - a.monto);
     return x;
   });
+
+  // Lo real corriendo mes a mes: cuánto suma este mes y todos los anteriores.
+  let acumulado = 0;
+  filas.forEach((x) => { acumulado = redondear(acumulado + x.real); x.acumulado = acumulado; });
 
   return {
     filas,
@@ -6318,6 +6350,7 @@ function proyeccion(meses, { excluidas = null } = {}) {
         redondear(filas.reduce((s, x) => s + x.medios[k], 0))])),
       reales: Object.fromEntries(MEDIOS.map((k) => [k,
         redondear(filas.reduce((s, x) => s + x.reales[k], 0))])),
+      real: redondear(filas.reduce((s, x) => s + x.real, 0)),
     },
   };
 }
@@ -9554,16 +9587,18 @@ function render(raiz) {
       <header><h2>Solo lo real</h2>
         <span class="pista">Sin estimar nada · lo que ya está registrado</span></header>
       <div class="aviso"><span class="icono">i</span>
-        <span class="crece">Aquí no hay ni una cifra supuesta: las cuotas de
-        tarjeta de compras ya hechas —aunque venzan meses adelante, el importe
-        se conoce—, el efectivo ya gastado y las cuotas de préstamo ya pagadas.
-        Tócale a un mes para ver de qué se compone.</span></div>
+        <span class="crece">Aquí no hay ni una cifra supuesta: el efectivo ya
+        gastado, las cuotas de tarjeta de compras ya hechas y las cuotas de
+        préstamo. Aunque venzan meses adelante, esos importes están firmados,
+        no estimados. La última columna va acumulando. Tócale a un mes para ver
+        de qué se compone.</span></div>
       ${tablaMeses(plan.filas, {
     grupo: 'real',
     celda: (f) => f.reales,
-    total: (f) => f.comprometido,
+    total: (f) => f.real,
     totales: plan.totales.reales,
-    granTotal: plan.totales.comprometido,
+    granTotal: plan.totales.real,
+    acumulado: true,
   })}
     </section>
 
@@ -9694,12 +9729,15 @@ function render(raiz) {
  * real pelado. El `grupo` separa las filas desplegables de las dos, que si no
  * comparten el `data-mes` y abrir un mes en una abriría el de la otra.
  */
-function tablaMeses(filas, { grupo, celda, total, totales, granTotal }) {
+function tablaMeses(filas, {
+  grupo, celda, total, totales, granTotal, acumulado = false,
+}) {
+  const columnas = MEDIOS.length + 2 + (acumulado ? 1 : 0);
   return `
     <div class="tabla-scroll">
       <table>
         <thead><tr><th>Mes</th>${MEDIOS.map((m) => `<th>${m}</th>`).join('')}
-          <th>Total</th></tr></thead>
+          <th>Total</th>${acumulado ? '<th>Acumulado</th>' : ''}</tr></thead>
         <tbody>${filas.map((f) => `
           <tr class="desplegable" data-grupo="${grupo}" data-mes="${esc(f.mes)}"
               aria-expanded="false" tabindex="0">
@@ -9707,14 +9745,16 @@ function tablaMeses(filas, { grupo, celda, total, totales, granTotal }) {
             ${MEDIOS.map((m) => `<td class="${celda(f)[m] ? '' : 'cero'}">${
   celda(f)[m] ? money(celda(f)[m]) : '—'}</td>`).join('')}
             <td><strong>${money(total(f))}</strong></td>
+            ${acumulado ? `<td class="acumulado">${money(f.acumulado)}</td>` : ''}
           </tr>
           <tr class="detalle" data-detalle="${grupo}:${esc(f.mes)}" hidden>
-            <td colspan="${MEDIOS.length + 2}"></td></tr>`).join('')}
+            <td colspan="${columnas}"></td></tr>`).join('')}
         </tbody>
         <tfoot><tr>
           <td>TOTAL</td>
           ${MEDIOS.map((m) => `<td>${money(totales[m])}</td>`).join('')}
           <td>${money(granTotal)}</td>
+          ${acumulado ? `<td class="acumulado">${money(granTotal)}</td>` : ''}
         </tr></tfoot>
       </table>
     </div>`;
@@ -9783,8 +9823,8 @@ function detalleReal(fila) {
     </li>`).join('')}
     </ul>
     <div class="pie-desglose">${fila.realLineas.length}
-      ${fila.realLineas.length === 1 ? 'gasto' : 'gastos'} ya registrados ·
-      <strong>${money(fila.comprometido)}</strong></div>`;
+      ${fila.realLineas.length === 1 ? 'gasto' : 'gastos'} ·
+      <strong>${money(fila.real)}</strong></div>`;
 }
 
 /**
