@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-+hOb7lkqF2IYVTQr3lvMehRBAaOaxoFY+VrYQTaNqIw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-XsRpfcuNqPPEGH4TMDNt1ujV7WWvGV9S4/b6tCP9rPA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -1225,6 +1225,69 @@ tr.detalle > td {
   margin: 0;
 }
 .lista-marcas .marca > span { min-width: 0; }
+
+/* Una categoría del análisis, que se abre para enseñar sus movimientos.
+   Cerrada se lee como una fila de lista; abierta, el detalle queda dentro y
+   con sangría, para que se vea de quién cuelga. */
+.cat { border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.cat:first-of-type { border-top: 0; }
+.cat > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  cursor: pointer;
+  list-style: none;
+}
+.cat > summary::-webkit-details-marker { display: none; }
+.cat > summary .principal { flex: 1 1 auto; min-width: 0; }
+.cat > summary .titulo {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tinta);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cat > summary .flecha {
+  color: var(--tinta-2);
+  font-size: 15px;
+  line-height: 1;
+  transition: transform 0.18s;
+}
+.cat[open] > summary .flecha { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) {
+  .cat > summary .flecha { transition: none; }
+}
+.cat > summary .barra-jc { margin-top: 7px; height: 6px; }
+.cat > summary .meta {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--tinta-2);
+}
+.cat > summary .monto {
+  flex: none;
+  text-align: right;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+}
+.cat > summary .monto .pie {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--tinta-2);
+}
+/* El detalle vive dentro de su categoría: sangrado y sobre un fondo algo más
+   hundido, para que no se confunda con la siguiente categoría. */
+.cat > .desglose {
+  margin: 0 0 12px;
+  padding: 4px 0 4px 14px;
+  border-left: 2px solid var(--serie-2);
+  background: rgba(0, 0, 0, 0.14);
+  border-radius: 0 var(--radio-s) var(--radio-s) 0;
+}
 
 /* Reparto por categoría dentro del análisis: nombre, barra y cifra. */
 .lista.compacta { margin: 12px 0 4px; }
@@ -11037,35 +11100,44 @@ function resultado({
           <td class="acumulado">${money(total)}</td></tr></tfoot>
       </table></div>` : ''}
 
-    ${porCat.length > 1 ? `
-      <header><h2>Por categoría</h2>
-        <span class="pista">${porCat.length} en este corte</span></header>
-      <ul class="lista compacta">${porCat.map(([c, v]) => `
-        <li>
+    <header><h2>Por categoría</h2>
+      <span class="pista">Toca una para ver en qué se fue</span></header>
+    ${porCat.map(([c, v]) => {
+    // Cada categoría lleva dentro sus propios movimientos, del más caro al
+    // más barato. Antes iban todos juntos en una lista al final: con
+    // cuatrocientos, era un muro sin manera de mirar solo lo de una.
+    const suyos = movs.filter((m) => (m.categoria || 'Sin categoría') === c)
+      .sort((x, y) => y.monto - x.monto);
+    return `
+      <details class="cat">
+        <summary>
           <div class="principal">
-            <div class="titulo">${esc(c)}</div>
+            <div class="titulo"><span class="flecha" aria-hidden="true">›</span>${esc(c)}</div>
             <div class="barra-jc" role="presentation">
               <span style="flex:${v};background:var(--serie-2)"></span>
               <span style="flex:${Math.max(0, total - v)};background:transparent"></span>
             </div>
+            <div class="meta">${suyos.length}
+              ${suyos.length === 1 ? 'movimiento' : 'movimientos'}</div>
           </div>
           <div class="monto">${money(v)}
             <span class="pie">${((v / total) * 100).toFixed(0)} %</span></div>
-        </li>`).join('')}</ul>` : ''}
+        </summary>
+        <ul class="desglose">${suyos.map((m) => `
+          <li>
+            <div class="principal">
+              <div class="titulo">${esc(m.detalle)}</div>
+              <div class="meta">${esc(textoFecha(m.fecha))} · ${esc(m.origen)}${
+  m.cuota ? ` · ${esc(m.cuota)}` : ''}</div>
+            </div>
+            <div class="monto">${money(m.monto)}</div>
+          </li>`).join('')}</ul>
+      </details>`;
+  }).join('')}
 
-    <header><h2>Movimientos</h2>
-      <span class="pista">Todos, del más caro al más barato</span></header>
-    <ul class="desglose">${[...movs].sort((a, b) => b.monto - a.monto).map((m) => `
-      <li>
-        <div class="principal">
-          <div class="titulo">${esc(m.detalle)}</div>
-          <div class="meta">${esc(textoFecha(m.fecha))} · ${esc(m.categoria || 'Sin categoría')}
-            · ${esc(m.origen)}${m.cuota ? ` · ${esc(m.cuota)}` : ''}</div>
-        </div>
-        <div class="monto">${money(m.monto)}</div>
-      </li>`).join('')}</ul>
     <div class="pie-desglose">${movs.length}
-      ${movs.length === 1 ? 'movimiento' : 'movimientos'} ·
+      ${movs.length === 1 ? 'movimiento' : 'movimientos'} en
+      ${porCat.length} ${porCat.length === 1 ? 'categoría' : 'categorías'} ·
       <strong>${money(total)}</strong></div>`;
 }
 
