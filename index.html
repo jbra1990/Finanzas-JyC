@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ndoWtD6e0LzJdXdeTmh0LVy28xOU6bKSFkVEVp5hmew='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-cRlGn5aTKaWKv+aBA8pZMKhK5upUa9UiWWi/Nkp5HAk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -646,7 +646,9 @@ a { color: var(--acento); }
  */
 .acciones-panel {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* Cuatro accesos no caben en una fila de móvil sin apretar el texto, así que
+     se reparten en dos filas de dos. */
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 10px;
   margin-top: 18px;
 }
@@ -6536,6 +6538,428 @@ function mesesProyectados(n = 6) {
 return { MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, estaExcluida, fijosManuales, guardarAjuste, guardarManual, marcarPago, medioDe, mesesProyectados, presupuestoSugerido, proyeccion, recurrencias };
 })();
 
+M["pdf"] = (function () {
+/**
+ * Un PDF escrito a mano, sin librerías.
+ *
+ * La app no tiene dependencias y funciona sin conexión, así que traerse un
+ * generador de PDF de un CDN sobraba por dos motivos: pesa cientos de kilos y
+ * no estaría ahí cuando no hay señal. Lo que hace falta aquí es mucho menos:
+ * texto en una o varias hojas, en dos tamaños y dos pesos, con columnas
+ * alineadas. Eso es un PDF de manual.
+ *
+ * Las fuentes son las CATORCE ESTÁNDAR —Helvetica y Helvetica-Bold—, que todo
+ * lector trae incorporadas: no hay que incrustar nada, y por eso un informe de
+ * cien líneas pesa unos pocos kilobytes.
+ *
+ * Ninguna función de este módulo toca el DOM.
+ */
+
+/** Tamaño A4 en puntos, que es la unidad del PDF (72 por pulgada). */
+const ANCHO = 595.28;
+const ALTO = 841.89;
+const MARGEN = 42;
+
+/*
+ * Anchos de los caracteres de Helvetica, en milésimas de punto. Hacen falta
+ * para alinear cifras a la derecha y para cortar un texto que no cabe: sin
+ * ellos habría que suponer que todas las letras miden lo mismo, y una columna
+ * de importes quedaría en diagonal.
+ *
+ * Solo se guardan los del rango imprimible de Latin-1; lo de fuera se sustituye
+ * antes de llegar aquí.
+ */
+const ANCHOS = (() => {
+  // 32..126, del espacio a la virgulilla.
+  const base = [
+    278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278,
+    556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556,
+    1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778,
+    667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556,
+    333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556,
+    556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584,
+  ];
+  const m = new Map();
+  base.forEach((w, i) => m.set(32 + i, w));
+  // Acentuadas y demás Latin-1: en Helvetica miden lo mismo que su letra base.
+  const como = {
+    193: 'A', 201: 'E', 205: 'I', 211: 'O', 218: 'U', 209: 'N', 220: 'U',
+    225: 'a', 233: 'e', 237: 'i', 243: 'o', 250: 'u', 241: 'n', 252: 'u',
+    191: '?', 161: '!', 176: 'o', 171: '<', 187: '>', 151: '-', 183: '.',
+  };
+  Object.entries(como).forEach(([cod, ch]) => m.set(Number(cod), m.get(ch.charCodeAt(0))));
+  return m;
+})();
+
+/** Lo que mide un texto en puntos, a un tamaño dado. */
+function ancho(texto, tam, negrita = false) {
+  let total = 0;
+  for (const ch of String(texto)) {
+    // La negrita de Helvetica es algo más ancha; el 4 % es la media medida
+    // sobre el juego completo, y basta para que nada se solape.
+    total += (ANCHOS.get(ch.charCodeAt(0)) ?? 556) * (negrita ? 1.04 : 1);
+  }
+  return (total / 1000) * tam;
+}
+
+/** Recorta un texto a los puntos que quepan, con puntos suspensivos. */
+function recortar(texto, max, tam, negrita = false) {
+  const t = String(texto);
+  if (ancho(t, tam, negrita) <= max) return t;
+  let corte = t;
+  while (corte.length > 1 && ancho(`${corte}...`, tam, negrita) > max) {
+    corte = corte.slice(0, -1);
+  }
+  return `${corte.trimEnd()}...`;
+}
+
+/*
+ * De texto de JavaScript a bytes de PDF.
+ *
+ * Las cadenas del PDF van entre paréntesis, así que el paréntesis y la barra
+ * invertida hay que escaparlos. Y como la fuente se declara en WinAnsi, cada
+ * carácter viaja como UN byte: lo que no exista en ese juego —una comilla
+ * curva, un emoji— se cambia por algo parecido antes de que llegue aquí, que
+ * es mejor que un cuadrito o un byte inválido.
+ */
+const EQUIVALE = {
+  '“': '"', '”': '"', '‘': "'", '’': "'", '–': '-', '—': '',
+  '…': '...', '·': '·', '€': 'EUR', ' ': ' ',
+};
+
+function aWinAnsi(texto) {
+  let salida = '';
+  for (const ch of String(texto)) {
+    const eq = EQUIVALE[ch];
+    if (eq !== undefined) { salida += eq; continue; }
+    const c = ch.codePointAt(0);
+    if (c <= 0xff) salida += ch;
+    else {
+      // Último recurso: quitarle el acento; si ni así, un espacio.
+      const plano = ch.normalize('NFD').replace(/[̀-ͯ]/g, '');
+      salida += plano.codePointAt(0) <= 0xff ? plano : ' ';
+    }
+  }
+  return salida.replace(/[\\()]/g, (m) => `\\${m}`);
+}
+
+/**
+ * Un documento en construcción.
+ *
+ * Se escribe de arriba abajo y él solo pasa de hoja cuando se acaba el sitio,
+ * repitiendo la cabecera que se le haya dado.
+ */
+function documento({ titulo = '', pie = '', cabeceraRepetida = null } = {}) {
+  const paginas = [];
+  let flujo = '';
+  let y = 0;
+
+  const nuevaPagina = () => {
+    if (flujo) paginas.push(flujo);
+    flujo = '';
+    y = ALTO - MARGEN;
+    if (paginas.length && cabeceraRepetida) cabeceraRepetida(api);
+  };
+
+  const api = {
+    /** Puntos libres desde el borde inferior. */
+    get libre() { return y - MARGEN - 24; },
+    get anchoUtil() { return ANCHO - MARGEN * 2; },
+    get pagina() { return paginas.length + 1; },
+
+    /** Deja un hueco vertical. */
+    salto(alto) { y -= alto; return api; },
+
+    /** Se asegura de que caben `alto` puntos; si no, pasa de hoja. */
+    asegurar(alto) {
+      if (y - alto < MARGEN + 24) nuevaPagina();
+      return api;
+    },
+
+    /**
+     * Una línea de texto. `x` desde el margen izquierdo; con `derecha` el
+     * texto termina en esa x en vez de empezar ahí, que es como se alinean
+     * las cifras.
+     */
+    texto(txt, {
+      x = 0, tam = 10, negrita = false, gris = 0, derecha = false, avance = 0,
+    } = {}) {
+      const t = aWinAnsi(txt);
+      const px = derecha ? MARGEN + x - ancho(txt, tam, negrita) : MARGEN + x;
+      flujo += `BT /F${negrita ? 2 : 1} ${tam} Tf ${gris ? `${gris} g` : '0 g'} `
+        + `1 0 0 1 ${px.toFixed(2)} ${y.toFixed(2)} Tm (${t}) Tj ET\n`;
+      if (avance) y -= avance;
+      return api;
+    },
+
+    /** Una línea horizontal fina de lado a lado. */
+    regla({ gris = 0.8, avance = 0 } = {}) {
+      flujo += `${gris} G 0.6 w ${MARGEN} ${y.toFixed(2)} m `
+        + `${(ANCHO - MARGEN).toFixed(2)} ${y.toFixed(2)} l S\n`;
+      if (avance) y -= avance;
+      return api;
+    },
+
+    /** Un rectángulo relleno. Sin `x`/`ancho` ocupa el ancho útil entero. */
+    rect({ x = 0, ancho: w = null, alto = 18, gris = 0.94, desde = 0 } = {}) {
+      const ax = w === null ? ANCHO - MARGEN * 2 : w;
+      if (ax <= 0) return api;
+      flujo += `${gris} g ${(MARGEN + x).toFixed(2)} ${(y - desde).toFixed(2)} `
+        + `${ax.toFixed(2)} ${alto} re f 0 g\n`;
+      return api;
+    },
+
+    /** Banda de cabecera: un rectángulo de lado a lado. */
+    banda(opts = {}) { return api.rect(opts); },
+
+    /** Cierra el documento y devuelve el Blob listo para compartir. */
+    blob() {
+      if (flujo) paginas.push(flujo);
+      return armar(paginas, { titulo, pie });
+    },
+  };
+
+  nuevaPagina();
+  return api;
+}
+
+/** Los objetos del PDF, con su tabla de referencias cruzadas. */
+function armar(paginas, { titulo, pie }) {
+  const objetos = [];
+  const añadir = (cuerpo) => { objetos.push(cuerpo); return objetos.length; };
+
+  // 1: catálogo, 2: páginas, 3 y 4: las dos fuentes. Los contenidos y las
+  // páginas van después, en pares.
+  const idCatalogo = añadir(null);
+  const idPaginas = añadir(null);
+  const idFuente = añadir('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica '
+    + '/Encoding /WinAnsiEncoding >>');
+  const idNegrita = añadir('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold '
+    + '/Encoding /WinAnsiEncoding >>');
+
+  const idsPagina = [];
+  paginas.forEach((contenido, i) => {
+    // El pie con la numeración se escribe aquí, que es cuando ya se sabe
+    // cuántas hojas salieron.
+    const numero = `${pie}${pie ? '   ' : ''}Pagina ${i + 1} de ${paginas.length}`;
+    const conPie = `${contenido}BT /F1 8 Tf 0.45 g 1 0 0 1 ${MARGEN} ${MARGEN - 6} Tm `
+      + `(${aWinAnsi(numero)}) Tj ET\n`;
+    const idFlujo = añadir(`<< /Length ${bytes(conPie)} >>\nstream\n${conPie}endstream`);
+    idsPagina.push(añadir(`<< /Type /Page /Parent ${idPaginas} 0 R `
+      + `/MediaBox [0 0 ${ANCHO} ${ALTO}] /Resources << /Font << `
+      + `/F1 ${idFuente} 0 R /F2 ${idNegrita} 0 R >> >> /Contents ${idFlujo} 0 R >>`));
+  });
+
+  objetos[idCatalogo - 1] = `<< /Type /Catalog /Pages ${idPaginas} 0 R >>`;
+  objetos[idPaginas - 1] = `<< /Type /Pages /Kids [${
+    idsPagina.map((n) => `${n} 0 R`).join(' ')}] /Count ${idsPagina.length} >>`;
+  const idInfo = añadir(`<< /Title (${aWinAnsi(titulo)}) /Producer (Finanzas J&C) >>`);
+
+  let salida = '%PDF-1.4\n';
+  const posiciones = [];
+  objetos.forEach((cuerpo, i) => {
+    posiciones.push(bytes(salida));
+    salida += `${i + 1} 0 obj\n${cuerpo}\nendobj\n`;
+  });
+
+  const inicioTabla = bytes(salida);
+  salida += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n`;
+  posiciones.forEach((p) => { salida += `${String(p).padStart(10, '0')} 00000 n \n`; });
+  salida += `trailer\n<< /Size ${objetos.length + 1} /Root ${idCatalogo} 0 R `
+    + `/Info ${idInfo} 0 R >>\nstartxref\n${inicioTabla}\n%%EOF`;
+
+  /*
+   * Cada carácter de la cadena es un byte del archivo: las posiciones de la
+   * tabla xref se calcularon así, y con UTF-8 una sola letra acentuada las
+   * correría todas y el lector no abriría el archivo.
+   */
+  const buf = new Uint8Array(salida.length);
+  for (let i = 0; i < salida.length; i += 1) buf[i] = salida.charCodeAt(i) & 0xff;
+  return new Blob([buf], { type: 'application/pdf' });
+}
+
+/** Longitud en bytes, contando un byte por carácter (ver `armar`). */
+const bytes = (s) => s.length;
+
+return { ancho, documento, recortar };
+})();
+
+M["informe"] = (function () {
+/**
+ * El informe mensual de una persona, en PDF, para mandarlo por WhatsApp.
+ *
+ * La pregunta que resuelve es la de fin de mes: «¿qué gastaste tú este mes?».
+ * Enseñar la pantalla no sirve —el otro no tiene la app— y una captura se corta
+ * a los diez movimientos. Un PDF de dos o tres hojas se manda por WhatsApp, se
+ * abre en cualquier teléfono y se guarda.
+ *
+ * Sale con todo el detalle a propósito: el total y el reparto por categoría
+ * arriba, y debajo la lista completa de movimientos, uno por línea. Lo que se
+ * quiere ver en un reparto de gastos es justamente lo que no cabe en un
+ * resumen.
+ */
+
+const {documento, ancho, recortar} = M["pdf"];
+const {nombreMes, money, redondear, textoFecha, detalleDeGastos} = M["calc"];
+/*
+ * Fecha corta: «17 sep 25».
+ *
+ * En una columna de 60 puntos no cabe «17 de septiembre», y lo que sobraba se
+ * metía encima del nombre del comercio. El año en dos cifras no es un adorno:
+ * en el mes de enero aparecen cuotas de compras del año anterior, y sin él
+ * parecen del mismo mes.
+ */
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
+  'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+function fechaCompacta(iso) {
+  const [a, m, d] = String(iso).slice(0, 10).split('-');
+  if (!d) return String(iso);
+  return `${Number(d)} ${MESES_CORTOS[Number(m) - 1] || m} ${a.slice(2)}`;
+}
+
+/** Coordenadas de las columnas, en puntos desde el margen izquierdo. */
+const COL = { fecha: 0, detalle: 62, categoria: 300, medio: 404, monto: 511 };
+
+/** Dónde empieza y cuánto mide la barra del reparto por categoría. */
+const ANCHO_BARRA_X = 200;
+const ANCHO_BARRA = 240;
+
+/**
+ * Arma el PDF del mes de una persona.
+ *
+ * @param {string} mes 'YYYY-MM'
+ * @param {string} usuario 'J', 'C' o 'ambos'
+ * @returns {{blob: Blob, nombre: string, total: number, movimientos: number}}
+ */
+function informeMensual(mes, usuario = 'ambos') {
+  const movs = detalleDeGastos([mes], { usuario })
+    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+  const total = redondear(movs.reduce((s, m) => s + m.monto, 0));
+
+  const porCategoria = [...movs.reduce((m, x) => {
+    const c = x.categoria || 'Sin categoria';
+    return m.set(c, redondear((m.get(c) || 0) + x.monto));
+  }, new Map())].sort((a, b) => b[1] - a[1]);
+
+  const porMedio = ['Tarjeta', 'Efectivo'].map((t) => ({
+    tipo: t,
+    monto: redondear(movs.filter((x) => x.tipo === t).reduce((s, x) => s + x.monto, 0)),
+  })).filter((x) => x.monto > 0);
+
+  const dueño = usuario === 'ambos' ? 'J y C' : usuario;
+  const titulo = `Gastos de ${nombreMes(mes)} - ${dueño}`;
+
+  const doc = documento({
+    titulo,
+    pie: titulo,
+    // Al pasar de hoja se repiten los rótulos: media lista sin cabecera no se
+    // lee, hay que subir a la hoja anterior para saber qué columna es cuál.
+    cabeceraRepetida: (d) => {
+      d.salto(6);
+      cabeceraTabla(d);
+    },
+  });
+
+  doc.texto(titulo, { tam: 17, negrita: true, avance: 20 });
+  doc.texto(`Generado el ${textoFecha(new Date().toISOString().slice(0, 10))}`,
+    { tam: 9, gris: 0.45, avance: 18 });
+
+  // El total, en grande: es lo primero que se busca al abrirlo.
+  doc.banda({ alto: 40, desde: 30 });
+  doc.texto('TOTAL DEL MES', { x: 10, tam: 8, negrita: true, gris: 0.35, avance: 15 });
+  doc.texto(money(total), { x: 10, tam: 19, negrita: true, avance: 12 });
+  doc.texto(`${movs.length} ${movs.length === 1 ? 'movimiento' : 'movimientos'}${
+    porMedio.length ? `   ${porMedio.map((m) => `${m.tipo} ${money(m.monto)}`).join('   ')}` : ''}`,
+  { x: 10, tam: 9, gris: 0.35, avance: 26 });
+
+  if (!movs.length) {
+    doc.texto(`No hay gastos registrados de ${dueño} en ${nombreMes(mes)}.`,
+      { tam: 11, gris: 0.4 });
+    return terminar(doc, mes, usuario, total, 0);
+  }
+
+  // Reparto por categoría, con barra: en un reparto entre dos, lo que se
+  // discute es en qué se fue, no cuánto en total.
+  doc.texto('Por categoria', { tam: 11, negrita: true, avance: 15 });
+  porCategoria.forEach(([cat, monto]) => {
+    doc.asegurar(15);
+    const parte = total > 0 ? monto / total : 0;
+    doc.texto(recortar(cat, ANCHO_BARRA_X - 8, 9.5), { tam: 9.5 });
+    // Todas las barras arrancan en la misma vertical, no pegadas a su texto:
+    // si cada una empieza donde acaba su nombre, no se pueden comparar.
+    doc.rect({ x: ANCHO_BARRA_X, ancho: ANCHO_BARRA, alto: 6, gris: 0.88, desde: -1 });
+    doc.rect({ x: ANCHO_BARRA_X, ancho: ANCHO_BARRA * parte, alto: 6, gris: 0.5, desde: -1 });
+    doc.texto(`${(parte * 100).toFixed(0)}%`, { x: 455, tam: 8.5, gris: 0.45, derecha: true });
+    doc.texto(money(monto), { x: COL.monto, tam: 9.5, negrita: true, derecha: true, avance: 14 });
+  });
+
+  doc.salto(10);
+  doc.texto('Detalle de movimientos', { tam: 11, negrita: true, avance: 15 });
+  cabeceraTabla(doc);
+
+  movs.forEach((m) => {
+    doc.asegurar(13);
+    doc.texto(fechaCompacta(m.fecha), { x: COL.fecha, tam: 8.5, gris: 0.4 });
+    doc.texto(recortar(m.detalle, COL.categoria - COL.detalle - 8, 9), { x: COL.detalle, tam: 9 });
+    doc.texto(recortar(m.categoria || 'Sin categoria', COL.medio - COL.categoria - 8, 8.5),
+      { x: COL.categoria, tam: 8.5, gris: 0.4 });
+    doc.texto(recortar(`${m.tipo}${m.cuota ? ` ${m.cuota}` : ''}`, 92, 8.5),
+      { x: COL.medio, tam: 8.5, gris: 0.4 });
+    doc.texto(money(m.monto), { x: COL.monto, tam: 9, derecha: true, avance: 13 });
+  });
+
+  doc.salto(2).regla({ gris: 0.6, avance: 13 });
+  doc.texto(`Total ${nombreMes(mes)}`, { tam: 10, negrita: true });
+  doc.texto(money(total), { x: COL.monto, tam: 10, negrita: true, derecha: true });
+
+  return terminar(doc, mes, usuario, total, movs.length);
+}
+
+function cabeceraTabla(doc) {
+  doc.banda({ alto: 14, desde: 4, gris: 0.92 });
+  doc.texto('FECHA', { x: COL.fecha + 2, tam: 7.5, negrita: true, gris: 0.35 });
+  doc.texto('DETALLE', { x: COL.detalle, tam: 7.5, negrita: true, gris: 0.35 });
+  doc.texto('CATEGORIA', { x: COL.categoria, tam: 7.5, negrita: true, gris: 0.35 });
+  doc.texto('PAGO', { x: COL.medio, tam: 7.5, negrita: true, gris: 0.35 });
+  doc.texto('MONTO', { x: COL.monto, tam: 7.5, negrita: true, gris: 0.35, derecha: true, avance: 14 });
+}
+
+function terminar(doc, mes, usuario, total, movimientos) {
+  const quien = usuario === 'ambos' ? 'JyC' : usuario;
+  return {
+    blob: doc.blob(),
+    nombre: `Gastos_${mes}_${quien}.pdf`,
+    total,
+    movimientos,
+  };
+}
+
+/**
+ * Manda el PDF por donde el teléfono deje: la hoja de compartir del sistema
+ * —donde está WhatsApp— y, si no la hay, descargándolo.
+ *
+ * En iOS `navigator.share` con archivos existe desde Safari 15, pero solo
+ * responde a un gesto del usuario: por eso esto se llama desde el propio clic
+ * y no después de un `await` largo.
+ */
+async function compartir({ blob, nombre }, texto = '') {
+  const archivo = new File([blob], nombre, { type: 'application/pdf' });
+  if (navigator.canShare?.({ files: [archivo] })) {
+    try {
+      await navigator.share({ files: [archivo], text: texto });
+      return 'compartido';
+    } catch (e) {
+      // Cancelar la hoja de compartir no es un error que haya que contar.
+      if (e?.name === 'AbortError') return 'cancelado';
+    }
+  }
+  return 'descargar';
+}
+
+return { compartir, informeMensual };
+})();
+
 M["forms"] = (function () {
 /**
  * Formularios de captura y corrección.
@@ -7221,8 +7645,9 @@ M["views/resumen"] = (function () {
 const {db, tarjetas, usuarios} = M["store"];
 const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, detalleDeGastos, difMeses, mesesConDatos} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
-const {crear, esc, $, segmentado} = M["ui"];
+const {crear, esc, $, segmentado, modal, brindis, opciones, descargar} = M["ui"];
 const {formGastoTarjeta, formIngreso} = M["forms"];
+const {informeMensual, compartir} = M["informe"];
 let usuarioFiltro = 'ambos';
 
 /*
@@ -7277,6 +7702,12 @@ function render(raiz, { irA }) {
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 19V5M6 11l6-6 6 6"/>
           </svg>Ingreso</button>
+        <button type="button" data-accion="pdf">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Zm0 0v5h5"/>
+            <path d="M12 18v-6m-2.5 2.5L12 12l2.5 2.5"/>
+          </svg>PDF</button>
         <button type="button" data-accion="pagar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -7414,6 +7845,7 @@ function render(raiz, { irA }) {
   $('[data-accion="ingreso"]', raiz).addEventListener('click',
     () => formIngreso(recargar));
   $('[data-accion="pagar"]', raiz).addEventListener('click', () => irA('tarjetas'));
+  $('[data-accion="pdf"]', raiz).addEventListener('click', () => formInforme(mes));
 }
 
 /**
@@ -7760,6 +8192,68 @@ function resultadoAnalisis() {
     <div class="pie-desglose">${movs.length}
       ${movs.length === 1 ? 'movimiento' : 'movimientos'} de ${esc(queCosa)} ·
       <strong>${money(total)}</strong></div>`;
+}
+
+/**
+ * El cuadro para armar el PDF del mes.
+ *
+ * Dos preguntas y ya: de qué mes y de quién. Lo demás se decide solo, porque
+ * el informe existe para una cosa concreta —mandárselo al otro por WhatsApp—
+ * y cada opción de más es una decisión que tomar antes de poder mandarlo.
+ */
+function formInforme(mesPorDefecto) {
+  const meses = mesesConDatos();
+  // De más reciente a más antiguo: el que se manda casi siempre es el último.
+  const opcionesMes = [...meses].reverse().map((m) => ({ valor: m, texto: nombreMes(m) }));
+  const inicial = meses.includes(mesPorDefecto) ? mesPorDefecto
+    : (meses[meses.length - 1] || mesPorDefecto);
+  let quien = usuarioFiltro === 'ambos' ? 'J' : usuarioFiltro;
+
+  modal({
+    titulo: 'Informe en PDF',
+    cuerpo: `
+      <div class="filtros">
+        <div class="campo ancho"><label for="pdf-mes">Mes</label>
+          <select id="pdf-mes" name="mes">${opciones(opcionesMes, inicial)}</select></div>
+      </div>
+      <div class="filtros"><div class="campo ancho"><label>De quién</label>
+        <div id="pdf-quien"></div></div></div>
+      <p class="pista" id="pdf-previa"></p>
+      <p class="pista">Se abre la hoja de compartir del teléfono, donde está
+        WhatsApp. Si no la trae, el archivo se descarga.</p>`,
+    aceptar: 'Crear y compartir',
+    alAbrir(form) {
+      const previa = $('#pdf-previa', form);
+      const refrescar = () => {
+        const m = $('#pdf-mes', form).value;
+        const movs = detalleDeGastos([m], { usuario: quien });
+        const total = redondear(movs.reduce((s, x) => s + x.monto, 0));
+        previa.textContent = movs.length
+          ? `${movs.length} ${movs.length === 1 ? 'movimiento' : 'movimientos'} · ${money(total)}`
+          : 'Ese mes no tiene gastos registrados de esa persona.';
+      };
+      $('#pdf-quien', form).appendChild(segmentado(
+        [{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' },
+          { valor: 'ambos', texto: 'Los dos' }],
+        quien,
+        (v) => { quien = v; refrescar(); },
+      ));
+      $('#pdf-mes', form).addEventListener('change', refrescar);
+      refrescar();
+    },
+    async alEnviar(d) {
+      const informe = informeMensual(d.mes, quien);
+      const texto = `Gastos de ${nombreMes(d.mes)}${
+        quien === 'ambos' ? '' : ` de ${quien}`}: ${money(informe.total)}`;
+      const via = await compartir(informe, texto);
+      if (via === 'descargar') {
+        descargar(informe.blob, informe.nombre);
+        brindis('PDF descargado');
+      } else if (via === 'compartido') {
+        brindis('PDF compartido');
+      }
+    },
+  });
 }
 
 return { render };
