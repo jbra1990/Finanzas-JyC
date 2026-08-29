@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Xmx+ILp+D7Ae03UETGA9lylAieGf1aIwoVy8+zv34jk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ndoWtD6e0LzJdXdeTmh0LVy28xOU6bKSFkVEVp5hmew='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -1141,6 +1141,57 @@ tr.detalle > td {
    en vez de cortarse: la fecha de pago quedaba en «se paga el 1…». */
 .lista li.con-acciones .titulo,
 .lista li.con-acciones .meta { white-space: normal; }
+/* Listado de categorías para armar un corte: una por línea, con su casilla.
+   Se desplaza dentro de su caja en vez de estirar la tarjeta a lo largo de
+   toda la pantalla. */
+.lista-marcas {
+  max-height: 232px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--superficie-2);
+  border-radius: var(--radio-s);
+  background: var(--superficie-2);
+  padding: 2px 0;
+}
+.lista-marcas .marca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* Alto de dedo: 44px, aunque la casilla mida 18. */
+  min-height: 44px;
+  padding: 0 13px;
+  font-size: 13.5px;
+  color: var(--tinta-2);
+  cursor: pointer;
+}
+.lista-marcas .marca + .marca { border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.lista-marcas .marca:has(input:checked) { color: var(--tinta); font-weight: 600; }
+.lista-marcas .marca.todas { font-weight: 600; }
+.lista-marcas input[type="checkbox"] {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--serie-2);
+  margin: 0;
+}
+.lista-marcas .marca > span { min-width: 0; }
+
+/* Reparto por categoría dentro del análisis: nombre, barra y cifra. */
+.lista.compacta { margin: 12px 0 4px; }
+.lista.compacta li { padding: 7px 0; }
+.lista.compacta .barra-jc { margin-top: 6px; height: 6px; }
+.lista.compacta .monto { text-align: right; white-space: nowrap; }
+.lista.compacta .monto .pie {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--tinta-2);
+}
+
+/* Las cuatro cifras de cabecera del análisis no cuelgan de un panel oscuro,
+   así que necesitan su propio filo arriba. */
+.an-cifras { border-top-color: var(--superficie-2); }
+
 /* La columna que va acumulando pesa menos que el mes: es contexto, no el
    dato que se lee primero. */
 td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
@@ -2719,9 +2770,18 @@ function gastosEnMeses(meses, filtros = {}) {
  * se compró y, si venía a plazos, qué cuota es.
  */
 function detalleDeCategoria(meses, categoria, filtros = {}) {
+  return detalleDeGastos(meses, { ...filtros, categorias: [categoria] });
+}
+
+/**
+ * Lo mismo pero sin atarse a una categoría: los movimientos que hay detrás de
+ * cualquier corte —un mes o doce, una categoría o cinco, solo tarjeta o todo—,
+ * con lo que hace falta para leerlos.
+ */
+function detalleDeGastos(meses, filtros = {}) {
   const nombreCuenta = (id) => db.cuentas.find((c) => c.id === id)?.nombre || id;
 
-  return gastosEnMeses(meses, { ...filtros, categorias: [categoria] })
+  return gastosEnMeses(meses, filtros)
     .map((x) => {
       const esTarjeta = x.tipo === 'Tarjeta';
       const g = esTarjeta
@@ -2737,6 +2797,9 @@ function detalleDeCategoria(meses, categoria, filtros = {}) {
         monto: x.monto,
         mes: x.mes,
         origen: nombreCuenta(x.origen),
+        categoria: x.categoria,
+        tipo: x.tipo,
+        proposito: g?.proposito || '',
         cuota: g && g.cuotas > 1 && cuota ? `cuota ${cuota.n_cuota}/${g.cuotas}` : '',
       };
     })
@@ -2842,7 +2905,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDelMes, patrimonioNeto, planificarCuotas, presupuestoVsReal, rangoMeses, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, totalAhorrado, totalInvertido, totalPorCategoria, totalPorUsuario };
+return { acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDelMes, patrimonioNeto, planificarCuotas, presupuestoVsReal, rangoMeses, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, totalAhorrado, totalInvertido, totalPorCategoria, totalPorUsuario };
 })();
 
 M["charts"] = (function () {
@@ -7156,11 +7219,19 @@ M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
 const {db, tarjetas, usuarios} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, detalleDeGastos, difMeses, mesesConDatos} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
 const {crear, esc, $, segmentado} = M["ui"];
 const {formGastoTarjeta, formIngreso} = M["forms"];
 let usuarioFiltro = 'ambos';
+
+/*
+ * El corte de análisis vive aparte del resto de la pantalla y se recuerda
+ * mientras dure la sesión: se abre Resumen, se mira lo de siempre y abajo se
+ * sigue con la pregunta que uno traía —«¿cuánto llevo en restaurantes este
+ * año?»— sin volver a montarla cada vez.
+ */
+const corte = { desde: null, hasta: null, medio: 'ambos', categorias: new Set() };
 
 function render(raiz, { irA }) {
   const mes = mesActual();
@@ -7270,7 +7341,9 @@ function render(raiz, { irA }) {
       </div>
     </section>
 
-    <section class="tarjeta" id="proximos"></section>`;
+    <section class="tarjeta" id="proximos"></section>
+
+    <section class="tarjeta" id="analisis"></section>`;
 
   // Filtro J / C / ambos
   $('#seg-usuario', raiz).appendChild(segmentado(
@@ -7327,6 +7400,8 @@ function render(raiz, { irA }) {
 
   // Próximos vencimientos e hitos
   $('#proximos', raiz).innerHTML = seccionProximos(mes);
+
+  montarAnalisis($('#analisis', raiz));
 
   raiz.querySelectorAll('[data-ir]').forEach((b) => {
     b.addEventListener('click', () => irA(b.dataset.ir));
@@ -7499,6 +7574,192 @@ function iniciales(nombre) {
   const palabras = String(nombre).replace(/^TC /, '').split(/\s+/).filter(Boolean);
   if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
   return String(palabras[0] || '?').slice(0, 2).toUpperCase();
+}
+
+/*
+ * ANÁLISIS A MEDIDA
+ *
+ * El resto de la pantalla contesta preguntas fijas: cuánto va este mes, cómo
+ * se reparte, qué viene. Esta sección contesta la que uno traiga: cuánto se
+ * fue en restaurantes en marzo, o en restaurantes más bebidas más aperitivos
+ * de enero a agosto, o solo lo pagado en efectivo. Tres controles —desde/hasta,
+ * medio de pago y las categorías que se quieran— y el corte se recalcula sin
+ * tocar nada más de la vista.
+ */
+function montarAnalisis(seccion) {
+  const hoy = mesActual();
+  if (!corte.desde) { corte.desde = hoy; corte.hasta = hoy; }
+
+  // Solo las categorías que de verdad tienen gasto: una lista con las 40
+  // categorías del catálogo, la mitad vacías, no se puede recorrer con el dedo.
+  const conDatos = mesesConDatos();
+  const universo = conDatos.length ? conDatos : [hoy];
+  const cats = [...new Set(detalleDeGastos(universo, {}).map((x) => x.categoria || 'Sin categoría'))]
+    .sort((a, b) => a.localeCompare(b, 'es'));
+
+  seccion.innerHTML = `
+    <header><h2>Análisis a medida</h2>
+      <span class="pista">El corte que quieras, aparte del resto</span></header>
+
+    <div class="filtros">
+      <div class="campo"><label for="an-desde">Desde</label>
+        <input id="an-desde" type="month" value="${esc(corte.desde)}"></div>
+      <div class="campo"><label for="an-hasta">Hasta</label>
+        <input id="an-hasta" type="month" value="${esc(corte.hasta)}"></div>
+    </div>
+    <div class="filtros"><div class="campo ancho"><label>Cómo se pagó</label>
+      <div id="an-medio"></div></div></div>
+
+    <div class="campo ancho"><label>Categorías <span class="pista"
+      id="an-cuantas"></span></label>
+      <div class="lista-marcas" id="an-cats">
+        <label class="marca todas">
+          <input type="checkbox" data-cat="" ${corte.categorias.size ? '' : 'checked'}>
+          <span>Todas</span></label>
+        ${cats.map((c) => `
+          <label class="marca">
+            <input type="checkbox" data-cat="${esc(c)}" ${
+  corte.categorias.has(c) ? 'checked' : ''}>
+            <span>${esc(c)}</span></label>`).join('')}
+      </div>
+    </div>
+
+    <div id="an-resultado"></div>`;
+
+  $('#an-medio', seccion).appendChild(segmentado(
+    [{ valor: 'ambos', texto: 'Ambos' }, { valor: 'tarjeta', texto: 'Tarjeta' },
+      { valor: 'efectivo', texto: 'Efectivo' }],
+    corte.medio,
+    (v) => { corte.medio = v; pintar(); },
+  ));
+
+  const pintar = () => {
+    $('#an-resultado', seccion).innerHTML = resultadoAnalisis();
+    seccion.querySelectorAll('#an-cats input[type=checkbox]').forEach((b) => {
+      const suya = b.dataset.cat;
+      b.checked = suya ? corte.categorias.has(suya) : !corte.categorias.size;
+    });
+    // Cuántas van marcadas, para no tener que contarlas a ojo en la lista.
+    const rotulo = seccion.querySelector('#an-cuantas');
+    if (rotulo) {
+      rotulo.textContent = corte.categorias.size
+        ? `${corte.categorias.size} de ${cats.length}` : `las ${cats.length}`;
+    }
+  };
+
+  seccion.querySelectorAll('#an-cats input[type=checkbox]').forEach((b) => {
+    b.addEventListener('change', () => {
+      const cat = b.dataset.cat;
+      // «Todas» no es una categoría más: limpia la selección.
+      if (!cat) corte.categorias.clear();
+      else if (corte.categorias.has(cat)) corte.categorias.delete(cat);
+      else corte.categorias.add(cat);
+      pintar();
+    });
+  });
+
+  const desde = $('#an-desde', seccion);
+  const hasta = $('#an-hasta', seccion);
+  const cambioMes = () => {
+    // Al revés no hay rango: se arrastra el otro extremo en vez de no enseñar
+    // nada, que es lo que haría un rango vacío.
+    corte.desde = desde.value || hoy;
+    corte.hasta = hasta.value || hoy;
+    if (corte.hasta < corte.desde) {
+      if (document.activeElement === desde) { corte.hasta = corte.desde; hasta.value = corte.hasta; }
+      else { corte.desde = corte.hasta; desde.value = corte.desde; }
+    }
+    pintar();
+  };
+  desde.addEventListener('change', cambioMes);
+  hasta.addEventListener('change', cambioMes);
+
+  pintar();
+}
+
+/** El corte pedido, resuelto: cuánto, en qué y en qué se fue. */
+function resultadoAnalisis() {
+  const meses = rangoMeses(corte.desde, corte.hasta);
+  const filtros = {
+    usuario: usuarioFiltro,
+    categorias: [...corte.categorias],
+    incluirTarjeta: corte.medio !== 'efectivo',
+    incluirEfectivo: corte.medio !== 'tarjeta',
+  };
+  const movs = detalleDeGastos(meses, filtros);
+  const total = redondear(movs.reduce((s, m) => s + m.monto, 0));
+
+  const cuantas = corte.categorias.size;
+  const queCosa = cuantas === 0 ? 'todas las categorías'
+    : cuantas === 1 ? [...corte.categorias][0]
+      : `${cuantas} categorías`;
+
+  if (!movs.length) {
+    return `<p class="vacio">No hay gasto de ${esc(queCosa)} en
+      ${meses.length === 1 ? esc(nombreMes(meses[0]))
+    : `${esc(nombreMes(meses[0]))} – ${esc(nombreMes(meses[meses.length - 1]))}`}${
+  corte.medio === 'ambos' ? '' : ` pagado con ${esc(corte.medio)}`}.</p>`;
+  }
+
+  const porMes = meses.map((m) => ({
+    mes: m,
+    monto: redondear(movs.filter((x) => x.mes === m).reduce((s, x) => s + x.monto, 0)),
+  }));
+  const porCat = [...movs.reduce((m, x) => {
+    const c = x.categoria || 'Sin categoría';
+    return m.set(c, redondear((m.get(c) || 0) + x.monto));
+  }, new Map())].sort((a, b) => b[1] - a[1]);
+  const pico = porMes.reduce((a, b) => (b.monto > a.monto ? b : a));
+
+  return `
+    <div class="panel-datos an-cifras">
+      <div><div class="etq">Total</div><div class="val">${money(total)}</div></div>
+      <div><div class="etq">Movimientos</div><div class="val">${movs.length}</div></div>
+      <div><div class="etq">Al mes</div>
+        <div class="val">${money(redondear(total / meses.length))}</div></div>
+      <div><div class="etq">Mes más alto</div>
+        <div class="val">${esc(nombreMes(pico.mes, true))}</div></div>
+    </div>
+
+    ${meses.length > 1 ? `
+      <div class="tabla-scroll"><table>
+        <thead><tr><th>Mes</th><th>Gasto</th><th>Acumulado</th></tr></thead>
+        <tbody>${(() => { let ac = 0; return porMes.map((f) => {
+    ac = redondear(ac + f.monto);
+    return `<tr><td>${esc(nombreMes(f.mes))}</td>
+      <td class="${f.monto ? '' : 'cero'}">${f.monto ? money(f.monto) : '—'}</td>
+      <td class="acumulado">${money(ac)}</td></tr>`;
+  }).join(''); })()}</tbody>
+        <tfoot><tr><td>TOTAL</td><td>${money(total)}</td>
+          <td class="acumulado">${money(total)}</td></tr></tfoot>
+      </table></div>` : ''}
+
+    ${porCat.length > 1 ? `
+      <ul class="lista compacta">${porCat.map(([c, v]) => `
+        <li>
+          <div class="principal">
+            <div class="titulo">${esc(c)}</div>
+            <div class="barra-jc" role="presentation">
+              <span style="flex:${v};background:var(--serie-2)"></span>
+              <span style="flex:${Math.max(0, total - v)};background:transparent"></span>
+            </div>
+          </div>
+          <div class="monto">${money(v)}
+            <span class="pie">${((v / total) * 100).toFixed(0)} %</span></div>
+        </li>`).join('')}</ul>` : ''}
+
+    <ul class="desglose">${movs.map((m) => `
+      <li>
+        <div class="principal">
+          <div class="titulo">${esc(m.detalle)}</div>
+          <div class="meta">${esc(textoFecha(m.fecha))} · ${esc(m.categoria || 'Sin categoría')}
+            · ${esc(m.origen)}${m.cuota ? ` · ${esc(m.cuota)}` : ''}</div>
+        </div>
+        <div class="monto">${money(m.monto)}</div>
+      </li>`).join('')}</ul>
+    <div class="pie-desglose">${movs.length}
+      ${movs.length === 1 ? 'movimiento' : 'movimientos'} de ${esc(queCosa)} ·
+      <strong>${money(total)}</strong></div>`;
 }
 
 return { render };
