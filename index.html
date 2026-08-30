@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LEyZ6J4op3oTY073eHCmkfEBQ84/9Mr99p+83alcTfo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Hn9sIsm1Ctpc1kjhaRBlUknBGwQNXRNGGaBt+E1Vuj0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -7432,6 +7432,71 @@ function categoriaElegida(d, tipo = 'Gasto') {
 
 // --- Gasto con tarjeta -------------------------------------------------------
 
+/**
+ * Guarda un gasto de tarjeta con su cronograma de cuotas.
+ *
+ * Vive aquí y no dentro del formulario porque el presupuesto también lo
+ * necesita: cuando se ejecuta un pago previsto que va con tarjeta tiene que
+ * acabar exactamente igual que si se hubiera escrito por el formulario normal
+ * —mismo cronograma, mismo redondeo, mismas cuotas—. Dos caminos que escriben
+ * lo mismo por su cuenta acaban discrepando.
+ *
+ * Corriente es un solo pago; Diferido, N cuotas repartidas desde `mesInicio`.
+ * Al corregir uno existente se rehace el cronograma conservando qué meses ya
+ * estaban marcados como pagados.
+ */
+function registrarGastoTarjeta({
+  id: idExistente = null, fecha, tarjeta, usuario, detalle, proposito = '',
+  categoria, tipo = 'Corriente', cuotas = 1, montoTotal, tasaInteres = 0,
+  mesInicio, notas = '',
+}) {
+  const enCuotas = tipo !== 'Corriente';
+  const n = enCuotas ? Math.max(2, Number(cuotas) || 2) : 1;
+  const tasa = tipo === 'Diferido' ? (Number(tasaInteres) || 0) : 0;
+  const plan = planificarCuotas({
+    montoTotal, cuotas: n, mesInicio, tasaInteres: tasa,
+  });
+
+  const id = idExistente || nuevoId('gastosTarjeta');
+  const fila = tocar({
+    id,
+    fecha,
+    tarjeta,
+    usuario,
+    detalle: capitalizar(detalle),
+    proposito: capitalizar(proposito),
+    categoria,
+    tipo,
+    cuotas: n,
+    monto_total: redondear(montoTotal),
+    tasa_interes: tasa,
+    mes_inicio: mesInicio,
+    notas,
+  });
+
+  const pagados = new Set(db.cuotas
+    .filter((c) => c.gasto_id === id && c.pagado === 'Si')
+    .map((c) => c.mes));
+  db.cuotas = db.cuotas.filter((c) => c.gasto_id !== id);
+
+  const i = db.gastosTarjeta.findIndex((x) => x.id === id);
+  if (i >= 0) db.gastosTarjeta[i] = fila;
+  else db.gastosTarjeta.push(fila);
+
+  plan.cuotas.forEach((c) => db.cuotas.push(tocar({
+    gasto_id: id,
+    n_cuota: c.n_cuota,
+    mes: c.mes,
+    monto: c.monto,
+    tarjeta,
+    usuario,
+    categoria,
+    pagado: pagados.has(c.mes) ? 'Si' : '',
+  })));
+  guardar();
+  return { fila, plan, n };
+}
+
 function formGastoTarjeta(alTerminar, existente = null) {
   const g = existente;
   const cuerpo = `
@@ -7561,54 +7626,21 @@ function formGastoTarjeta(alTerminar, existente = null) {
       refrescar();
     },
     alEnviar(d) {
-      const categoria = categoriaElegida(d);
-      const enCuotas = d.tipo !== 'Corriente';
-      const n = enCuotas ? Math.max(2, Number(d.cuotas) || 2) : 1;
-      const tasa = d.tipo === 'Diferido' ? aNumero(d.tasa_interes) : 0;
-      const plan = planificarCuotas({
-        montoTotal: aNumero(d.monto_total), cuotas: n,
-        mesInicio: d.mes_inicio, tasaInteres: tasa,
-      });
-
-      const id = g?.id || nuevoId('gastosTarjeta');
-      const fila = tocar({
-        id,
+      const { fila, plan, n } = registrarGastoTarjeta({
+        id: g?.id,
         fecha: d.fecha,
         tarjeta: d.tarjeta,
         usuario: d.usuario,
-        detalle: capitalizar(d.detalle),
-        proposito: capitalizar(d.proposito),
-        categoria,
+        detalle: d.detalle,
+        proposito: d.proposito,
+        categoria: categoriaElegida(d),
         tipo: d.tipo,
-        cuotas: n,
-        monto_total: redondear(aNumero(d.monto_total)),
-        tasa_interes: tasa,
-        mes_inicio: d.mes_inicio,
+        cuotas: d.cuotas,
+        montoTotal: aNumero(d.monto_total),
+        tasaInteres: aNumero(d.tasa_interes),
+        mesInicio: d.mes_inicio,
         notas: g?.notas || '',
       });
-
-      // Al corregir se rehace el cronograma, conservando qué meses ya estaban
-      // marcados como pagados.
-      const pagados = new Set(db.cuotas
-        .filter((c) => c.gasto_id === id && c.pagado === 'Si')
-        .map((c) => c.mes));
-      db.cuotas = db.cuotas.filter((c) => c.gasto_id !== id);
-
-      const i = db.gastosTarjeta.findIndex((x) => x.id === id);
-      if (i >= 0) db.gastosTarjeta[i] = fila;
-      else db.gastosTarjeta.push(fila);
-
-      plan.cuotas.forEach((c) => db.cuotas.push(tocar({
-        gasto_id: id,
-        n_cuota: c.n_cuota,
-        mes: c.mes,
-        monto: c.monto,
-        tarjeta: d.tarjeta,
-        usuario: d.usuario,
-        categoria,
-        pagado: pagados.has(c.mes) ? 'Si' : '',
-      })));
-      guardar();
       brindis(g
         ? `Gasto corregido · ${money(plan.totalPagado)}`
         : `Gasto registrado · ${money(plan.totalPagado)} en ${n} ${n === 1 ? 'pago' : 'cuotas'}`);
@@ -8024,7 +8056,7 @@ function liquidarInversion(id, alTerminar) {
   alTerminar?.();
 }
 
-return { formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMovimiento, formPagoTarjeta, liquidarInversion };
+return { formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMovimiento, formPagoTarjeta, liquidarInversion, registrarGastoTarjeta };
 })();
 
 M["views/resumen"] = (function () {
@@ -10358,11 +10390,12 @@ M["views/plan"] = (function () {
  * comprometido más lo previsto, y la suma de los dos es el presupuesto.
  */
 
-const {db, guardar, categoriasGasto, cuentasBancarias, upsert, nuevoId, capitalizar} = M["store"];
+const {db, guardar, categoriasGasto, cuentasBancarias, tarjetas, upsert, nuevoId, capitalizar} = M["store"];
 const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha} = M["calc"];
 const {columnasApiladas, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento} = M["ui"];
 const {MEDIOS, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago} = M["plan"];
+const {registrarGastoTarjeta} = M["forms"];
 /*
  * `quien` arranca en J: el presupuesto es una herramienta de decisión personal
  * y mezclar dos bolsillos daba una cifra que no es de nadie. Se puede cambiar
@@ -10859,6 +10892,17 @@ function formFijo(r, alTerminar) {
   opciones([{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' },
     { valor: '', texto: 'De los dos' }], r?.usuario ?? estado.quien)}</select></div>
     </div>
+    <div class="filtros" id="pf-caja-tarjeta" hidden>
+      <div class="campo"><label for="pf-tarjeta">Con qué tarjeta</label>
+        <select id="pf-tarjeta" name="tarjeta">${
+  opciones(tarjetas().map((t) => ({ valor: t.id, texto: t.nombre })), r?.tarjeta)}</select></div>
+      <div class="campo"><label for="pf-cargo">Cómo se carga</label>
+        <select id="pf-cargo" name="cargo">${
+  opciones([{ valor: 'Corriente', texto: 'Corriente (1 pago)' },
+    { valor: 'Diferido', texto: 'Diferido en cuotas' }], r?.cargo || 'Corriente')}</select></div>
+    </div>
+    <p class="pista" id="pf-pista-tarjeta" hidden></p>
+
     <div class="filtros">
       <div class="campo" data-solo="periodico"><label>Tipo de importe</label>
         <div id="pf-tipo"></div></div>
@@ -10905,7 +10949,30 @@ function formFijo(r, alTerminar) {
        */
       const selMedio = $('#pf-medio', form);
       let medioTocado = false;
-      selMedio?.addEventListener('change', () => { medioTocado = true; });
+
+      /*
+       * La tarjeta y la forma del cargo solo tienen sentido si se paga con
+       * tarjeta. Preguntarlas siempre llenaba el cuadro de campos que no
+       * aplican, y esconderlas sin desactivarlas dejaba enviando valores de un
+       * medio que ya no era el elegido.
+       */
+      const cajaTarjeta = $('#pf-caja-tarjeta', form);
+      const pistaTarjeta = $('#pf-pista-tarjeta', form);
+      const mostrarTarjeta = () => {
+        const conTarjeta = selMedio.value === 'Tarjeta';
+        cajaTarjeta.hidden = !conTarjeta;
+        pistaTarjeta.hidden = !conTarjeta;
+        cajaTarjeta.querySelectorAll('select').forEach((x) => { x.disabled = !conTarjeta; });
+        if (!conTarjeta) return;
+        const diferido = $('#pf-cargo', form).value === 'Diferido';
+        pistaTarjeta.textContent = diferido
+          ? 'Al ejecutarlo se registrará como compra diferida y la app repartirá '
+            + 'sus cuotas por los meses que toque, igual que si lo apuntaras desde Tarjetas.'
+          : 'Al ejecutarlo se registrará como una compra corriente de esa tarjeta, '
+            + 'y caerá en el mes que le corresponda según su fecha de corte.';
+      };
+      selMedio?.addEventListener('change', () => { medioTocado = true; mostrarTarjeta(); });
+      $('#pf-cargo', form)?.addEventListener('change', mostrarTarjeta);
 
       const cajaClase = $('#pf-clase', form);
       if (cajaClase) {
@@ -10978,6 +11045,7 @@ function formFijo(r, alTerminar) {
       };
       ['input', 'change'].forEach((e) => form.addEventListener(e, refrescar));
       mostrarClase();
+      mostrarTarjeta();
       refrescar();
     },
     alEnviar(d) {
@@ -10994,6 +11062,8 @@ function formFijo(r, alTerminar) {
           desdeMes: d.desdeMes || mesHoy,
           categoria: d.categoria,
           medio: d.medio,
+          tarjeta: d.tarjeta || '',
+          cargo: d.cargo || 'Corriente',
           usuario: d.usuario,
           tipo: 'Fijo',
           cadencia: 30,
@@ -11005,6 +11075,8 @@ function formFijo(r, alTerminar) {
           cadencia: Number(d.cadencia) || 30,
           categoria: d.categoria,
           medio: d.medio,
+          tarjeta: d.tarjeta || '',
+          cargo: d.cargo || 'Corriente',
           usuario: d.usuario,
           tipo,
         };
@@ -11107,6 +11179,8 @@ function formPagar(r, alTerminar) {
   // Si toca la última cuota, la que lleva los centavos del reparto.
   const cuotaAhora = r.clase === 'plazos' && (r.pagadas || 0) + 1 >= r.cuotas
     ? (r.ultimaCuota ?? r.monto) : r.monto;
+  const misTarjetas = tarjetas();
+  const hoy = new Date().toISOString().slice(0, 10);
 
   modal({
     titulo: `Pagar ${r.detalle}`,
@@ -11115,37 +11189,121 @@ function formPagar(r, alTerminar) {
         ${campoMonto('pg-monto', 'monto', {
     etiqueta: 'Importe', valor: String(cuotaAhora).replace('.', ','), requerido: true,
   })}
-        <div class="campo"><label for="pg-cuenta">Sale de</label>
-          <select id="pg-cuenta" name="cuenta" required>${
+        <div class="campo"><label for="pg-medio">Cómo se paga</label>
+          <select id="pg-medio" name="medio">${opciones([
+    { valor: 'Efectivo', texto: 'Efectivo o banco' },
+    { valor: 'Tarjeta', texto: 'Tarjeta de crédito' },
+  ], r.medio === 'Tarjeta' ? 'Tarjeta' : 'Efectivo')}</select></div>
+      </div>
+
+      <div class="filtros" id="pg-caja-cuenta">
+        <div class="campo ancho"><label for="pg-cuenta">Sale de</label>
+          <select id="pg-cuenta" name="cuenta">${
   opciones(cuentas.map((c) => ({ valor: c.id, texto: c.nombre })), 'PACIFICO-1')}</select></div>
       </div>
+
+      <div class="filtros" id="pg-caja-tarjeta" hidden>
+        <div class="campo"><label for="pg-tarjeta">Con qué tarjeta</label>
+          <select id="pg-tarjeta" name="tarjeta">${
+  opciones(misTarjetas.map((t) => ({ valor: t.id, texto: t.nombre })), r.tarjeta)}</select></div>
+        <div class="campo"><label for="pg-cargo">Cómo se carga</label>
+          <select id="pg-cargo" name="cargo">${opciones([
+    { valor: 'Corriente', texto: 'Corriente (1 pago)' },
+    { valor: 'Diferido', texto: 'Diferido en cuotas' },
+  ], r.cargo || 'Corriente')}</select></div>
+      </div>
+      <div class="filtros" id="pg-caja-cuotas" hidden>
+        <div class="campo"><label for="pg-cuotas">Nº de cuotas</label>
+          <input id="pg-cuotas" name="cuotas" type="number" inputmode="numeric"
+                 min="2" max="48" step="1" value="${esc(String(r.cuotas > 1 ? r.cuotas : 6))}"></div>
+        <div class="campo"><label for="pg-mes">Mes de la primera cuota</label>
+          <input id="pg-mes" name="mes_inicio" type="month" value="${esc(mes)}"></div>
+      </div>
+
       <div class="filtros">
         <div class="campo"><label for="pg-fecha">Fecha</label>
-          <input id="pg-fecha" name="fecha" type="date"
-                 value="${new Date().toISOString().slice(0, 10)}" required></div>
+          <input id="pg-fecha" name="fecha" type="date" value="${hoy}" required></div>
         <div class="campo"><label for="pg-usuario">Usuario</label>
           <select id="pg-usuario" name="usuario">${
   opciones(['J', 'C'], r.usuario || 'J')}</select></div>
       </div>
-      <p class="pista">Se apunta como gasto de ${esc(nombreMes(mes))} y el importe
-        sale del saldo de la cuenta elegida.${r.clase === 'plazos'
-    ? ` Sería la cuota ${(r.pagadas || 0) + 1} de ${r.cuotas}.` : ''}</p>`,
+      ${r.clase === 'plazos' ? `<p class="pista">Sería la cuota ${
+  (r.pagadas || 0) + 1} de ${r.cuotas}.</p>` : ''}
+      <p class="pista" id="pg-pista"></p>`,
     aceptar: 'Registrar el pago',
+    alAbrir(form) {
+      /*
+       * Lo que se pregunta depende de por dónde va a salir el dinero, y los
+       * campos que no aplican se DESACTIVAN además de esconderse: escondidos a
+       * secas seguirían enviando el valor de un medio que ya no es el elegido.
+       */
+      const selMedio = $('#pg-medio', form);
+      const selCargo = $('#pg-cargo', form);
+      const pista = $('#pg-pista', form);
+      const cajas = {
+        cuenta: $('#pg-caja-cuenta', form),
+        tarjeta: $('#pg-caja-tarjeta', form),
+        cuotas: $('#pg-caja-cuotas', form),
+      };
+      const mostrar = (caja, si) => {
+        caja.hidden = !si;
+        caja.querySelectorAll('input, select').forEach((x) => { x.disabled = !si; });
+      };
+      const refrescar = () => {
+        const conTarjeta = selMedio.value === 'Tarjeta';
+        const diferido = conTarjeta && selCargo.value === 'Diferido';
+        mostrar(cajas.cuenta, !conTarjeta);
+        mostrar(cajas.tarjeta, conTarjeta);
+        mostrar(cajas.cuotas, diferido);
+        pista.textContent = !conTarjeta
+          ? `Se apunta como gasto de ${nombreMes(mes)} y el importe sale del saldo `
+            + 'de la cuenta elegida.'
+          : diferido
+            ? 'Se registra como compra diferida de esa tarjeta: la app reparte las '
+              + 'cuotas por sus meses y aparecen en Tarjetas y en el mes que toque.'
+            : 'Se registra como compra corriente de esa tarjeta, y cae en el mes '
+              + 'que le corresponda según su fecha de corte.';
+      };
+      [selMedio, selCargo].forEach((x) => x.addEventListener('change', refrescar));
+      refrescar();
+    },
     alEnviar(d) {
-      upsert('gastosEfectivo', {
-        id: nuevoId('gastosEfectivo'),
-        fecha: d.fecha,
-        usuario: d.usuario,
-        cuenta: d.cuenta,
-        detalle: r.detalle,
-        proposito: r.clase === 'plazos' ? `Cuota ${(r.pagadas || 0) + 1} de ${r.cuotas}` : '',
-        categoria: r.categoria,
-        monto: redondear(aNumero(d.monto)),
-        notas: 'Pago registrado desde Presupuesto',
-      });
+      const monto = redondear(aNumero(d.monto));
+      if (d.medio === 'Tarjeta') {
+        // El mismo camino que «+ Gasto con tarjeta»: mismo cronograma, mismo
+        // redondeo, y el gasto acaba donde acabaría si se hubiera apuntado allí.
+        registrarGastoTarjeta({
+          fecha: d.fecha,
+          tarjeta: d.tarjeta,
+          usuario: d.usuario,
+          detalle: r.detalle,
+          proposito: r.clase === 'plazos'
+            ? `Cuota ${(r.pagadas || 0) + 1} de ${r.cuotas}` : 'Previsto en el presupuesto',
+          categoria: r.categoria,
+          tipo: d.cargo,
+          cuotas: d.cuotas,
+          montoTotal: monto,
+          mesInicio: d.mes_inicio || mes,
+          notas: 'Pago registrado desde Presupuesto',
+        });
+      } else {
+        upsert('gastosEfectivo', {
+          id: nuevoId('gastosEfectivo'),
+          fecha: d.fecha,
+          usuario: d.usuario,
+          cuenta: d.cuenta,
+          detalle: r.detalle,
+          proposito: r.clase === 'plazos' ? `Cuota ${(r.pagadas || 0) + 1} de ${r.cuotas}` : '',
+          categoria: r.categoria,
+          monto,
+          notas: 'Pago registrado desde Presupuesto',
+        });
+      }
       marcarPago(r.clave, mes, true);
       guardar();
-      brindis('Pago registrado');
+      brindis(d.medio === 'Tarjeta'
+        ? `Registrado en ${misTarjetas.find((t) => t.id === d.tarjeta)?.nombre || 'la tarjeta'}`
+        : 'Pago registrado');
       alTerminar?.();
     },
   });
