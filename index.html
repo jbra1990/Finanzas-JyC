@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-KmmHar4A0vSb1wmtvqIUxpOGfhHy3+CZtqAm80lgB58='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Myjf6ii1+NG3KPI4WKn/O0Wgi8mvFjsYeeoBS/XkTkU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -1046,6 +1046,73 @@ tr.detalle > td {
   font-weight: 640; white-space: nowrap;
   font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
 }
+/* Una línea de gasto que guarda escrito para qué era: se toca y lo enseña.
+   Cerrada tiene que leerse exactamente igual que las que no la tienen, así que
+   el `details` no puede alterar la fila; solo se le añade la marca. */
+.desglose li.con-nota { display: block; padding: 0; }
+.desglose li.con-nota > details > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  cursor: pointer;
+  list-style: none;
+}
+.desglose li.con-nota > details > summary::-webkit-details-marker { display: none; }
+.desglose li.con-nota .tiene-nota {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid var(--serie-2);
+  color: var(--serie-2);
+  font-size: 9.5px;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+}
+.desglose li.con-nota .mov-nota {
+  margin: 0 0 10px;
+  padding: 8px 11px;
+  border-left: 2px solid var(--serie-2);
+  border-radius: 0 var(--radio-s) var(--radio-s) 0;
+  background: rgba(0, 0, 0, 0.16);
+  font-size: 12.5px;
+  color: var(--tinta-2);
+}
+
+/* El detalle en filas que ya llevan botones: su propia línea, a todo el ancho
+   de la fila, para no competir con «Corregir» ni con el importe. */
+.nota-extra {
+  flex: 1 0 100%;
+  margin-top: 4px;
+  font-size: 12px;
+}
+.nota-extra > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  cursor: pointer;
+  list-style: none;
+  color: var(--tinta-2);
+  font-weight: 560;
+}
+.nota-extra > summary::-webkit-details-marker { display: none; }
+.nota-extra > p {
+  margin: 4px 0 2px;
+  padding: 7px 10px;
+  border-left: 2px solid var(--serie-2);
+  border-radius: 0 var(--radio-s) var(--radio-s) 0;
+  background: rgba(0, 0, 0, 0.16);
+  font-size: 12.5px;
+  color: var(--tinta-2);
+}
+/* En una fila que no envuelve, el desplegable necesita romper línea él solo. */
+.lista li { flex-wrap: wrap; }
+
 .pie-desglose {
   padding: 8px 12px 2px;
   font-size: 12px;
@@ -1965,6 +2032,22 @@ function notificar() {
   suscriptores.forEach((fn) => fn(db));
 }
 
+/**
+ * "CORAL HIPERMERCADOS MANTA" → "Coral hipermercados manta".
+ *
+ * Los extractos del banco llegan en mayúsculas de máquina, y una lista entera
+ * gritando se lee peor y ocupa más. Se deja la inicial en mayúscula y el resto
+ * en minúscula, que es como se escribe en castellano.
+ *
+ * NO se aplica a los nombres de cuentas y tarjetas: «TC Pichincha» no es una
+ * frase, es un nombre propio, y pasarlo a «Tc pichincha» lo estropea.
+ */
+function capitalizar(texto) {
+  const t = String(texto ?? '').trim().replace(/\s+/g, ' ');
+  if (!t) return '';
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+}
+
 /** Marca un registro como modificado ahora (para la fusión entre dispositivos). */
 function tocar(registro) {
   registro._ts = Date.now();
@@ -2071,6 +2154,7 @@ function adoptar(datos) {
  */
 function migrarEsquema() {
   limpiarCategorias();
+  normalizarTextos();
   retirarPichinchaAdicional();
   fechasDeTarjeta();
   if (Number(db.config.version_esquema) >= 2) return;
@@ -2135,6 +2219,36 @@ function fechasDeTarjeta() {
  * Solo se descarta si nadie la usa: una categoría con gastos detrás se
  * respeta, por rara que parezca.
  */
+/*
+ * Pone en forma de frase todo lo escrito a mano o importado del banco.
+ *
+ * Corre en cada arranque, así que también alcanza a lo que entra por el Excel
+ * o por la sincronización, sin necesidad de acordarse de llamarla en cada
+ * sitio. Como las demás migraciones, trabaja EN MEMORIA y sin tocar la marca
+ * de tiempo: escribir aquí dispararía el sync durante la carga y haría parecer
+ * editado a mano lo que solo cambió de mayúsculas. El primer cambio de verdad
+ * lo persiste.
+ */
+function normalizarTextos() {
+  const arreglar = (fila, campos) => {
+    for (const c of campos) {
+      if (typeof fila[c] === 'string' && fila[c]) fila[c] = capitalizar(fila[c]);
+    }
+  };
+  db.gastosTarjeta.forEach((g) => arreglar(g, ['detalle', 'proposito', 'notas']));
+  db.gastosEfectivo.forEach((g) => arreglar(g, ['detalle', 'proposito', 'notas']));
+  db.ingresos.forEach((i) => arreglar(i, ['concepto', 'notas']));
+  db.movimientos.forEach((m) => arreglar(m, ['concepto', 'notas']));
+  db.inversiones.forEach((p) => arreglar(p, ['institucion', 'notas']));
+  db.categorias.forEach((c) => arreglar(c, ['nombre']));
+  // Las cuotas guardan la categoría copiada de su compra: si no se arregla
+  // también aquí, la tabla mensual sigue enseñando la versión en mayúsculas.
+  db.cuotas.forEach((c) => arreglar(c, ['categoria']));
+  db.gastosTarjeta.forEach((g) => arreglar(g, ['categoria']));
+  db.gastosEfectivo.forEach((g) => arreglar(g, ['categoria']));
+  db.ingresos.forEach((i) => arreglar(i, ['categoria']));
+}
+
 function limpiarCategorias() {
   const basura = (n) => !n || n.startsWith('→') || n.length > 44;
   const enUso = new Set([
@@ -2377,7 +2491,7 @@ function usuarios() {
     .filter(Boolean);
 }
 
-return { CLAVES, COLECCIONES, CONFIG_LOCAL, alCambiar, almacenamiento, cargar, categoriasGasto, categoriasIngreso, codigoDispositivo, comprobarAlmacenamiento, cuenta, cuentasBancarias, db, eliminar, guardar, instantanea, instantaneaSinSecretos, limpiarTodo, nuevoId, reemplazar, tarjetas, tocar, upsert, usuarios };
+return { CLAVES, COLECCIONES, CONFIG_LOCAL, alCambiar, almacenamiento, capitalizar, cargar, categoriasGasto, categoriasIngreso, codigoDispositivo, comprobarAlmacenamiento, cuenta, cuentasBancarias, db, eliminar, guardar, instantanea, instantaneaSinSecretos, limpiarTodo, nuevoId, reemplazar, tarjetas, tocar, upsert, usuarios };
 })();
 
 M["calc"] = (function () {
@@ -4018,6 +4132,49 @@ function segmentado(items, valorActual, alCambiar) {
   return nodo;
 }
 
+/**
+ * Una fila de movimiento dentro de un desglose.
+ *
+ * Si el gasto lleva escrito PARA QUÉ era —«Mantenimiento Nissan» en un cargo
+ * de Dacar—, la fila se abre al tocarla y lo enseña. El nombre del comercio
+ * dice dónde se pagó, no en qué se fue el dinero, y eso segundo es lo que uno
+ * busca meses después; pero enseñarlo siempre duplicaría la altura de listas
+ * de cuatrocientas líneas.
+ *
+ * `titulo` y `nota` se escapan aquí; `meta` y `monto` llegan ya montados por
+ * quien llama, que es el que sabe qué partes suyas hay que escapar.
+ */
+function filaMovimiento({
+  titulo, meta = '', monto = '', nota = '', extra = '',
+}) {
+  const cuerpo = `
+    <div class="principal">
+      <div class="titulo">${esc(titulo)}${extra}${
+  nota ? '<span class="tiene-nota" aria-hidden="true">i</span>' : ''}</div>
+      <div class="meta">${meta}</div>
+    </div>
+    <div class="monto">${monto}</div>`;
+
+  if (!nota) return `<li>${cuerpo}</li>`;
+  return `<li class="con-nota"><details><summary>${cuerpo}</summary>
+    <p class="mov-nota">${esc(nota)}</p></details></li>`;
+}
+
+/**
+ * El mismo detalle, para filas que ya llevan botones.
+ *
+ * En Cuentas y en Tarjetas la fila no se puede convertir en un desplegable
+ * entero: tocarla en cualquier sitio abriría el detalle, y encima hay botones
+ * de corregir y de borrar. Así que el detalle va como su propio desplegable,
+ * en una línea aparte dentro de la misma fila.
+ */
+function notaFila(nota) {
+  if (!nota) return '';
+  return `<details class="nota-extra">
+    <summary><span class="tiene-nota" aria-hidden="true">i</span>Detalle</summary>
+    <p>${esc(nota)}</p></details>`;
+}
+
 /** Descarga un Blob con el nombre indicado. */
 function descargar(blob, nombre) {
   const url = URL.createObjectURL(blob);
@@ -4054,7 +4211,7 @@ const ICONOS = {
   datos: '<path d="M12 7c4.4 0 8-1.1 8-2.5S16.4 2 12 2 4 3.1 4 4.5 7.6 7 12 7Zm8-2.5v15c0 1.4-3.6 2.5-8 2.5s-8-1.1-8-2.5v-15" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M20 12c0 1.4-3.6 2.5-8 2.5S4 13.4 4 12" fill="none" stroke="currentColor" stroke-width="1.8"/>',
 };
 
-return { $, $$, ICONOS, aNumero, brindis, campoMonto, confirmar, crear, descargar, esc, hoyISO, modal, opciones, pedirArchivo, segmentado };
+return { $, $$, ICONOS, aNumero, brindis, campoMonto, confirmar, crear, descargar, esc, filaMovimiento, hoyISO, modal, notaFila, opciones, pedirArchivo, segmentado };
 })();
 
 M["xlsx"] = (function () {
@@ -6418,11 +6575,11 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
   }
 
   // Lo ya apuntado: las cuotas son de tarjeta y los gastos sueltos, de efectivo.
-  const apuntar = (m, medio, monto, detalle, fecha, nota) => {
+  const apuntar = (m, medio, monto, detalle, fecha, nota, proposito = '') => {
     m.comprometido += monto;
     m.medios[medio] += monto;
     m.reales[medio] += monto;
-    m.realLineas.push({ detalle, monto, medio, fecha, nota });
+    m.realLineas.push({ detalle, monto, medio, fecha, nota, proposito });
   };
 
   for (const c of db.cuotas) {
@@ -6434,7 +6591,8 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
       compra?.detalle || c.categoria || 'Cuota de tarjeta',
       // La fecha que interesa es la de la compra: el mes de la cuota ya lo
       // dice la fila que se ha desplegado.
-      compra?.fecha, enCuotas ? `cuota ${c.n_cuota} de ${compra.cuotas}` : '');
+      compra?.fecha, enCuotas ? `cuota ${c.n_cuota} de ${compra.cuotas}` : '',
+      compra?.proposito || '');
   }
   for (const g of db.gastosEfectivo) {
     const m = porMes.get(claveMes(g.fecha));
@@ -6442,7 +6600,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
     const medio = medioManual.get(claveGasto(g.detalle)) || medioDe(g.cuenta);
     apuntar(m, MEDIOS.includes(medio) ? medio : 'Efectivo',
       Number(g.monto) || 0, g.detalle || g.categoria || 'Gasto', g.fecha,
-      g.proposito || '');
+      '', g.proposito || '');
   }
 
   const usadas = [];
@@ -7137,7 +7295,7 @@ M["forms"] = (function () {
  * coma y punto al enviar.
  */
 
-const {db, guardar, nuevoId, upsert, tocar, cuentasBancarias, tarjetas, categoriasGasto, categoriasIngreso, usuarios} = M["store"];
+const {db, guardar, nuevoId, upsert, tocar, cuentasBancarias, tarjetas, categoriasGasto, categoriasIngreso, usuarios, capitalizar} = M["store"];
 const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta} = M["calc"];
 const {modal, opciones, brindis, hoyISO, esc, $, aNumero, campoMonto} = M["ui"];
 const selUsuarios = (sel) => opciones(usuarios(), sel);
@@ -7352,8 +7510,8 @@ function formGastoTarjeta(alTerminar, existente = null) {
         fecha: d.fecha,
         tarjeta: d.tarjeta,
         usuario: d.usuario,
-        detalle: d.detalle.trim(),
-        proposito: (d.proposito || '').trim(),
+        detalle: capitalizar(d.detalle),
+        proposito: capitalizar(d.proposito),
         categoria,
         tipo: d.tipo,
         cuotas: n,
@@ -7437,8 +7595,8 @@ function formGastoEfectivo(alTerminar, existente = null) {
         id: g?.id || nuevoId('gastosEfectivo'),
         fecha: d.fecha,
         usuario: d.usuario,
-        detalle: d.detalle.trim(),
-        proposito: (d.proposito || '').trim(),
+        detalle: capitalizar(d.detalle),
+        proposito: capitalizar(d.proposito),
         categoria: categoriaElegida(d),
         monto: redondear(aNumero(d.monto)),
         cuenta: d.cuenta,
@@ -7502,7 +7660,7 @@ function formIngreso(alTerminar, existente = null) {
         fecha: d.fecha,
         mes: claveMes(d.fecha),
         usuario: d.usuario,
-        concepto: d.concepto.trim(),
+        concepto: capitalizar(d.concepto),
         categoria: categoriaElegida(d, 'Ingreso'),
         bruto: redondear(aNumero(d.bruto)),
         descuentos: redondear(aNumero(d.descuentos)),
@@ -7629,7 +7787,7 @@ function formInversion(alTerminar, existente = null) {
         id: g?.id || nuevoId('inversiones'),
         fecha_inicio: d.fecha_inicio,
         usuario: d.usuario,
-        institucion: d.institucion.trim(),
+        institucion: capitalizar(d.institucion),
         tipo: d.tipo,
         capital,
         tasa_anual: aNumero(d.tasa_anual),
@@ -8168,7 +8326,7 @@ M["views/mensual"] = (function () {
 const {tarjetas, categoriasGasto, guardar} = M["store"];
 const {mesActual, nombreMes, money, rangoMeses, mesesConDatos, matrizCategoriaMes, totalPorCategoria, totalPorUsuario, serieMensual, presupuestoVsReal, detalleDeCategoria} = M["calc"];
 const {dona, barrasHorizontales, columnas, alRedimensionar} = M["charts"];
-const {esc, $, $$, opciones, segmentado, modal, brindis} = M["ui"];
+const {esc, $, $$, opciones, segmentado, modal, brindis, filaMovimiento} = M["ui"];
 const {presupuestoSugerido, aplicarPresupuesto} = M["plan"];
 const estado = {
   usuario: 'ambos',
@@ -8464,15 +8622,13 @@ function detalleHTML(meses, categoria, filtros) {
   const filas = detalleDeCategoria(meses, categoria, filtros);
   if (!filas.length) return '<p class="vacio">Sin movimientos.</p>';
 
-  return `<ul class="desglose">${filas.map((x) => `
-    <li>
-      <div class="principal">
-        <div class="titulo">${esc(x.detalle)}
-          <span class="chip ${esc(String(x.usuario).toLowerCase())}">${esc(x.usuario)}</span></div>
-        <div class="meta">${esc(x.fecha)} · ${esc(x.origen)}${x.cuota ? ` · ${esc(x.cuota)}` : ''}</div>
-      </div>
-      <div class="monto">${money(x.monto)}</div>
-    </li>`).join('')}
+  return `<ul class="desglose">${filas.map((x) => filaMovimiento({
+    titulo: x.detalle,
+    extra: `<span class="chip ${esc(String(x.usuario).toLowerCase())}">${esc(x.usuario)}</span>`,
+    meta: `${esc(x.fecha)} · ${esc(x.origen)}${x.cuota ? ` · ${esc(x.cuota)}` : ''}`,
+    monto: money(x.monto),
+    nota: x.proposito,
+  })).join('')}
     </ul>
     <div class="pie-desglose">${filas.length}
       ${filas.length === 1 ? 'movimiento' : 'movimientos'} ·
@@ -8683,7 +8839,7 @@ M["views/tarjetas"] = (function () {
 const {db, tarjetas, eliminar, guardar} = M["store"];
 const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta} = M["calc"];
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
-const {esc, $, $$, segmentado, confirmar, opciones, aNumero} = M["ui"];
+const {esc, $, $$, segmentado, confirmar, opciones, aNumero, notaFila} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta} = M["forms"];
 const estado = { tarjeta: null, usuario: 'ambos', mes: null, comprobando: false };
 
@@ -8994,6 +9150,7 @@ function listaDiferidos(tarjetaId, usuario) {
         </div>
       </div>
       <div class="monto neg">${money(d.restante)}<span class="pie">por pagar</span></div>
+      ${notaFila(d.gasto.proposito)}
     </li>`;
   }).join('')}</ul>
     <div class="aviso"><span class="icono">Σ</span>
@@ -9054,6 +9211,7 @@ function listaMovimientos(tarjetaId, mes, usuario, marcable = false) {
             ${pendiente ? '' : ' · pagada'}</div>
         </div>
         <div class="monto">${money(cuota.monto)}</div>
+        ${notaFila(gasto.proposito)}
         <div class="acciones">
           <button class="btn pequeno" data-corregir="${esc(gasto.id)}">Corregir</button>
           <button class="btn pequeno peligro" data-borrar="${esc(gasto.id)}">Eliminar</button>
@@ -9261,7 +9419,7 @@ M["views/cuentas"] = (function () {
 const {db, cuentasBancarias, eliminar, upsert, cuenta} = M["store"];
 const {money, moneyHTML, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes} = M["calc"];
 const {dona, linea, alRedimensionar} = M["charts"];
-const {esc, $, $$, confirmar, modal, brindis, aNumero} = M["ui"];
+const {esc, $, $$, confirmar, modal, brindis, aNumero, notaFila} = M["ui"];
 const {formMovimiento, formIngreso, formGastoEfectivo} = M["forms"];
 function render(raiz) {
   const cuentas = cuentasBancarias();
@@ -9372,6 +9530,7 @@ function render(raiz) {
   $('#lista-ingresos', raiz).innerHTML = listaSimple(
     db.ingresos.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))),
     (i) => ({
+      nota: i.notas,
       titulo: `${i.concepto} · ${i.usuario}`,
       meta: `${i.fecha} · bruto ${money(i.bruto)} − descuentos ${money(i.descuentos)} → ${cuenta(i.cuenta)?.nombre || i.cuenta}`,
       monto: Number(i.neto) || 0,
@@ -9387,6 +9546,7 @@ function render(raiz) {
     (g) => ({
       titulo: `${g.detalle} · ${g.usuario}`,
       meta: `${g.fecha} · ${g.categoria} · ${cuenta(g.cuenta)?.nombre || g.cuenta}`,
+      nota: g.proposito,
       monto: Number(g.monto) || 0,
       signo: 'neg',
       id: g.id,
@@ -9461,6 +9621,7 @@ function listaSimple(filas, mapear, vacio) {
           <div class="meta">${esc(v.meta)}</div>
         </div>
         <div class="monto ${v.signo}">${money(v.monto)}</div>
+        ${notaFila(v.nota)}
         <button class="btn pequeno" data-corregir="${esc(v.id)}"
                 data-coleccion="${esc(v.coleccion)}">Corregir</button>
         <button class="btn pequeno peligro" data-borrar="${esc(v.id)}"
@@ -10131,10 +10292,10 @@ M["views/plan"] = (function () {
  * comprometido más lo previsto, y la suma de los dos es el presupuesto.
  */
 
-const {db, guardar, categoriasGasto, cuentasBancarias, upsert, nuevoId} = M["store"];
+const {db, guardar, categoriasGasto, cuentasBancarias, upsert, nuevoId, capitalizar} = M["store"];
 const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha} = M["calc"];
 const {columnasApiladas, alRedimensionar} = M["charts"];
-const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones} = M["ui"];
+const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento} = M["ui"];
 const {MEDIOS, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago} = M["plan"];
 /*
  * `quien` arranca en J: el presupuesto es una herramienta de decisión personal
@@ -10508,15 +10669,13 @@ function detalleReal(fila) {
     return `<p class="vacio">Todavía no hay nada registrado en
       ${esc(nombreMes(fila.mes))}.</p>`;
   }
-  return `<ul class="desglose">${fila.realLineas.map((l) => `
-    <li>
-      <div class="principal">
-        <div class="titulo">${esc(l.detalle)}</div>
-        <div class="meta">${esc(l.medio)}${l.nota ? ` · ${esc(l.nota)}` : ''}${
-  l.fecha ? ` · ${esc(textoFecha(l.fecha))}` : ''}</div>
-      </div>
-      <div class="monto">${money(l.monto)}</div>
-    </li>`).join('')}
+  return `<ul class="desglose">${fila.realLineas.map((l) => filaMovimiento({
+    titulo: l.detalle,
+    meta: `${esc(l.medio)}${l.nota ? ` · ${esc(l.nota)}` : ''}${
+  l.fecha ? ` · ${esc(textoFecha(l.fecha))}` : ''}`,
+    monto: money(l.monto),
+    nota: l.proposito,
+  })).join('')}
     </ul>
     <div class="pie-desglose">${fila.realLineas.length}
       ${fila.realLineas.length === 1 ? 'gasto' : 'gastos'} ·
@@ -10758,7 +10917,7 @@ function formFijo(r, alTerminar) {
     alEnviar(d) {
       const fila = clase === 'plazos'
         ? {
-          detalle: d.detalle.trim(),
+          detalle: capitalizar(d.detalle),
           clase: 'plazos',
           // Se guarda el total, que es el dato exacto; la cuota se deriva de él
           // cada vez. Guardar solo la cuota perdería los centavos del reparto.
@@ -10774,7 +10933,7 @@ function formFijo(r, alTerminar) {
           cadencia: 30,
         }
         : {
-          detalle: d.detalle.trim(),
+          detalle: capitalizar(d.detalle),
           clase: 'periodico',
           monto: redondear(aNumero(d.monto)),
           cadencia: Number(d.cadencia) || 30,
@@ -10945,7 +11104,7 @@ M["views/analisis"] = (function () {
  */
 
 const {nombreMes, money, moneyHTML, redondear, rangoMeses, mesActual, mesesConDatos, textoFecha, detalleDeGastos} = M["calc"];
-const {esc, $, $$, segmentado, modal, brindis, opciones, descargar} = M["ui"];
+const {esc, $, $$, segmentado, modal, brindis, opciones, descargar, filaMovimiento} = M["ui"];
 const {informeMensual, compartir} = M["informe"];
 /*
  * El corte se recuerda mientras dure la sesión: se sale a mirar otra cosa y al
@@ -11175,15 +11334,13 @@ function resultado({
           <div class="monto">${money(v)}
             <span class="pie">${((v / total) * 100).toFixed(0)} %</span></div>
         </summary>
-        <ul class="desglose">${suyos.map((m) => `
-          <li>
-            <div class="principal">
-              <div class="titulo">${esc(m.detalle)}</div>
-              <div class="meta">${esc(textoFecha(m.fecha))} · ${esc(m.origen)}${
-  m.cuota ? ` · ${esc(m.cuota)}` : ''}</div>
-            </div>
-            <div class="monto">${money(m.monto)}</div>
-          </li>`).join('')}</ul>
+        <ul class="desglose">${suyos.map((m) => filaMovimiento({
+    titulo: m.detalle,
+    meta: `${esc(textoFecha(m.fecha))} · ${esc(m.origen)}${
+  m.cuota ? ` · ${esc(m.cuota)}` : ''}`,
+    monto: money(m.monto),
+    nota: m.proposito,
+  })).join('')}</ul>
       </details>`;
   }).join('')}
 
