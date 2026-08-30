@@ -737,7 +737,11 @@ a { color: var(--acento); }
  */
 .tarjeta > header {
   display: flex;
-  flex-wrap: nowrap;
+  /* Si no cabe, se parte en dos líneas. Con `nowrap` el segundo bloque salía
+     empujado FUERA de la tarjeta: en «Año» el selector acababa a 391 px de una
+     pantalla de 390. El rótulo y su pista encogen antes de partirse, así que
+     esto solo actúa donde de verdad no cabe. */
+  flex-wrap: wrap;
   align-items: stretch;
   justify-content: space-between;
   gap: 0;
@@ -775,10 +779,12 @@ a { color: var(--acento); }
   text-align: right;
 }
 
-/* Lo que no es rótulo ni dato —botones— se queda como estaba. */
+/* Lo que no es rótulo ni dato —una cifra grande, un botón, un selector—. */
 .tarjeta > header > *:not(h2):not(.pista) {
   align-self: center;
-  flex: none;
+  /* `flex: none` impedía encoger, y con dos de estos el segundo se salía. */
+  flex: 0 1 auto;
+  min-width: 0;
   margin-right: 16px;
 }
 
@@ -793,7 +799,10 @@ a { color: var(--acento); }
   background: var(--superficie-2);
   border: 1px solid transparent;
   border-radius: var(--radio);
-  padding: 15px 16px;
+  /* Relleno lateral corto: cada píxel que se le quita es un píxel que gana la
+     cifra, que es lo que se estaba saliendo de la caja. */
+  padding: 15px 12px;
+  min-width: 0;
 }
 .tarjeta .kpi { background: var(--superficie-2); }
 
@@ -806,7 +815,11 @@ a { color: var(--acento); }
   line-height: 1.3;
 }
 .kpi .valor {
-  font-size: 23px;
+  /* 23 px no cabían: «$-12.273,54» pedía 147 px en una celda de 122 y se salía
+     por la derecha. A 18, y con la celda ensanchada a 130, entra cualquier
+     importe hasta un negativo de seis cifras —«$-123.456,78»—, que es más de
+     lo que esta app va a ver. */
+  font-size: 18px;
   font-weight: 660;
   letter-spacing: -0.03em;
   margin-top: 6px;
@@ -1078,7 +1091,13 @@ tr.detalle > td {
 }
 .desglose li:last-child { border-bottom: 0; }
 .desglose .principal { flex: 1; min-width: 0; }
-.desglose .titulo { font-weight: 570; display: flex; align-items: center; gap: 7px; }
+.desglose .titulo {
+  font-weight: 570;
+  display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.desglose .titulo > .chip,
+.desglose .titulo > .tiene-nota { vertical-align: middle; margin-left: 7px; }
 .desglose .meta { font-size: 11.5px; color: var(--tinta-3); margin-top: 1px; }
 .desglose .monto {
   font-weight: 640; white-space: nowrap;
@@ -1171,12 +1190,21 @@ tr.detalle > td {
 }
 .lista li:last-child { border-bottom: 0; }
 .lista .principal { flex: 1; min-width: 0; }
+/*
+ * `text-overflow: ellipsis` NO se aplica a un contenedor flex, así que aunque
+ * estaba escrito no hacía nada: «Banco del Pacífico 1» se cortaba a hachazo en
+ * «Banco del Pacíf» sin puntos suspensivos, y no había manera de saber que
+ * faltaba texto. En bloque sí funciona; el chip que va al lado se alinea con
+ * `vertical-align` en vez de con `align-items`.
+ */
 .lista .titulo {
   font-weight: 570;
   letter-spacing: -0.01em;
-  display: flex; align-items: center; gap: 7px;
+  display: block;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.lista .titulo > .chip,
+.lista .titulo > .tiene-nota { vertical-align: middle; margin-left: 7px; }
 .lista .meta {
   font-size: 11.5px; color: var(--tinta-3); margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
