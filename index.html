@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
-<meta name="theme-color" content="#091a33" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0d2247" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#eaf3fd" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -193,18 +193,40 @@
   :root:not([data-tema="claro"]) {
     color-scheme: dark;
     --fondo-1: #0d2141;
-    --fondo-2: #091a33;
-    --fondo-3: #061224;
-    --fondo-4: #040d1c;
-    --plano: #061224;
+    --fondo-2: #071228;
+    --fondo-3: #040f22;
+    --fondo-4: #020914;
+    --plano: #040f22;
     /* Sin franja clara arriba: en oscuro la cabecera ya se apoya en el navy. */
+    /*
+     * FONDO OSCURO, agosto 2026. Se bajó el tono para que las tarjetas
+     * despeguen del fondo, y a la vez se subió su velo: oscurecer el fondo a
+     * secas hace lo CONTRARIO de lo que parece —a luminancias tan bajas la
+     * fórmula de contraste se aplana y la separación pasaba de 1,25 a 1,18—.
+     * Bajando el fondo Y subiendo el velo, la separación sube a 1,28–1,38 en
+     * toda la pantalla. La rampa mantiene el azul alto respecto al rojo para
+     * que se siga leyendo como azul y no como gris.
+     *
+     * TONO ANTERIOR, por si hay que volver: hay que deshacerlo en LOS DOS
+     * bloques oscuros —este y el de :root[data-tema="oscuro"]— con estos
+     * valores, que son los que había:
+     *   --degradado: linear-gradient(180deg,
+     *     #14294e 0, #102142 180px, #0a1832 400px, #061224 640px, #040d1c 804px);
+     *   --fondo-2: #091a33; --fondo-3: #061224; --fondo-4: #040d1c;
+     *   --plano: #061224;
+     *   --superficie: rgba(255, 255, 255, 0.075);
+     *   --superficie-solida: #171f2d;
+     * Y el theme-color oscuro vuelve a #091a33 en index.html y en
+     * tools/build.py (dos sitios en el build).
+     */
     --degradado: linear-gradient(180deg,
-      #14294e 0, #102142 180px, #0a1832 400px, #061224 640px, #040d1c 804px);
+      #0d2247 0, #0a1c3c 180px, #07152e 400px, #040f22 640px, #020914 804px);
     --tinta-cabecera: #eaf3ff;
     --tinta-cabecera-2: #9fbcda;
 
-    --superficie: rgba(255, 255, 255, 0.075);
-    --superficie-solida: #171f2d;
+    /* 0.075 antes; se sube con el fondo para ganar separación (ver arriba). */
+    --superficie: rgba(255, 255, 255, 0.11);
+    --superficie-solida: #1e242e;
     --superficie-2: rgba(255, 255, 255, 0.095);
     --superficie-3: rgba(255, 255, 255, 0.15);
 
@@ -250,16 +272,17 @@
 :root[data-tema="oscuro"] {
   color-scheme: dark;
   --fondo-1: #0d2141;
-  --fondo-2: #091a33;
-  --fondo-3: #061224;
-  --fondo-4: #040d1c;
-  --plano: #061224;
+  --fondo-2: #071228;
+  --fondo-3: #040f22;
+  --fondo-4: #020914;
+  --plano: #040f22;
+  /* Mismo fondo que en el bloque de arriba; el anterior queda anotado allí. */
   --degradado: linear-gradient(180deg,
-    #14294e 0, #102142 180px, #0a1832 400px, #061224 640px, #040d1c 804px);
+    #0d2247 0, #0a1c3c 180px, #07152e 400px, #040f22 640px, #020914 804px);
   --tinta-cabecera: #eaf3ff;
   --tinta-cabecera-2: #9fbcda;
-  --superficie: rgba(255, 255, 255, 0.075);
-  --superficie-solida: #171f2d;
+  --superficie: rgba(255, 255, 255, 0.11);
+  --superficie-solida: #1e242e;
   --superficie-2: rgba(255, 255, 255, 0.095);
   --superficie-3: rgba(255, 255, 255, 0.15);
   --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
