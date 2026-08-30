@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Myjf6ii1+NG3KPI4WKn/O0Wgi8mvFjsYeeoBS/XkTkU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LEyZ6J4op3oTY073eHCmkfEBQ84/9Mr99p+83alcTfo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -816,7 +816,9 @@ a { color: var(--acento); }
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  align-items: flex-end;
+  /* Alineados por ARRIBA: con `flex-end` los rótulos de dos campos contiguos
+     se separaban en cuanto sus controles medían distinto. */
+  align-items: start;
   margin: 10px 0;
 }
 .campo { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1 1 150px; }
@@ -839,6 +841,26 @@ input, select, textarea {
   border-radius: var(--radio-s);
   min-height: 44px;
   transition: border-color 0.15s, background 0.15s;
+}
+/*
+ * Todos los controles de una línea, exactamente igual de altos.
+ *
+ * `min-height` no bastaba: el contenido interno de cada tipo tiene su propia
+ * altura —la fecha medía 48 px, el texto 46 y el selector 44—, y en una fila
+ * de dos campos eso dejaba los rótulos escalonados, como si uno estuviera
+ * encima del otro. Con una altura fija los tres miden lo mismo y los rótulos
+ * quedan a la misma raya.
+ */
+input:not([type='checkbox']):not([type='radio']):not([type='file']),
+select {
+  height: 44px;
+}
+/* WebKit centra mal el contenido de fecha y mes dentro de una altura fija. */
+input[type='date'], input[type='month'], input[type='time'] {
+  display: block;
+  -webkit-appearance: none;
+  appearance: none;
+  line-height: 20px;
 }
 input:hover, select:hover, textarea:hover { background: var(--superficie-3); }
 input:focus, select:focus, textarea:focus {
@@ -7385,7 +7407,7 @@ function formGastoTarjeta(alTerminar, existente = null) {
   })}
     </div>
     <div class="campo ancho"><label for="f-detalle">Comercio o proveedor</label>
-      <input id="f-detalle" name="detalle" required placeholder="MI COMISARIATO"
+      <input id="f-detalle" name="detalle" required placeholder="Mi comisariato"
              value="${esc(g?.detalle || '')}"></div>
     <div class="campo ancho"><label for="f-proposito">Qué se compró</label>
       <input id="f-proposito" name="proposito" placeholder="Víveres de la semana"
