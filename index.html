@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Hn9sIsm1Ctpc1kjhaRBlUknBGwQNXRNGGaBt+E1Vuj0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LCUzT3X3uzQuiT4UrRGaI/aHWU9WzqAREskILks3W3w='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3099,6 +3099,85 @@ function detalleDeGastos(meses, filtros = {}) {
     .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
 }
 
+/**
+ * Recorrido y gasto de combustible, mes a mes.
+ *
+ * El odómetro es una cuenta que solo sube, así que los kilómetros de un
+ * repostaje no son su lectura: son la DIFERENCIA con la lectura anterior. El
+ * primer repostaje registrado no tiene con qué compararse y por eso no aporta
+ * kilómetros —sí su gasto—; a partir del segundo ya hay recorrido.
+ *
+ * Una lectura menor que la anterior se descarta: o es un error de tecleo, o el
+ * odómetro se reinició, y en los dos casos restar daría un número negativo que
+ * ensuciaría el promedio de meses enteros.
+ */
+function recorridoCombustible(filtros = {}) {
+  const esCombustible = (c) => String(c || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim() === 'combustible';
+
+  const repostajes = [
+    ...db.gastosTarjeta.map((g) => ({
+      fecha: String(g.fecha || '').slice(0, 10),
+      km: Number(g.km) || 0,
+      monto: Number(g.monto_total) || 0,
+      usuario: g.usuario,
+      categoria: g.categoria,
+      detalle: g.detalle,
+      origen: 'Tarjeta',
+    })),
+    ...db.gastosEfectivo.map((g) => ({
+      fecha: String(g.fecha || '').slice(0, 10),
+      km: Number(g.km) || 0,
+      monto: Number(g.monto) || 0,
+      usuario: g.usuario,
+      categoria: g.categoria,
+      detalle: g.detalle,
+      origen: 'Efectivo',
+    })),
+  ]
+    .filter((x) => esCombustible(x.categoria)
+      && /^\d{4}-\d{2}-\d{2}$/.test(x.fecha)
+      && (!filtros.usuario || filtros.usuario === 'ambos' || filtros.usuario === x.usuario))
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  const porMes = new Map();
+  const casilla = (mes) => {
+    if (!porMes.has(mes)) porMes.set(mes, { mes, km: 0, gasto: 0, repostajes: 0 });
+    return porMes.get(mes);
+  };
+
+  let anterior = 0;
+  for (const r of repostajes) {
+    const c = casilla(claveMes(r.fecha));
+    c.gasto = redondear(c.gasto + r.monto);
+    c.repostajes += 1;
+    if (r.km > 0) {
+      if (anterior > 0 && r.km > anterior) c.km += r.km - anterior;
+      anterior = Math.max(anterior, r.km);
+    }
+  }
+
+  const meses = [...porMes.values()].sort((a, b) => a.mes.localeCompare(b.mes));
+  meses.forEach((m) => { m.porKm = m.km > 0 ? redondear(m.gasto / m.km) : 0; });
+
+  const km = meses.reduce((s, m) => s + m.km, 0);
+  const gasto = redondear(meses.reduce((s, m) => s + m.gasto, 0));
+  const conKm = meses.filter((m) => m.km > 0);
+  return {
+    meses,
+    km,
+    gasto,
+    porKm: km > 0 ? redondear(gasto / km) : 0,
+    // El promedio se saca solo de los meses con recorrido medido: incluir los
+    // que no lo tienen lo hundiría sin que signifique nada.
+    kmPorMes: conKm.length ? Math.round(km / conKm.length) : 0,
+    ultima: repostajes.filter((r) => r.km > 0).at(-1)?.km || 0,
+    repostajes: repostajes.length,
+    conMedida: repostajes.filter((r) => r.km > 0).length,
+  };
+}
+
 /** Matriz categorías × meses lista para pintar la tabla mensual. */
 function matrizCategoriaMes(meses, filtros = {}) {
   const filas = gastosEnMeses(meses, filtros);
@@ -3198,7 +3277,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDelMes, patrimonioNeto, planificarCuotas, presupuestoVsReal, rangoMeses, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, totalAhorrado, totalInvertido, totalPorCategoria, totalPorUsuario };
+return { acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDelMes, patrimonioNeto, planificarCuotas, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, totalAhorrado, totalInvertido, totalPorCategoria, totalPorUsuario };
 })();
 
 M["charts"] = (function () {
@@ -4972,6 +5051,10 @@ const ESQUEMA = [
     ['Tipo', 'tipo', 't'], ['Cuotas', 'cuotas', 'n'],
     ['Monto total', 'monto_total', 'n'], ['Tasa %', 'tasa_interes', 'n'],
     ['Mes inicio', 'mes_inicio', 't'], ['Notas', 'notas', 't'],
+    // Al final y solo para combustible: la lectura del odómetro al repostar.
+    // Añadir una columna es aditivo —los libros viejos simplemente no la
+    // traen— porque las filas se casan por el texto de la cabecera.
+    ['Kilometraje', 'km', 'n'],
   ]],
   ['Cuotas', 'cuotas', [
     ['Gasto ID', 'gasto_id', 't'], ['N° cuota', 'n_cuota', 'n'],
@@ -4984,6 +5067,7 @@ const ESQUEMA = [
     ['Detalle', 'detalle', 't'], ['Propósito', 'proposito', 't'],
     ['Categoría', 'categoria', 't'], ['Monto', 'monto', 'n'],
     ['Cuenta origen', 'cuenta', 't'], ['Notas', 'notas', 't'],
+    ['Kilometraje', 'km', 'n'],
   ]],
   ['Inversiones', 'inversiones', [
     ['ID', 'id', 't'], ['Fecha inicio', 'fecha_inicio', 'f'],
@@ -7403,6 +7487,50 @@ function campoCategoria(id, lista, valor) {
              maxlength="40" autocomplete="off" hidden disabled></div>`;
 }
 
+/**
+ * ¿Esta categoría es la de combustible?
+ *
+ * Se compara sin acentos ni mayúsculas porque el nombre lo escribe quien usa
+ * la app: «Combustible», «combustible», «COMBUSTIBLE» y «Combustíble» son la
+ * misma cosa, y el campo del odómetro tiene que salir en las cuatro.
+ */
+function esCombustible(categoria) {
+  return String(categoria || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim() === 'combustible';
+}
+
+/** Campo del odómetro: solo aparece si la categoría es combustible. */
+function campoKm(id, valor) {
+  return `
+    <div class="filtros" id="${id}-caja" hidden>
+      <div class="campo ancho"><label for="${id}">Kilometraje del tablero</label>
+        <input id="${id}" name="km" type="number" inputmode="numeric" min="0"
+               step="1" placeholder="128450" value="${valor ? esc(String(valor)) : ''}">
+        <span class="pista">La lectura del odómetro al repostar. Con la de la vez
+          anterior la app saca cuántos kilómetros hiciste con ese depósito.</span></div>
+    </div>`;
+}
+
+/** Enseña u oculta el odómetro según la categoría elegida. */
+function conectarKm(form, idCategoria, idKm) {
+  const caja = $(`#${idKm}-caja`, form);
+  if (!caja) return;
+  const sel = $(`#${idCategoria}`, form);
+  const nueva = $(`#${idCategoria}-nueva`, form);
+  const refrescar = () => {
+    const cat = sel.value === NUEVA_CAT ? (nueva?.value || '') : sel.value;
+    const si = esCombustible(cat);
+    caja.hidden = !si;
+    // Escondido Y desactivado: si no, seguiría enviando el kilometraje de una
+    // categoría que ya no es combustible.
+    caja.querySelectorAll('input').forEach((x) => { x.disabled = !si; });
+  };
+  sel.addEventListener('change', refrescar);
+  nueva?.addEventListener('input', refrescar);
+  refrescar();
+}
+
 function conectarCategoria(form, id) {
   const sel = $(`#${id}`, form);
   const txt = $(`#${id}-nueva`, form);
@@ -7448,7 +7576,7 @@ function categoriaElegida(d, tipo = 'Gasto') {
 function registrarGastoTarjeta({
   id: idExistente = null, fecha, tarjeta, usuario, detalle, proposito = '',
   categoria, tipo = 'Corriente', cuotas = 1, montoTotal, tasaInteres = 0,
-  mesInicio, notas = '',
+  mesInicio, notas = '', km = '',
 }) {
   const enCuotas = tipo !== 'Corriente';
   const n = enCuotas ? Math.max(2, Number(cuotas) || 2) : 1;
@@ -7472,6 +7600,7 @@ function registrarGastoTarjeta({
     tasa_interes: tasa,
     mes_inicio: mesInicio,
     notas,
+    km: Number(km) > 0 ? Number(km) : '',
   });
 
   const pagados = new Set(db.cuotas
@@ -7523,6 +7652,9 @@ function formGastoTarjeta(alTerminar, existente = null) {
              value="${esc(g?.proposito || '')}"></div>
     <div class="filtros">
       ${campoCategoria('f-categoria', categoriasGasto(), g?.categoria || 'Viveres')}
+    </div>
+    ${campoKm('f-km', g?.km)}
+    <div class="filtros">
     </div>
     <div class="filtros">
       <div class="campo"><label for="f-tipo">Tipo de pago</label>
@@ -7622,6 +7754,7 @@ function formGastoTarjeta(alTerminar, existente = null) {
       };
 
       conectarCategoria(form, 'f-categoria');
+      conectarKm(form, 'f-categoria', 'f-km');
       ['change', 'input'].forEach((ev) => form.addEventListener(ev, refrescar));
       refrescar();
     },
@@ -7640,6 +7773,7 @@ function formGastoTarjeta(alTerminar, existente = null) {
         tasaInteres: aNumero(d.tasa_interes),
         mesInicio: d.mes_inicio,
         notas: g?.notas || '',
+        km: d.km,
       });
       brindis(g
         ? `Gasto corregido · ${money(plan.totalPagado)}`
@@ -7681,13 +7815,17 @@ function formGastoEfectivo(alTerminar, existente = null) {
              value="${esc(g?.proposito || '')}"></div>
     <div class="filtros">
       ${campoCategoria('e-categoria', categoriasGasto(), g?.categoria)}
-    </div>`;
+    </div>
+    ${campoKm('e-km', g?.km)}`;
 
   modal({
     titulo: g ? 'Corregir gasto en efectivo' : 'Gasto en efectivo / débito',
     cuerpo,
     aceptar: g ? 'Guardar cambios' : 'Registrar gasto',
-    alAbrir(form) { conectarCategoria(form, 'e-categoria'); },
+    alAbrir(form) {
+      conectarCategoria(form, 'e-categoria');
+      conectarKm(form, 'e-categoria', 'e-km');
+    },
     alEnviar(d) {
       upsert('gastosEfectivo', {
         id: g?.id || nuevoId('gastosEfectivo'),
@@ -7699,6 +7837,7 @@ function formGastoEfectivo(alTerminar, existente = null) {
         monto: redondear(aNumero(d.monto)),
         cuenta: d.cuenta,
         notas: g?.notas || '',
+        km: Number(d.km) > 0 ? Number(d.km) : '',
       });
       brindis(g ? 'Gasto corregido' : `Gasto en efectivo · ${money(aNumero(d.monto))}`);
       alTerminar?.();
@@ -8056,14 +8195,14 @@ function liquidarInversion(id, alTerminar) {
   alTerminar?.();
 }
 
-return { formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMovimiento, formPagoTarjeta, liquidarInversion, registrarGastoTarjeta };
+return { esCombustible, formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMovimiento, formPagoTarjeta, liquidarInversion, registrarGastoTarjeta };
 })();
 
 M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
 const {db, tarjetas, usuarios} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
 const {crear, esc, $, segmentado} = M["ui"];
 const {formGastoTarjeta, formIngreso} = M["forms"];
@@ -8179,6 +8318,8 @@ function render(raiz, { irA }) {
     </section>
 
     <section class="tarjeta" id="proximos"></section>
+
+    <section class="tarjeta" id="combustible"></section>
 `;
 
   // Filtro J / C / ambos
@@ -8236,6 +8377,8 @@ function render(raiz, { irA }) {
 
   // Próximos vencimientos e hitos
   $('#proximos', raiz).innerHTML = seccionProximos(mes);
+
+  $('#combustible', raiz).innerHTML = seccionCombustible(filtros);
 
 
   raiz.querySelectorAll('[data-ir]').forEach((b) => {
@@ -8409,6 +8552,73 @@ function iniciales(nombre) {
   const palabras = String(nombre).replace(/^TC /, '').split(/\s+/).filter(Boolean);
   if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
   return String(palabras[0] || '?').slice(0, 2).toUpperCase();
+}
+
+/**
+ * Combustible: cuánto se recorre y cuánto cuesta, mes a mes.
+ *
+ * Un gasto de combustible por sí solo no dice nada: $40 puede ser mucho o poco
+ * según lo que se haya rodado. Lo que sirve para comparar un mes con otro es el
+ * coste por kilómetro, y para eso hace falta el odómetro, que es lo que se pide
+ * al registrar el repostaje.
+ */
+function seccionCombustible(filtros) {
+  const r = recorridoCombustible(filtros);
+  const cab = `<header><h2>Combustible y kilómetros</h2>
+    <span class="pista">${r.km > 0
+    ? `${money(r.porKm)} por km` : 'Sin recorrido medido'}</span></header>`;
+
+  if (!r.repostajes) {
+    return `${cab}<p class="vacio">Todavía no hay gastos de combustible registrados.
+      Al apuntar uno, la app pedirá el kilometraje del tablero, y a partir del
+      segundo empezará a contar cuánto recorres y cuánto te cuesta.</p>`;
+  }
+  if (!r.km) {
+    return `${cab}<p class="vacio">Hay ${r.repostajes}
+      ${r.repostajes === 1 ? 'repostaje' : 'repostajes'} por ${money(r.gasto)},
+      pero ${r.conMedida < 2
+    ? 'todavía falta una segunda lectura del odómetro'
+    : 'ninguna lectura del odómetro es mayor que la anterior'}
+      para poder calcular los kilómetros.</p>`;
+  }
+
+  // Del mes más reciente hacia atrás: cada uno se compara con el anterior.
+  const meses = [...r.meses].reverse().slice(0, 12);
+  const maxKm = Math.max(...meses.map((m) => m.km), 1);
+  const miles = (n) => n.toLocaleString('es-EC');
+
+  return `${cab}
+    <div class="rejilla kpis">
+      <div class="kpi"><div class="etq">Kilómetros acumulados</div>
+        <div class="valor">${miles(r.km)} km</div>
+        <div class="delta">${miles(r.kmPorMes)} km al mes de promedio</div></div>
+      <div class="kpi"><div class="etq">Gasto acumulado</div>
+        <div class="valor">${money(r.gasto)}</div>
+        <div class="delta">${r.repostajes}
+          ${r.repostajes === 1 ? 'repostaje' : 'repostajes'}</div></div>
+      <div class="kpi"><div class="etq">Coste por kilómetro</div>
+        <div class="valor">${money(r.porKm)}</div>
+        <div class="delta">${r.ultima
+    ? `último odómetro ${miles(r.ultima)} km` : ''}</div></div>
+    </div>
+
+    <ul class="lista compacta">${meses.map((m, i) => {
+    const previo = meses[i + 1];
+    const dif = previo && previo.km > 0 ? ((m.km - previo.km) / previo.km) * 100 : null;
+    return `
+      <li>
+        <div class="principal">
+          <div class="titulo">${esc(nombreMes(m.mes))}</div>
+          <div class="barra-jc" role="presentation">
+            <span style="flex:${m.km};background:var(--serie-2)"></span>
+            <span style="flex:${Math.max(0, maxKm - m.km)};background:transparent"></span>
+          </div>
+          <div class="meta">${money(m.gasto)}${m.km > 0 ? ` · ${money(m.porKm)}/km` : ''}${
+  dif === null ? '' : ` · ${dif >= 0 ? '↗' : '↘'} ${Math.abs(dif).toFixed(0)} % vs. mes previo`}</div>
+        </div>
+        <div class="monto">${m.km > 0 ? miles(m.km) : '—'}<span class="pie">km</span></div>
+      </li>`;
+  }).join('')}</ul>`;
 }
 
 return { render };
