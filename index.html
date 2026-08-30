@@ -646,19 +646,29 @@ a { color: var(--acento); }
  */
 .acciones-panel {
   display: grid;
-  /* Cuatro accesos no caben en una fila de móvil sin apretar el texto, así que
-     se reparten en dos filas de dos. */
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  /* El ancho mínimo se calcula sobre el rótulo más largo —«Ingreso»—, no sobre
+     una cifra a ojo: con 120 px los tres accesos no cabían en un móvil de 390
+     y el tercero se caía a una segunda fila él solo. 72 los deja en una fila
+     hasta en una pantalla de 320. */
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   gap: 10px;
   margin-top: 18px;
 }
 .acciones-panel button {
   display: flex;
-  flex-direction: column;
+  /* El icono AL LADO del rótulo, no encima: apilados el botón medía 74 px y
+     ocupaba más que la cifra del mes, que es lo que se viene a mirar. En fila
+     mide la mitad y sigue siendo un blanco cómodo para el dedo. */
+  flex-direction: row;
   align-items: center;
-  gap: 7px;
-  padding: 14px 6px;
-  border-radius: 18px;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  /* Relleno lateral corto: en una pantalla de 320 el rótulo más largo
+     —«Ingreso»— se salía del botón con 6 px a cada lado. */
+  padding: 8px 4px;
+  border-radius: 13px;
+  min-width: 0;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: var(--panel-tinta);
@@ -670,7 +680,13 @@ a { color: var(--acento); }
 }
 .acciones-panel button:hover { background: rgba(255, 255, 255, 0.19); }
 .acciones-panel button:active { transform: scale(0.97); }
-.acciones-panel svg { width: 19px; height: 19px; }
+.acciones-panel svg { width: 16px; height: 16px; flex: none; }
+/* En una pantalla de 320 «Ingreso» necesita 83 px y su botón mide 75: se
+   retira el icono, que es decoración, y se queda la palabra, que es lo que
+   informa. Encoger la letra en su lugar la dejaba ilegible. */
+@media (max-width: 359px) {
+  .acciones-panel svg { display: none; }
+}
 
 .panel .medidor { margin: 14px 0 0; }
 .panel .btn {
