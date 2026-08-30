@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-XsRpfcuNqPPEGH4TMDNt1ujV7WWvGV9S4/b6tCP9rPA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-KmmHar4A0vSb1wmtvqIUxpOGfhHy3+CZtqAm80lgB58='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -6959,9 +6959,26 @@ function informeMensual(mes, usuario = 'ambos') {
     monto: redondear(movs.filter((x) => x.tipo === t).reduce((s, x) => s + x.monto, 0)),
   })).filter((x) => x.monto > 0);
 
+  /*
+   * Y por TARJETA O CUENTA, que es la pregunta de verdad al repartir gastos:
+   * lo de Pichincha se paga en una fecha y lo de Bolivariano en otra, así que
+   * mezclarlos en una lista sola obliga a separarlos a mano leyendo la columna
+   * del medio de pago línea por línea.
+   */
+  const porOrigen = [...movs.reduce((m, x) => {
+    const o = x.origen || 'Sin cuenta';
+    if (!m.has(o)) m.set(o, { origen: o, monto: 0, movs: [] });
+    const g = m.get(o);
+    g.monto = redondear(g.monto + x.monto);
+    g.movs.push(x);
+    return m;
+  }, new Map()).values()].sort((x, y) => y.monto - x.monto);
+
   const dueño = usuario === 'ambos' ? 'J y C' : usuario;
   const titulo = `Gastos de ${nombreMes(mes)} - ${dueño}`;
 
+  // Los rótulos de columna solo se repiten mientras se está listando la tabla.
+  let enTabla = false;
   const doc = documento({
     titulo,
     pie: titulo,
@@ -6969,7 +6986,7 @@ function informeMensual(mes, usuario = 'ambos') {
     // lee, hay que subir a la hoja anterior para saber qué columna es cuál.
     cabeceraRepetida: (d) => {
       d.salto(6);
-      cabeceraTabla(d);
+      if (enTabla) cabeceraTabla(d);
     },
   });
 
@@ -6991,6 +7008,22 @@ function informeMensual(mes, usuario = 'ambos') {
     return terminar(doc, mes, usuario, total, 0);
   }
 
+  if (porOrigen.length > 1) {
+    doc.texto('Por tarjeta o cuenta', { tam: 11, negrita: true, avance: 15 });
+    porOrigen.forEach((g) => {
+      doc.asegurar(15);
+      const parte = total > 0 ? g.monto / total : 0;
+      doc.texto(recortar(g.origen, ANCHO_BARRA_X - 8, 9.5), { tam: 9.5 });
+      doc.rect({ x: ANCHO_BARRA_X, ancho: ANCHO_BARRA, alto: 6, gris: 0.88, desde: -1 });
+      doc.rect({ x: ANCHO_BARRA_X, ancho: ANCHO_BARRA * parte, alto: 6, gris: 0.5, desde: -1 });
+      doc.texto(`${g.movs.length}`, { x: 440, tam: 8.5, gris: 0.45, derecha: true });
+      doc.texto(money(g.monto), {
+        x: COL.monto, tam: 9.5, negrita: true, derecha: true, avance: 14,
+      });
+    });
+    doc.salto(10);
+  }
+
   // Reparto por categoría, con barra: en un reparto entre dos, lo que se
   // discute es en qué se fue, no cuánto en total.
   doc.texto('Por categoria', { tam: 11, negrita: true, avance: 15 });
@@ -7007,23 +7040,42 @@ function informeMensual(mes, usuario = 'ambos') {
   });
 
   doc.salto(10);
-  doc.texto('Detalle de movimientos', { tam: 11, negrita: true, avance: 15 });
-  cabeceraTabla(doc);
+  doc.texto('Detalle por tarjeta o cuenta', { tam: 11, negrita: true, avance: 16 });
 
-  movs.forEach((m) => {
-    doc.asegurar(13);
-    doc.texto(fechaCompacta(m.fecha), { x: COL.fecha, tam: 8.5, gris: 0.4 });
-    doc.texto(recortar(m.detalle, COL.categoria - COL.detalle - 8, 9), { x: COL.detalle, tam: 9 });
-    doc.texto(recortar(m.categoria || 'Sin categoria', COL.medio - COL.categoria - 8, 8.5),
-      { x: COL.categoria, tam: 8.5, gris: 0.4 });
-    doc.texto(recortar(`${m.tipo}${m.cuota ? ` ${m.cuota}` : ''}`, 92, 8.5),
-      { x: COL.medio, tam: 8.5, gris: 0.4 });
-    doc.texto(money(m.monto), { x: COL.monto, tam: 9, derecha: true, avance: 13 });
+  porOrigen.forEach((g, i) => {
+    // La cabecera de una tarjeta no puede quedarse sola al pie de la hoja.
+    doc.asegurar(56);
+    if (i) doc.salto(10);
+    doc.rect({ alto: 19, gris: 0.86, desde: 5 });
+    doc.texto(recortar(g.origen, 300, 10.5, true), { x: 6, tam: 10.5, negrita: true });
+    doc.texto(`${g.movs.length} ${g.movs.length === 1 ? 'movimiento' : 'movimientos'}`,
+      { x: 390, tam: 8.5, gris: 0.3, derecha: true });
+    doc.texto(money(g.monto), {
+      x: COL.monto - 6, tam: 10.5, negrita: true, derecha: true, avance: 20,
+    });
+    enTabla = true;
+    cabeceraTabla(doc);
+
+    g.movs.forEach((m) => {
+      doc.asegurar(13);
+      doc.texto(fechaCompacta(m.fecha), { x: COL.fecha, tam: 8.5, gris: 0.4 });
+      doc.texto(recortar(m.detalle, COL.categoria - COL.detalle - 8, 9),
+        { x: COL.detalle, tam: 9 });
+      doc.texto(recortar(m.categoria || 'Sin categoria', COL.medio - COL.categoria - 8, 8.5),
+        { x: COL.categoria, tam: 8.5, gris: 0.4 });
+      doc.texto(recortar(m.cuota || '', 92, 8.5), { x: COL.medio, tam: 8.5, gris: 0.4 });
+      doc.texto(money(m.monto), { x: COL.monto, tam: 9, derecha: true, avance: 13 });
+    });
+
+    doc.salto(1).regla({ gris: 0.75, avance: 12 });
+    doc.texto(`Subtotal ${recortar(g.origen, 200, 9)}`, { tam: 9, negrita: true });
+    doc.texto(money(g.monto), { x: COL.monto, tam: 9, negrita: true, derecha: true, avance: 4 });
+    enTabla = false;
   });
 
-  doc.salto(2).regla({ gris: 0.6, avance: 13 });
-  doc.texto(`Total ${nombreMes(mes)}`, { tam: 10, negrita: true });
-  doc.texto(money(total), { x: COL.monto, tam: 10, negrita: true, derecha: true });
+  doc.salto(8).asegurar(24).regla({ gris: 0.4, avance: 14 });
+  doc.texto(`TOTAL ${nombreMes(mes)}`, { tam: 11, negrita: true });
+  doc.texto(money(total), { x: COL.monto, tam: 11, negrita: true, derecha: true });
 
   return terminar(doc, mes, usuario, total, movs.length);
 }
@@ -7033,7 +7085,7 @@ function cabeceraTabla(doc) {
   doc.texto('FECHA', { x: COL.fecha + 2, tam: 7.5, negrita: true, gris: 0.35 });
   doc.texto('DETALLE', { x: COL.detalle, tam: 7.5, negrita: true, gris: 0.35 });
   doc.texto('CATEGORIA', { x: COL.categoria, tam: 7.5, negrita: true, gris: 0.35 });
-  doc.texto('PAGO', { x: COL.medio, tam: 7.5, negrita: true, gris: 0.35 });
+  doc.texto('CUOTA', { x: COL.medio, tam: 7.5, negrita: true, gris: 0.35 });
   doc.texto('MONTO', { x: COL.monto, tam: 7.5, negrita: true, gris: 0.35, derecha: true, avance: 14 });
 }
 
