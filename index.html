@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-4JcmnB0yiBybftIxtGFRFQY5T/drS7xoHH/NqEjPX7I='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-m7hFhz9MdGh/3VEVD7nIhyXBFA/hrdST21P1ceBaea0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -6651,16 +6651,37 @@ function recurrencias(quien = null) {
         const hasta = sumarMeses(desde, cuotas - 1);
         const pagos = new Set(f.pagos || []);
         /*
-         * Cuántas cuotas van. Un préstamo se da de alta a mitad de camino —el
-         * mío lleva pagándose desde enero— y contar solo las marcadas con el
-         * botón diría «0 de 120» con siete ya pagadas. Una cuota de un mes que
-         * ya pasó está pagada, la marque uno o no: el banco la cobró igual.
+         * CUÁNTAS CUOTAS VAN.
+         *
+         * Antes se daba por pagada toda cuota cuyo mes hubiera pasado. Eso
+         * servía para dar de alta un préstamo a mitad de camino, pero se
+         * equivocaba en los dos sentidos:
+         *
+         *   · Contaba de más en lo SIMULADO. Un diferido que se está pensando
+         *     —un concierto que quizá no se compre— sumaba cuotas «pagadas»
+         *     solo porque el calendario avanzaba, sin que existiera la compra.
+         *   · Y contaba de más al filo del mes. Una letra que se cobra a fin de
+         *     mes no está pagada el día 1: el contador saltaba a la siguiente
+         *     antes de que el banco cobrara nada.
+         *
+         * Así que ya no se adivina: el número de partida lo escribe quien lo
+         * sabe, en el propio formulario, y a partir de ahí solo avanza cuando
+         * se pulsa «Pagar». Para las filas antiguas, que no traen el dato, se
+         * conserva el cálculo de antes y así nada cambia de golpe.
          */
         const mesHoy = claveMes(hoy);
-        let hechas = 0;
-        for (let i = 0; i < cuotas; i += 1) {
-          const m = sumarMeses(desde, i);
-          if (m < mesHoy || pagos.has(m)) hechas += 1;
+        const transcurridas = () => {
+          let k = 0;
+          for (let i = 0; i < cuotas; i += 1) if (sumarMeses(desde, i) < mesHoy) k += 1;
+          return k;
+        };
+        const inicio = Math.max(0, Math.min(cuotas, f.pagadasInicio === undefined
+          ? transcurridas() : Math.round(Number(f.pagadasInicio) || 0)));
+        // Las marcadas con el botón cuentan solo a partir de ahí: si no, una
+        // cuota vieja marcada a mano se sumaría dos veces.
+        let hechas = inicio;
+        for (let i = inicio; i < cuotas; i += 1) {
+          if (pagos.has(sumarMeses(desde, i))) hechas += 1;
         }
 
         /*
@@ -6702,6 +6723,14 @@ function recurrencias(quien = null) {
           fiable: true,
           pagos: f.pagos || [],
           pagadas: hechas,
+          pagadasInicio: inicio,
+          /*
+           * El mes de la SIGUIENTE cuota por pagar, que no tiene por qué ser el
+           * mes en curso: una letra que se cobra a fin de mes se paga con
+           * retraso, y el botón «Pagar» tiene que saldar la que toca —la 8— y
+           * no la del calendario de hoy —la 9—.
+           */
+          mesSiguiente: sumarMeses(desde, Math.min(hechas, cuotas - 1)),
           // Las marcadas a mano, para saber si toca el botón de este mes.
           marcadas: pagos.size,
           vigente: f.activo !== false && hasta >= mesHoy,
@@ -6780,6 +6809,16 @@ function finDeMes(mes) {
 }
 
 /**
+ * El día `dia` de un mes, recortado si el mes es más corto: el recibo del 31
+ * cae el 30 en abril y el 28 en febrero, no se desborda al mes siguiente.
+ */
+function diaDelMes(mes, dia) {
+  const [y, m] = mes.split('-').map(Number);
+  const ultimo = new Date(y, m, 0).getDate();
+  return `${mes}-${String(Math.min(dia, ultimo)).padStart(2, '0')}`;
+}
+
+/**
  * Presupuesto simulado mes a mes.
  *
  * Regla que evita contar dos veces: un gasto previsto NO se añade a un mes que
@@ -6855,11 +6894,13 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
 
     const pagados = new Set(r.pagos || []);
     /*
-     * `conocido` distingue lo que se ESTIMA de lo que se SABE. Una cuota de
-     * préstamo no es una suposición: el importe y el mes están firmados, igual
-     * que la cuota de una tarjeta por una compra ya hecha. Así que pesa en la
-     * tabla de lo real aunque todavía no se haya pagado. Lo que la app deduce
-     * del historial —la gasolina, el súper— sigue siendo solo previsión.
+     * `conocido` distingue lo que se ESTIMA de lo que se SABE, y la frontera es
+     * quién puso la cifra. Todo lo que ESCRIBE el usuario está decidido: la
+     * cuota de un préstamo, el pago único de la matrícula, la suscripción que
+     * acaba de contratar. Sabe el importe y sabe el mes, así que pesa en la
+     * tabla de lo real aunque no se haya pagado todavía. Lo que la app DEDUCE
+     * del historial —la gasolina, el súper— es una media de lo que suele pasar,
+     * y eso se queda solo en la simulación.
      */
     const sumar = (mes, monto, cuando, conocido = false) => {
       const casilla = porMes.get(mes);
@@ -6903,15 +6944,41 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
       }
     } else if (r.mensual) {
       // Varias veces al mes: se presupuesta el importe mensual completo.
-      meses.forEach((m) => sumar(m, r.porMes, `~${(DIAS_MES / r.cadencia).toFixed(1)} al mes`));
+      meses.forEach((m) => sumar(m, r.porMes,
+        `~${(DIAS_MES / r.cadencia).toFixed(1)} al mes`, r.manual));
     } else {
-      const tope = finDeMes(meses[meses.length - 1]);
-      let f = r.ultima;
-      // Cadencias largas: se avanza en el calendario desde la última vez.
-      for (let i = 0; i < 400; i += 1) {
-        f = sumarDias(f, r.cadencia);
-        if (f > tope) break;
-        sumar(claveMes(f), r.monto, f);
+      /*
+       * Cadencias largas. Si el ritmo es de CALENDARIO —cada mes, cada
+       * trimestre— hay que avanzar por MESES y no por días.
+       *
+       * Sumando 30 días desde el 1 de septiembre se cae el 1 de octubre y otra
+       * vez el 31 de octubre: un gasto mensual aparecía DOS VECES en todo mes
+       * de 31 días, y el presupuesto de ese mes salía con el doble. Los meses
+       * no miden 30 días y no se pueden recorrer como si los midieran.
+       */
+      const cal = cadenciaCercana(r.cadencia);
+      const saltoMeses = cal && cal.porMes <= 1 ? Math.round(1 / cal.porMes) : 0;
+      const ultimo = meses[meses.length - 1];
+
+      if (saltoMeses) {
+        // Se conserva el día del mes: el recibo que llega el 12 sigue diciendo
+        // que llega el 12, no el día 1.
+        const dia = Number(String(r.ultima).slice(8, 10)) || 1;
+        let m = claveMes(r.ultima);
+        for (let i = 0; i < 400; i += 1) {
+          m = sumarMeses(m, saltoMeses);
+          if (m > ultimo) break;
+          sumar(m, r.monto, diaDelMes(m, dia), r.manual);
+        }
+      } else {
+        // Ritmos que no son de calendario —cada 9 días, cada 45—: por días.
+        const tope = finDeMes(ultimo);
+        let f = r.ultima;
+        for (let i = 0; i < 400; i += 1) {
+          f = sumarDias(f, r.cadencia);
+          if (f > tope) break;
+          sumar(claveMes(f), r.monto, f, r.manual);
+        }
       }
     }
     if (aporta) usadas.push(r);
@@ -10709,6 +10776,7 @@ const {columnasApiladas, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento} = M["ui"];
 const {MEDIOS, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago} = M["plan"];
 const {registrarGastoTarjeta} = M["forms"];
+const vistaTarjetas = M["views/tarjetas"];
 /*
  * `quien` arranca en J: el presupuesto es una herramienta de decisión personal
  * y mezclar dos bolsillos daba una cifra que no es de nadie. Se puede cambiar
@@ -10716,7 +10784,7 @@ const {registrarGastoTarjeta} = M["forms"];
  */
 const estado = { horizonte: 6, mesAbierto: null, quien: 'J' };
 
-function render(raiz) {
+function render(raiz, { irA } = {}) {
   const meses = mesesProyectados(estado.horizonte);
   const plan = proyeccion(meses, { quien: estado.quien });
   const todas = recurrencias(estado.quien);
@@ -10758,9 +10826,9 @@ function render(raiz) {
       [{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' },
         { valor: 'Ambos', texto: 'Ambos' }],
       estado.quien,
-      (v) => { estado.quien = v; render(raiz); },
+      (v) => { estado.quien = v; render(raiz, { irA }); },
     ));
-    $('#btn-fijo', raiz).addEventListener('click', () => formFijo(null, () => render(raiz)));
+    $('#btn-fijo', raiz).addEventListener('click', () => formFijo(null, () => render(raiz, { irA })));
     return;
   }
 
@@ -10936,13 +11004,13 @@ function render(raiz) {
     [{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' },
       { valor: 'Ambos', texto: 'Ambos' }],
     estado.quien,
-    (v) => { estado.quien = v; render(raiz); },
+    (v) => { estado.quien = v; render(raiz, { irA }); },
   ));
 
   $('#seg-horizonte', raiz).appendChild(segmentado(
     [{ valor: 3, texto: '3 meses' }, { valor: 6, texto: '6 meses' }, { valor: 12, texto: '12 meses' }],
     estado.horizonte,
-    (v) => { estado.horizonte = Number(v); render(raiz); },
+    (v) => { estado.horizonte = Number(v); render(raiz, { irA }); },
   ));
 
   const pintar = () => {
@@ -10982,7 +11050,7 @@ function render(raiz) {
     });
   });
 
-  const recargar = () => render(raiz);
+  const recargar = () => render(raiz, { irA });
   $('#btn-fijo', raiz).addEventListener('click', () => formFijo(null, recargar));
   $$('[data-editar]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -10995,7 +11063,7 @@ function render(raiz) {
   $$('[data-pagar]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => {
       const r = recurrencias().find((x) => x.clave === btn.dataset.pagar);
-      if (r) formPagar(r, recargar);
+      if (r) formPagar(r, recargar, irA);
     });
   });
 
@@ -11005,7 +11073,7 @@ function render(raiz) {
       guardarAjuste(clave, { activo: estaExcluida(clave) });
       db.config[`plan_no_${clave}`] = '';
       guardar();
-      render(raiz);
+      render(raiz, { irA });
     });
   });
 }
@@ -11052,7 +11120,14 @@ function tablaMeses(filas, {
  * en curso; para un pago único, el suyo —el de septiembre se marca en
  * septiembre aunque se ejecute hoy—.
  */
-const mesDePago = (r) => (r.clase === 'unico' ? r.mes : mesActual());
+const mesDePago = (r) => {
+  if (r.clase === 'unico') return r.mes;
+  // Un gasto a plazos salda la SIGUIENTE cuota pendiente, que no es la del mes
+  // del calendario: una letra que se cobra a fin de mes se paga con retraso, y
+  // marcar el mes de hoy saltaba una letra sin haberla pagado.
+  if (r.clase === 'plazos') return r.mesSiguiente || mesActual();
+  return mesActual();
+};
 const hecho = (r) => (r.pagos || []).includes(mesDePago(r));
 
 function listaRecurrencias(filas, fuera) {
@@ -11145,7 +11220,13 @@ function contadorPlazos(r) {
       <div class="plazos-cab">
         <span class="plazos-cuota">${terminado
     ? 'Terminado de pagar'
-    : `Vas por la cuota ${hechas + 1} de ${r.cuotas}`}</span>
+    /*
+     * «Vas por la cuota 9» se leía como «la 9 ya está», y con una letra que se
+     * cobra a fin de mes eso es justo lo que no ha pasado. Se dice lo que se
+     * sabe con certeza —cuántas están cobradas— y cuál viene después.
+     */
+    : `${hechas} de ${r.cuotas} pagadas · sigue la ${hechas + 1}, en ${
+      esc(nombreMes(r.mesSiguiente || r.desdeMes, true))}`}</span>
         <span class="plazos-pct">${(parte * 100).toFixed(0)} %</span>
       </div>
       <div class="plazos-barra" role="presentation">
@@ -11227,6 +11308,16 @@ function formFijo(r, alTerminar) {
     </div>
     <p class="pista" data-solo="plazos" hidden>Escribe el que sepas: el otro se
       calcula solo.</p>
+
+    <div class="filtros" data-solo="plazos" hidden>
+      <div class="campo ancho"><label for="pf-pagadas">Cuotas ya pagadas</label>
+        <input id="pf-pagadas" name="pagadasInicio" type="number" inputmode="numeric"
+               min="0" max="120" step="1"
+               value="${esc(String(r?.pagadasInicio ?? 0))}"></div>
+    </div>
+    <p class="pista" data-solo="plazos" hidden>Cuántas van cobradas <strong>de
+      verdad</strong>. Si es un gasto que todavía estás pensando, déjalo en 0: a
+      partir de aquí el contador solo avanza cuando pulses «Pagar».</p>
 
     <div class="filtros" data-solo="unico" hidden>
       ${campoMonto('pf-unico-monto', 'montoUnico', {
@@ -11443,6 +11534,9 @@ function formFijo(r, alTerminar) {
           monto: redondear(aNumero(d.cuota)),
           cuotas: Math.max(1, Math.round(Number(d.cuotas) || 1)),
           desdeMes: d.desdeMes || mesHoy,
+          // Cuántas van cobradas de verdad. Se guarda siempre, aunque sea 0:
+          // es lo que distingue un préstamo en marcha de uno que se piensa.
+          pagadasInicio: Math.max(0, Math.round(Number(d.pagadasInicio) || 0)),
           tipo: 'Fijo',
           cadencia: 30,
         }),
@@ -11531,7 +11625,7 @@ function detalleMes(fila) {
  * para que la previsión deje de contarlo ahí. Sin la marca, el mes tendría el
  * gasto apuntado Y previsto, contándolo dos veces.
  */
-function formPagar(r, alTerminar) {
+function formPagar(r, alTerminar, irA) {
   /*
    * El mes que se marca es el del gasto, no el de hoy. Un pago único apuntado
    * para septiembre se marca en septiembre aunque se ejecute hoy: marcando
@@ -11610,8 +11704,8 @@ function formPagar(r, alTerminar) {
           <select id="pg-usuario" name="usuario">${
   opciones(['J', 'C'], r.usuario || 'J')}</select></div>
       </div>
-      ${r.clase === 'plazos' ? `<p class="pista">Sería la cuota ${
-  (r.pagadas || 0) + 1} de ${r.cuotas}.</p>` : ''}
+      ${r.clase === 'plazos' ? `<p class="pista">Salda la cuota <strong>${
+  (r.pagadas || 0) + 1} de ${r.cuotas}</strong>, la de ${esc(nombreMes(mes))}.</p>` : ''}
       <p class="pista" id="pg-pista"></p>`,
     aceptar: 'Registrar el pago',
     alAbrir(form) {
@@ -11652,10 +11746,11 @@ function formPagar(r, alTerminar) {
     },
     alEnviar(d) {
       const monto = redondear(aNumero(d.monto));
+      let registrado = null;
       if (d.medio === 'Tarjeta') {
         // El mismo camino que «+ Gasto con tarjeta»: mismo cronograma, mismo
         // redondeo, y el gasto acaba donde acabaría si se hubiera apuntado allí.
-        registrarGastoTarjeta({
+        registrado = registrarGastoTarjeta({
           fecha: d.fecha,
           tarjeta: d.tarjeta,
           usuario: d.usuario,
@@ -11682,12 +11777,35 @@ function formPagar(r, alTerminar) {
           notas: 'Pago registrado desde Presupuesto',
         });
       }
-      marcarPago(r.clave, mes, true);
+      /*
+       * Un pago de UNA VEZ se acabó al ejecutarlo: ya está asentado en Tarjetas
+       * o en Cuentas, y dejarlo también en el presupuesto sería tenerlo en dos
+       * sitios. Se borra de aquí. Lo que se repite —un préstamo, una cuota— NO
+       * se borra: solo se marca ese mes, porque el mes que viene vuelve.
+       */
+      if (r.clase === 'unico') borrarManual(r.id);
+      else marcarPago(r.clave, mes, true);
       guardar();
-      brindis(d.medio === 'Tarjeta'
+
+      const conTarjeta = d.medio === 'Tarjeta';
+      brindis(conTarjeta
         ? `Registrado en ${misTarjetas.find((t) => t.id === d.tarjeta)?.nombre || 'la tarjeta'}`
         : 'Pago registrado');
       alTerminar?.();
+
+      /*
+       * Y se lleva al usuario a donde acaba de caer, que es la única manera de
+       * comprobar que llegó. Con tarjeta hace falta además COLOCAR la vista:
+       * por el corte, una compra de hoy puede entrar en el estado del mes que
+       * viene, y quedarse en el mes actual parecía que no se había guardado.
+       */
+      if (!irA) return;
+      if (conTarjeta) {
+        vistaTarjetas.enfocarGasto(registrado?.fila);
+        irA('tarjetas');
+      } else {
+        irA('cuentas');
+      }
     },
   });
 }
