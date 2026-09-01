@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-qB5HdPdy0zwePUMx+xob4c2uPJ/geOJMhi9O+VuYc7Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-9mkU1UZTAJwXN/qvdwXocPYJtw6cP+7CZaV7yU2Kj1I='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -664,30 +664,49 @@ a { color: var(--acento); }
 .panel .chip-panel.mal { color: #ff9d9d; }
 
 /*
- * El selector de mes va con los chips y no en la cabecera: al lado del
- * segmentador ensanchaba tanto el bloque de mandos que la cifra grande ya no
- * cabía en su línea y la cabecera se partía en dos hasta en una pantalla de
- * 430. Aquí tiene el ancho entero de la fila para caer, y se queda pegado a la
- * derecha, separado de los chips, que son de leer y este es de tocar.
+ * LOS MANDOS DEL PANEL —con quién y de qué mes— EN SU PROPIA FILA.
  *
- * Se viste como un chip y no como un campo de formulario: los campos son de
- * rellenar y esto es de mirar. Hay que deshacer a mano lo que los controles
- * heredan —ancho completo y 44 px de alto— o rompería la fila.
+ * Vivían dentro de la cabecera, repartidos con `space-between` contra el
+ * rótulo y la cifra. Ahí su sitio dependía de lo ancho que fuera el texto: con
+ * «Septiembre» el segmentador cabía al lado y con «Octubre» no, así que al
+ * cambiar de mes saltaba de arriba abajo él solo. Y el ancho del texto depende
+ * del tipo de letra del sistema, o sea que ni siquiera se rompe igual en todos
+ * los teléfonos.
+ *
+ * En su propia fila no depende de nada: los dos mandos van juntos, siempre en
+ * el mismo sitio, se llame como se llame el mes y valga lo que valga la cifra.
+ */
+.panel-mandos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/*
+ * El selector de mes se viste como un chip y no como un campo de formulario:
+ * los campos son de rellenar y este es de tocar y seguir. Hay que deshacer a
+ * mano lo que los controles heredan —ancho completo y 44 px de alto— o
+ * rompería la fila.
  */
 .panel .select-panel {
-  margin-left: auto;
-  order: 9;
   width: auto;
   max-width: 100%;
-  height: auto;
+  /*
+   * Exactamente el alto del segmentador de al lado: sus 3 px de relleno + los
+   * 34 del botón + 1 de borde arriba y abajo. Dos mandos que comparten fila y
+   * miden distinto se leen como un descuadre, por muy pequeño que sea.
+   */
+  height: 42px;
   min-height: 0;
-  padding: 7px 13px;
+  padding: 0 13px;
   border-radius: var(--radio-pill);
   background: rgba(255, 255, 255, 0.13);
   border: 1px solid rgba(255, 255, 255, 0.16);
   color: var(--panel-tinta);
-  font-size: 12.5px;
-  font-weight: 570;
+  font-size: 13px;
+  font-weight: 600;
   /* La lista desplegable la pinta el sistema: sin esto, en modo oscuro salía
      texto claro sobre fondo claro. */
   color-scheme: dark;
@@ -8420,10 +8439,18 @@ let mesFiltro = '';
 function render(raiz, { irA }) {
   const mes = mesFiltro || mesActual();
   const meses12 = rangoMeses(sumarMeses(mes, -11), mes);
-  // El mismo rango que en Tarjetas: año y medio atrás y un año por delante,
-  // que es hasta donde llegan las cuotas de un diferido.
+  /*
+   * El mismo rango que en Tarjetas: año y medio atrás y un año por delante,
+   * que es hasta donde llegan las cuotas de un diferido.
+   *
+   * En nombre corto —«Oct 26»— y no entero. Un selector con «Septiembre 2026»
+   * mide 169 px y ya no cabe al lado del filtro de persona, así que se caía a
+   * una segunda fila él solo. Corto caben los dos en la misma línea hasta en
+   * una pantalla de 320, y el mes completo se lee igual en el rótulo de
+   * encima, que es donde toca decirlo entero.
+   */
   const opcMes = rangoMeses(sumarMeses(mesActual(), -18), sumarMeses(mesActual(), 12))
-    .map((m) => ({ valor: m, texto: nombreMes(m) }));
+    .map((m) => ({ valor: m, texto: nombreMes(m, true) }));
   const filtros = { usuario: usuarioFiltro };
 
   const ingreso = ingresoDelMes(mes, usuarioFiltro);
@@ -8440,16 +8467,14 @@ function render(raiz, { irA }) {
 
   raiz.innerHTML = `
     <section class="panel">
-      <div class="panel-cab">
-        <div>
-          <span class="etiqueta">Gasto de ${esc(nombreMes(mes))}</span>
-          <span class="cifra">${moneyHTML(gastoMes)}</span>
-        </div>
+      <span class="etiqueta">Gasto de ${esc(nombreMes(mes))}</span>
+      <span class="cifra">${moneyHTML(gastoMes)}</span>
+      <div class="panel-mandos">
         <div id="seg-usuario"></div>
-      </div>
-      <div class="chips-panel">
         <select id="sel-mes" class="select-panel" aria-label="Mes que se mira"
           >${opciones(opcMes, mes)}</select>
+      </div>
+      <div class="chips-panel">
         ${gastoPrevio > 0 ? `
           <span class="chip-panel ${variacion <= 0 ? 'bien' : 'mal'}">
             ${variacion >= 0 ? '↗' : '↘'} ${Math.abs(variacion).toFixed(1)} %
