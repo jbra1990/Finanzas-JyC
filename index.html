@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LCUzT3X3uzQuiT4UrRGaI/aHWU9WzqAREskILks3W3w='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-4JcmnB0yiBybftIxtGFRFQY5T/drS7xoHH/NqEjPX7I='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -893,6 +893,15 @@ a { color: var(--acento); }
   color: var(--tinta-3);
 }
 .campo.ancho { flex-basis: 100%; }
+
+/*
+ * Un selector de mes escribe el nombre entero —«septiembre de 2026»— y encima
+ * lleva el icono del calendario, así que con los 150 px de un campo normal se
+ * quedaba en «Septiem… 20». Y no hay manera de detectarlo midiendo: el control
+ * recorta por dentro y sigue diciendo que todo le cabe. Se le da más base; si
+ * no la hay, la fila se parte y el campo se lleva su propia línea.
+ */
+.campo:has(input[type="month"]) { flex-basis: 215px; }
 
 input, select, textarea, button { font: inherit; color: var(--tinta); }
 
@@ -6578,6 +6587,58 @@ function recurrencias(quien = null) {
     })
     .filter(Boolean)
     .concat(fijosManuales().filter((f) => esDe(f.usuario, quien)).map((f) => {
+      const mesHoy0 = claveMes(hoy);
+
+      /*
+       * Un gasto DE UNA VEZ no se repite ni se parte: es un solo pago en un mes
+       * concreto que ya se sabe que viene —la matrícula, un viaje, el permiso
+       * de circulación—. No sale del historial porque no tiene historial: es la
+       * primera y la última vez. Se apunta a mano y desaparece de la previsión
+       * en cuanto se ejecuta o pasa su mes.
+       */
+      if (f.clase === 'unico') {
+        const mes = f.mes || mesHoy0;
+        const monto = redondear(Number(f.monto) || 0);
+        const hecho = (f.pagos || []).includes(mes);
+        return {
+          ...f,
+          clave: f.id,
+          clase: 'unico',
+          mes,
+          monto,
+          montoAuto: monto,
+          total: monto,
+          hecho,
+          detalle: f.detalle,
+          cadencia: 0,
+          cadenciaTexto: `Una sola vez · ${nombreMes(mes)}`,
+          veces: 0,
+          fechas: [],
+          mesesConRegistro: new Set(),
+          dispersion: 0,
+          variacion: 0,
+          tipo: 'Fijo',
+          tipoAuto: 'Fijo',
+          reparto: { [f.medio || 'Efectivo']: 1 },
+          fiable: true,
+          pagos: f.pagos || [],
+          // Vive hasta que se ejecuta o hasta que su mes queda atrás.
+          vigente: f.activo !== false && !hecho && mes >= mesHoy0,
+          mensual: false,
+          /*
+           * Un pago único NO tiene un «al mes»: cae entero en un solo mes. Si
+           * se le pusiera su importe, los totales de «fijos al mes» dirían que
+           * se gastan $450 todos los meses por una matrícula que se paga una.
+           */
+          porMes: 0,
+          ultima: `${mes}-01`,
+          proxima: `${mes}-01`,
+          diasDesde: 0,
+          ajustado: true,
+          manual: true,
+        };
+      }
+
       /*
        * Un gasto A PLAZOS —un préstamo, un curso diferido— no es periódico: no
        * se repite para siempre, son N cuotas que empiezan un mes concreto y se
@@ -6825,7 +6886,15 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
       aporta = true;
     };
 
-    if (r.clase === 'plazos') {
+    if (r.clase === 'unico') {
+      /*
+       * Un solo importe, en un solo mes. Va como CONOCIDO: no es una suposición
+       * sacada del historial, es un pago que uno ya sabe que va a hacer y por
+       * cuánto, igual que la cuota de un préstamo. Por eso pesa también en la
+       * tabla de lo real, que es donde se mira lo que está decidido.
+       */
+      sumar(r.mes, r.monto, 'pago único', true);
+    } else if (r.clase === 'plazos') {
       // Cuotas contadas: se colocan en sus meses y se acaban. La última lleva
       // los centavos que la división no repartió.
       for (let i = 0; i < r.cuotas; i += 1) {
@@ -10697,7 +10766,14 @@ function render(raiz) {
 
   const fiables = todas.filter((r) => r.fiable && r.vigente && !estaExcluida(r.clave));
   const descartadas = todas.filter((r) => r.fiable && r.vigente && estaExcluida(r.clave));
-  const caducadas = todas.filter((r) => r.fiable && !r.vigente);
+  /*
+   * Un pago único ya hecho —o cuyo mes quedó atrás— no es un gasto que «dejó de
+   * repetirse»: es uno que se completó, y decírselo así al usuario en la caja
+   * de los caducados no significaría nada. Se queda entre los que escribió él,
+   * marcado, para que se vea que ya está.
+   */
+  const unicosHechos = todas.filter((r) => r.clase === 'unico' && !r.vigente);
+  const caducadas = todas.filter((r) => r.fiable && !r.vigente && r.clase !== 'unico');
   const irregulares = todas.filter((r) => !r.fiable);
 
   /*
@@ -10720,9 +10796,12 @@ function render(raiz) {
    * para saber cuál había escrito uno. Aquí se ve de un vistazo qué se metió a
    * mano, cuánto suma y dónde tocar para añadir otro.
    */
-  const mios = fiables.filter((r) => r.manual);
+  const mios = [...fiables.filter((r) => r.manual), ...unicosHechos];
   const fijos = fiables.filter((r) => !r.manual && r.tipo === 'Fijo');
   const variables = fiables.filter((r) => !r.manual && r.tipo !== 'Fijo');
+  // Lo que se paga una vez no tiene un «al mes»; se cuenta aparte para poder
+  // decir en la cabecera cuánto hay pendiente y cuándo cae.
+  const unicosVivos = mios.filter((r) => r.clase === 'unico' && r.vigente);
 
   raiz.innerHTML = `
     <section class="panel">
@@ -10762,10 +10841,11 @@ function render(raiz) {
       <header><h2>Simulación mes a mes</h2>
         <span class="pista">Por bolsillo · lo apuntado más lo previsto</span></header>
       <div class="aviso"><span class="icono">i</span>
-        <span class="crece">Solo se proyecta lo que se repite con un ritmo
-        reconocible. Lo que se compra una vez y no vuelve no entra, así que esta
-        cifra es un piso, no un techo: el gasto real de los últimos meses
-        promedia ${money(promedio)}.</span></div>
+        <span class="crece">De lo que sale del historial solo se proyecta lo que
+        se repite con un ritmo reconocible; una compra suelta que no vuelve no
+        entra. Sí entra lo que escribas tú, incluido un pago de una sola vez.
+        Aun así esta cifra es un piso, no un techo: el gasto real de los últimos
+        meses promedia ${money(promedio)}.</span></div>
       <div id="g-plan"></div>
       ${tablaMeses(plan.filas, {
     grupo: 'sim',
@@ -10781,10 +10861,10 @@ function render(raiz) {
         <span class="pista">Sin estimar nada · lo que ya está registrado</span></header>
       <div class="aviso"><span class="icono">i</span>
         <span class="crece">Aquí no hay ni una cifra supuesta: el efectivo ya
-        gastado, las cuotas de tarjeta de compras ya hechas y las cuotas de
-        préstamo. Aunque venzan meses adelante, esos importes están firmados,
-        no estimados. La última columna va acumulando. Tócale a un mes para ver
-        de qué se compone.</span></div>
+        gastado, las cuotas de tarjeta de compras ya hechas, las cuotas de
+        préstamo y los pagos únicos que hayas apuntado. Aunque venzan meses
+        adelante, esos importes están decididos, no estimados. La última columna
+        va acumulando. Tócale a un mes para ver de qué se compone.</span></div>
       ${tablaMeses(plan.filas, {
     grupo: 'real',
     celda: (f) => f.reales,
@@ -10797,17 +10877,24 @@ function render(raiz) {
 
     <section class="tarjeta">
       <header><h2>Los que escribo yo</h2>
-        <span class="pista">${mios.length
-    ? `${money(suma(mios))} al mes · ${mios.length} ${mios.length === 1 ? 'gasto' : 'gastos'}`
-    : 'Todavía ninguno'}</span></header>
+        <span class="pista">${mios.length ? [
+    // Si todo lo escrito a mano es de una vez, no hay «al mes» que enseñar:
+    // decir «$0,00 al mes» solo hace ruido.
+    suma(mios) ? `${money(suma(mios))} al mes` : '',
+    unicosVivos.length
+      ? `${money(redondear(unicosVivos.reduce((t, r) => t + r.monto, 0)))} de una vez`
+      : '',
+    `${mios.length} ${mios.length === 1 ? 'gasto' : 'gastos'}`,
+  ].filter(Boolean).join(' · ') : 'Todavía ninguno'}</span></header>
       ${mios.length ? listaRecurrencias(mios, false) : `
         <p class="vacio">Aquí van los gastos que sabes que vienen aunque no estén
           en el historial: una cuota de préstamo, un curso diferido, una
-          suscripción que acabas de contratar. Entran en la previsión de cada mes
-          igual que los que la app deduce sola.</p>`}
+          suscripción que acabas de contratar, o un pago suelto que ya tienes
+          decidido. Entran en la previsión del mes que les toque igual que los
+          que la app deduce sola.</p>`}
       <div class="barra-accion">
-        <span class="pista crece">Se escribe el concepto, el importe y cómo se
-          paga: efectivo, tarjeta o préstamo.</span>
+        <span class="pista crece">Puede repetirse, ir a plazos o ser un solo pago
+          en un mes concreto. Se escribe el concepto, el importe y cómo se paga.</span>
         <button class="btn primario pequeno" id="btn-fijo">+ Añadir gasto</button>
       </div>
     </section>
@@ -10960,6 +11047,14 @@ function tablaMeses(filas, {
     </div>`;
 }
 
+/*
+ * El mes que se le marca a un gasto al pagarlo. Para lo que se repite es el mes
+ * en curso; para un pago único, el suyo —el de septiembre se marca en
+ * septiembre aunque se ejecute hoy—.
+ */
+const mesDePago = (r) => (r.clase === 'unico' ? r.mes : mesActual());
+const hecho = (r) => (r.pagos || []).includes(mesDePago(r));
+
 function listaRecurrencias(filas, fuera) {
   if (!filas.length) return '<p class="vacio">Nada por aquí.</p>';
 
@@ -10968,6 +11063,8 @@ function listaRecurrencias(filas, fuera) {
       <div class="principal">
         <div class="titulo">${esc(r.detalle)}
           ${r.manual ? '<span class="chip">a mano</span>' : ''}
+          ${r.clase === 'unico' && !r.vigente
+    ? `<span class="chip">${r.hecho ? 'ya pagado' : 'su mes ya pasó'}</span>` : ''}
           ${r.ajustado && !r.manual ? '<span class="chip">corregido</span>' : ''}</div>
         <div class="meta">${esc(r.cadenciaTexto)}${r.manual ? '' : ` · ${r.veces} veces · ${
   r.diasDesde >= 0
@@ -10978,7 +11075,7 @@ function listaRecurrencias(filas, fuera) {
         ${r.sitios?.length ? `<div class="meta sitios">En: ${
   esc(r.sitios.slice(0, 3).map((x) => x.nombre).join(' · '))}${
   r.sitios.length > 3 ? ` y ${r.sitios.length - 3} más` : ''}</div>` : ''}
-        ${r.clase === 'plazos' ? '' : `
+        ${r.clase === 'plazos' || r.clase === 'unico' ? '' : `
           <div class="cifras">
             <span>${r.tipo === 'Fijo' ? 'Cobra' : 'Suele ser'}
               <strong>${money(r.monto)}</strong></span>
@@ -10987,13 +11084,17 @@ function listaRecurrencias(filas, fuera) {
     : `<span>Próxima <strong>${esc(textoFecha(r.proxima))}</strong></span>`}
           </div>`}
       </div>
-      <div class="monto">${money(r.porMes)}<span class="pie">al mes</span></div>
+      ${r.clase === 'unico'
+    // Un pago único no tiene «al mes»: lo que importa es cuánto y cuándo.
+    ? `<div class="monto">${money(r.monto)}<span class="pie">en ${
+      esc(nombreMes(r.mes, true))}</span></div>`
+    : `<div class="monto">${money(r.porMes)}<span class="pie">al mes</span></div>`}
       ${r.clase === 'plazos' ? contadorPlazos(r) : ''}
       ${fuera === null ? '' : `
         <div class="acciones">
           ${r.manual ? `<button class="btn pequeno${
-  (r.pagos || []).includes(mesActual()) ? '' : ' primario'}" data-pagar="${esc(r.clave)}">
-            ${(r.pagos || []).includes(mesActual()) ? 'Pagado ✓' : 'Pagar'}</button>` : ''}
+  hecho(r) ? '' : ' primario'}" data-pagar="${esc(r.clave)}">
+            ${hecho(r) ? 'Pagado ✓' : 'Pagar'}</button>` : ''}
           <button class="btn pequeno" data-editar="${esc(r.clave)}">Editar</button>
           <button class="btn pequeno${fuera ? ' primario' : ''}" data-alternar="${esc(r.clave)}">
             ${fuera ? 'Devolver' : 'Dejar fuera'}</button>
@@ -11082,7 +11183,8 @@ const CADENCIAS = [
  */
 function formFijo(r, alTerminar) {
   const nuevo = !r;
-  const clasePrevia = r?.clase === 'plazos' ? 'plazos' : 'periodico';
+  const CLASES = ['periodico', 'plazos', 'unico'];
+  const clasePrevia = CLASES.includes(r?.clase) ? r.clase : 'periodico';
   const cats = categoriasGasto();
   const editaDeducido = r && !r.manual;
   const mesHoy = new Date().toISOString().slice(0, 7);
@@ -11126,6 +11228,15 @@ function formFijo(r, alTerminar) {
     <p class="pista" data-solo="plazos" hidden>Escribe el que sepas: el otro se
       calcula solo.</p>
 
+    <div class="filtros" data-solo="unico" hidden>
+      ${campoMonto('pf-unico-monto', 'montoUnico', {
+    etiqueta: 'Cuánto se va a pagar', valor: String(r?.monto ?? '').replace('.', ','),
+  })}
+      <div class="campo"><label for="pf-unico-mes">En qué mes</label>
+        <input id="pf-unico-mes" name="mesUnico" type="month"
+               value="${esc(r?.mes || mesHoy)}"></div>
+    </div>
+
     <div class="filtros">
       <div class="campo"><label for="pf-cat">Categoría</label>
         <select id="pf-cat" name="categoria">${opciones(cats, r?.categoria)}</select></div>
@@ -11156,9 +11267,9 @@ function formFijo(r, alTerminar) {
       a partir de ${r.veces} apariciones. Lo que escribas aquí manda sobre eso.</p>` : ''}`;
 
   let tipo = r?.tipo || 'Fijo';
-  let clase = r?.clase === 'plazos' ? 'plazos' : 'periodico';
+  let clase = clasePrevia;
   const dlg = modal({
-    titulo: nuevo ? 'Nuevo gasto periódico' : `Corregir «${r.detalle}»`,
+    titulo: nuevo ? 'Nuevo gasto previsto' : `Corregir «${r.detalle}»`,
     cuerpo,
     aceptar: nuevo ? 'Añadir' : 'Guardar',
     alAbrir(form) {
@@ -11182,8 +11293,10 @@ function formFijo(r, alTerminar) {
         // El importe es obligatorio, pero solo el de la clase que se está usando.
         const m = $('#pf-monto', form);
         const c = $('#pf-cuota', form);
+        const u = $('#pf-unico-monto', form);
         if (m) m.required = clase === 'periodico';
         if (c) c.required = clase === 'plazos';
+        if (u) u.required = clase === 'unico';
       };
 
       /*
@@ -11221,7 +11334,8 @@ function formFijo(r, alTerminar) {
       const cajaClase = $('#pf-clase', form);
       if (cajaClase) {
         cajaClase.appendChild(segmentado(
-          [{ valor: 'periodico', texto: 'Se repite' }, { valor: 'plazos', texto: 'A plazos' }],
+          [{ valor: 'periodico', texto: 'Se repite' }, { valor: 'plazos', texto: 'A plazos' },
+            { valor: 'unico', texto: 'Una vez' }],
           clase, (v) => {
             clase = v;
             if (selMedio && !medioTocado) {
@@ -11262,6 +11376,16 @@ function formFijo(r, alTerminar) {
       };
 
       const refrescar = () => {
+        if (clase === 'unico') {
+          const monto = redondear(aNumero($('#pf-unico-monto', form).value));
+          const cuando = $('#pf-unico-mes', form).value || mesHoy;
+          preview.innerHTML = monto
+            ? `Un solo pago de <strong>${money(monto)}</strong> en
+               <strong>${esc(nombreMes(cuando))}</strong>. Se suma a ese mes en las
+               dos tablas —la simulada y la real— y no vuelve a aparecer.`
+            : 'Escribe el importe para ver dónde va a caer.';
+          return;
+        }
         if (clase === 'plazos') {
           sincronizar();
           const n = Math.max(1, Math.round(Number(inN.value) || 1));
@@ -11293,9 +11417,24 @@ function formFijo(r, alTerminar) {
       refrescar();
     },
     alEnviar(d) {
-      const fila = clase === 'plazos'
-        ? {
-          detalle: capitalizar(d.detalle),
+      const comun = {
+        categoria: d.categoria,
+        medio: d.medio,
+        tarjeta: d.tarjeta || '',
+        cargo: d.cargo || 'Corriente',
+        usuario: d.usuario,
+      };
+      // Lo propio de cada clase. Los campos que no son suyos van desactivados
+      // en el formulario, así que ni llegan aquí.
+      const propio = {
+        unico: () => ({
+          clase: 'unico',
+          monto: redondear(aNumero(d.montoUnico)),
+          mes: d.mesUnico || mesHoy,
+          tipo: 'Fijo',
+          cadencia: 0,
+        }),
+        plazos: () => ({
           clase: 'plazos',
           // Se guarda el total, que es el dato exacto; la cuota se deriva de él
           // cada vez. Guardar solo la cuota perdería los centavos del reparto.
@@ -11304,30 +11443,22 @@ function formFijo(r, alTerminar) {
           monto: redondear(aNumero(d.cuota)),
           cuotas: Math.max(1, Math.round(Number(d.cuotas) || 1)),
           desdeMes: d.desdeMes || mesHoy,
-          categoria: d.categoria,
-          medio: d.medio,
-          tarjeta: d.tarjeta || '',
-          cargo: d.cargo || 'Corriente',
-          usuario: d.usuario,
           tipo: 'Fijo',
           cadencia: 30,
-        }
-        : {
-          detalle: capitalizar(d.detalle),
+        }),
+        periodico: () => ({
           clase: 'periodico',
           monto: redondear(aNumero(d.monto)),
           cadencia: Number(d.cadencia) || 30,
-          categoria: d.categoria,
-          medio: d.medio,
-          tarjeta: d.tarjeta || '',
-          cargo: d.cargo || 'Corriente',
-          usuario: d.usuario,
           tipo,
-        };
+        }),
+      };
+      const fila = { ...comun, detalle: capitalizar(d.detalle), ...propio[clase]() };
+
       if (nuevo) {
         guardarManual({
           ...fila,
-          id: `${clase === 'plazos' ? 'plazo' : 'fijo'}-${Date.now().toString(36)}`,
+          id: `${{ plazos: 'plazo', unico: 'unico' }[clase] || 'fijo'}-${Date.now().toString(36)}`,
           desde: new Date().toISOString().slice(0, 10),
           activo: true,
         });
@@ -11337,7 +11468,10 @@ function formFijo(r, alTerminar) {
         guardarAjuste(r.clave, fila);
       }
       guardar();
-      brindis(nuevo ? (clase === 'plazos' ? 'Gasto a plazos añadido' : 'Gasto periódico añadido') : 'Actualizado');
+      brindis(nuevo
+        ? { plazos: 'Gasto a plazos añadido', unico: 'Pago único añadido' }[clase]
+          || 'Gasto periódico añadido'
+        : 'Actualizado');
       alTerminar?.();
     },
   });
@@ -11398,8 +11532,13 @@ function detalleMes(fila) {
  * gasto apuntado Y previsto, contándolo dos veces.
  */
 function formPagar(r, alTerminar) {
-  const mes = mesActual();
-  const yaPagado = (r.pagos || []).includes(mes);
+  /*
+   * El mes que se marca es el del gasto, no el de hoy. Un pago único apuntado
+   * para septiembre se marca en septiembre aunque se ejecute hoy: marcando
+   * agosto seguiría previsto en septiembre y se contaría dos veces.
+   */
+  const mes = mesDePago(r);
+  const yaPagado = hecho(r);
   const cuentas = cuentasBancarias();
 
   if (yaPagado) {
