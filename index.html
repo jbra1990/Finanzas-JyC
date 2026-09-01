@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-m7hFhz9MdGh/3VEVD7nIhyXBFA/hrdST21P1ceBaea0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-qB5HdPdy0zwePUMx+xob4c2uPJ/geOJMhi9O+VuYc7Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -662,6 +662,38 @@ a { color: var(--acento); }
 }
 .panel .chip-panel.bien { color: #57e08f; }
 .panel .chip-panel.mal { color: #ff9d9d; }
+
+/*
+ * El selector de mes va con los chips y no en la cabecera: al lado del
+ * segmentador ensanchaba tanto el bloque de mandos que la cifra grande ya no
+ * cabía en su línea y la cabecera se partía en dos hasta en una pantalla de
+ * 430. Aquí tiene el ancho entero de la fila para caer, y se queda pegado a la
+ * derecha, separado de los chips, que son de leer y este es de tocar.
+ *
+ * Se viste como un chip y no como un campo de formulario: los campos son de
+ * rellenar y esto es de mirar. Hay que deshacer a mano lo que los controles
+ * heredan —ancho completo y 44 px de alto— o rompería la fila.
+ */
+.panel .select-panel {
+  margin-left: auto;
+  order: 9;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 7px 13px;
+  border-radius: var(--radio-pill);
+  background: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--panel-tinta);
+  font-size: 12.5px;
+  font-weight: 570;
+  /* La lista desplegable la pinta el sistema: sin esto, en modo oscuro salía
+     texto claro sobre fondo claro. */
+  color-scheme: dark;
+}
+.panel .select-panel:hover { background: rgba(255, 255, 255, 0.2); }
+.panel .select-panel:focus { background: rgba(255, 255, 255, 0.2); border-color: #fff; }
 
 /*
  * Accesos rápidos dentro del panel: icono arriba, rótulo debajo, tres en fila.
@@ -8374,14 +8406,24 @@ M["views/resumen"] = (function () {
 const {db, tarjetas, usuarios} = M["store"];
 const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
-const {crear, esc, $, segmentado} = M["ui"];
+const {crear, esc, $, segmentado, opciones} = M["ui"];
 const {formGastoTarjeta, formIngreso} = M["forms"];
 let usuarioFiltro = 'ambos';
+/*
+ * El mes que se está mirando. Vacío significa «el de hoy», que es donde tiene
+ * que abrirse siempre: Inicio responde a «cómo voy este mes». La elección se
+ * recuerda mientras dure la sesión, como en las demás secciones.
+ */
+let mesFiltro = '';
 
 
 function render(raiz, { irA }) {
-  const mes = mesActual();
+  const mes = mesFiltro || mesActual();
   const meses12 = rangoMeses(sumarMeses(mes, -11), mes);
+  // El mismo rango que en Tarjetas: año y medio atrás y un año por delante,
+  // que es hasta donde llegan las cuotas de un diferido.
+  const opcMes = rangoMeses(sumarMeses(mesActual(), -18), sumarMeses(mesActual(), 12))
+    .map((m) => ({ valor: m, texto: nombreMes(m) }));
   const filtros = { usuario: usuarioFiltro };
 
   const ingreso = ingresoDelMes(mes, usuarioFiltro);
@@ -8406,6 +8448,8 @@ function render(raiz, { irA }) {
         <div id="seg-usuario"></div>
       </div>
       <div class="chips-panel">
+        <select id="sel-mes" class="select-panel" aria-label="Mes que se mira"
+          >${opciones(opcMes, mes)}</select>
         ${gastoPrevio > 0 ? `
           <span class="chip-panel ${variacion <= 0 ? 'bien' : 'mal'}">
             ${variacion >= 0 ? '↗' : '↘'} ${Math.abs(variacion).toFixed(1)} %
@@ -8498,6 +8542,11 @@ function render(raiz, { irA }) {
     usuarioFiltro,
     (v) => { usuarioFiltro = v; render(raiz, { irA }); },
   ));
+
+  $('#sel-mes', raiz).addEventListener('change', (e) => {
+    mesFiltro = e.target.value;
+    render(raiz, { irA });
+  });
 
   /*
    * Cupos, con la forma de la lista de la referencia: insignia con las
