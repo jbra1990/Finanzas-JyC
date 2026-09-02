@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-7vqUc+P3cAiSHIEck4XkPMjQV3DdYJdSYO0ZBYLF5mI='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-SKKMYFs8XPV1FsX6rh8WoryomTR6dXFG1oSuQYhr7Ao='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2061,6 +2061,55 @@ body.con-cajon { overflow: hidden; }
   background: color-mix(in srgb, var(--critico) 8%, var(--superficie));
 }
 .aviso .icono { flex: none; font-size: 15px; line-height: 1.4; }
+
+/*
+ * Aviso informativo plegable: cerrado no es más que un círculo con «i», y el
+ * texto entero solo aparece al tocarlo. El `.aviso` de arriba se queda para
+ * los estados —cuadra, no cuadra, hay un error—, que hay que poder ver sin
+ * tocar nada; esto es para la explicación de fondo, que se lee una vez y
+ * después solo estorba.
+ */
+.aviso-info { margin: 10px 0; }
+.aviso-info > summary {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--borde);
+  background: var(--superficie-2);
+  cursor: pointer;
+  list-style: none;
+  /* El punto de toque real es mayor que el círculo dibujado: 26 px se ve bien
+     pero no siempre se acierta con el dedo. */
+  padding: 7px;
+  margin: -7px;
+}
+.aviso-info > summary::-webkit-details-marker { display: none; }
+.aviso-info > summary:hover { background: var(--superficie-3); }
+.aviso-info[open] > summary {
+  background: color-mix(in srgb, var(--acento) 16%, var(--superficie-2));
+  border-color: color-mix(in srgb, var(--acento) 45%, var(--borde));
+}
+.aviso-marca {
+  font-size: 12px;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+  color: var(--tinta-2);
+}
+.aviso-info[open] .aviso-marca { color: var(--acento); }
+.aviso-info .aviso-texto {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radio-s);
+  border: 1px solid var(--borde);
+  background: var(--superficie-2);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tinta-2);
+}
 
 .brindis {
   position: fixed;
@@ -4441,6 +4490,23 @@ function notaFila(nota) {
     <p>${esc(nota)}</p></details>`;
 }
 
+/**
+ * Un aviso informativo, plegado por defecto: un círculo con «i» que se toca
+ * para leer el texto entero, y se vuelve a tocar para cerrarlo.
+ *
+ * Antes estos avisos se quedaban siempre abiertos, así que un párrafo que se
+ * lee una vez y ya se sabe de memoria seguía ocupando cuatro o cinco líneas
+ * cada vez que se entraba a la sección. `html` ya viene armado por quien
+ * llama —puede traer `${money(...)}` u otras interpolaciones— y no se vuelve
+ * a escapar aquí.
+ */
+function avisoInfo(html) {
+  return `<details class="aviso-info">
+    <summary aria-label="Más información"><span class="aviso-marca" aria-hidden="true">i</span></summary>
+    <div class="aviso-texto">${html}</div>
+  </details>`;
+}
+
 /** Descarga un Blob con el nombre indicado. */
 function descargar(blob, nombre) {
   const url = URL.createObjectURL(blob);
@@ -4477,7 +4543,7 @@ const ICONOS = {
   datos: '<path d="M12 7c4.4 0 8-1.1 8-2.5S16.4 2 12 2 4 3.1 4 4.5 7.6 7 12 7Zm8-2.5v15c0 1.4-3.6 2.5-8 2.5s-8-1.1-8-2.5v-15" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M20 12c0 1.4-3.6 2.5-8 2.5S4 13.4 4 12" fill="none" stroke="currentColor" stroke-width="1.8"/>',
 };
 
-return { $, $$, ICONOS, aNumero, brindis, campoMonto, confirmar, crear, descargar, esc, filaMovimiento, hoyISO, modal, notaFila, opciones, pedirArchivo, segmentado };
+return { $, $$, ICONOS, aNumero, avisoInfo, brindis, campoMonto, confirmar, crear, descargar, esc, filaMovimiento, hoyISO, modal, notaFila, opciones, pedirArchivo, segmentado };
 })();
 
 M["xlsx"] = (function () {
@@ -10306,7 +10372,7 @@ M["views/datos"] = (function () {
 
 const {db, guardar, reemplazar, limpiarTodo, instantanea, instantaneaSinSecretos, tocar, CLAVES} = M["store"];
 const {money, redondear, nombreMes} = M["calc"];
-const {aNumero, esc, $, $$, brindis, modal, confirmar, descargar, pedirArchivo, opciones} = M["ui"];
+const {aNumero, esc, $, $$, brindis, modal, confirmar, descargar, pedirArchivo, opciones, avisoInfo} = M["ui"];
 const {escribirLibro, leerLibro} = M["xlsx"];
 const {ESQUEMA, construirLibro, libroADatos} = M["esquema"];
 const archivoExcel = M["archivo"];
@@ -10626,11 +10692,10 @@ function render(raiz) {
         <button class="btn primario" id="btn-exp-xlsx">⬇ Exportar a Excel</button>
         <button class="btn" id="btn-imp-xlsx">⬆ Importar desde Excel</button>
       </div>
-      <div class="aviso"><span class="icono">ℹ</span>
-        <span>Antes de aplicar nada verás cuántos consumos trae y por cuánto,
+      ${avisoInfo(`Antes de aplicar nada verás cuántos consumos trae y por cuánto,
         y podrás elegir entre añadirlos o reemplazar lo que ya hay. Volver a
         importar el mismo archivo no duplica: cada consumo se reconoce por su
-        contenido.</span></div>
+        contenido.`)}
     </section>
 
     <section class="tarjeta">
@@ -10874,7 +10939,7 @@ M["views/plan"] = (function () {
 const {db, guardar, categoriasGasto, cuentasBancarias, tarjetas, upsert, nuevoId, capitalizar} = M["store"];
 const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha} = M["calc"];
 const {columnasApiladas, alRedimensionar} = M["charts"];
-const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento} = M["ui"];
+const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo} = M["ui"];
 const {MEDIOS, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago} = M["plan"];
 const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
 const vistaTarjetas = M["views/tarjetas"];
@@ -11009,12 +11074,11 @@ function render(raiz, { irA } = {}) {
     <section class="tarjeta">
       <header><h2>Simulación mes a mes</h2>
         <span class="pista">Por bolsillo · lo apuntado más lo previsto</span></header>
-      <div class="aviso"><span class="icono">i</span>
-        <span class="crece">De lo que sale del historial solo se proyecta lo que
+      ${avisoInfo(`De lo que sale del historial solo se proyecta lo que
         se repite con un ritmo reconocible; una compra suelta que no vuelve no
         entra. Sí entra lo que escribas tú, incluido un pago de una sola vez.
         Aun así esta cifra es un piso, no un techo: el gasto real de los últimos
-        meses promedia ${money(promedio)}.</span></div>
+        meses promedia ${money(promedio)}.`)}
       <div id="g-plan"></div>
       ${tablaMeses(plan.filas, {
     grupo: 'sim',
@@ -11028,12 +11092,11 @@ function render(raiz, { irA } = {}) {
     <section class="tarjeta">
       <header><h2>Solo lo real</h2>
         <span class="pista">Sin estimar nada · lo que ya está registrado</span></header>
-      <div class="aviso"><span class="icono">i</span>
-        <span class="crece">Aquí no hay ni una cifra supuesta: el efectivo ya
+      ${avisoInfo(`Aquí no hay ni una cifra supuesta: el efectivo ya
         gastado, las cuotas de tarjeta de compras ya hechas, las cuotas de
         préstamo y los pagos únicos que hayas apuntado. Aunque venzan meses
         adelante, esos importes están decididos, no estimados. La última columna
-        va acumulando. Tócale a un mes para ver de qué se compone.</span></div>
+        va acumulando. Tócale a un mes para ver de qué se compone.`)}
       ${tablaMeses(plan.filas, {
     grupo: 'real',
     celda: (f) => f.reales,
