@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-9mkU1UZTAJwXN/qvdwXocPYJtw6cP+7CZaV7yU2Kj1I='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-7vqUc+P3cAiSHIEck4XkPMjQV3DdYJdSYO0ZBYLF5mI='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -8443,7 +8443,7 @@ function liquidarInversion(id, alTerminar) {
   alTerminar?.();
 }
 
-return { esCombustible, formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMovimiento, formPagoTarjeta, liquidarInversion, registrarGastoTarjeta };
+return { campoCategoria, categoriaElegida, conectarCategoria, esCombustible, formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMovimiento, formPagoTarjeta, liquidarInversion, registrarGastoTarjeta };
 })();
 
 M["views/resumen"] = (function () {
@@ -10876,7 +10876,7 @@ const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses
 const {columnasApiladas, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento} = M["ui"];
 const {MEDIOS, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago} = M["plan"];
-const {registrarGastoTarjeta} = M["forms"];
+const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
 const vistaTarjetas = M["views/tarjetas"];
 /*
  * `quien` arranca en J: el presupuesto es una herramienta de decisión personal
@@ -11430,8 +11430,7 @@ function formFijo(r, alTerminar) {
     </div>
 
     <div class="filtros">
-      <div class="campo"><label for="pf-cat">Categoría</label>
-        <select id="pf-cat" name="categoria">${opciones(cats, r?.categoria)}</select></div>
+      ${campoCategoria('pf-cat', cats, r?.categoria)}
       <div class="campo"><label for="pf-medio">Cómo se paga</label>
         <select id="pf-medio" name="medio">${opciones(MEDIOS, medioPorDefecto)}</select></div>
       <div class="campo"><label for="pf-quien">De quién es</label>
@@ -11469,6 +11468,7 @@ function formFijo(r, alTerminar) {
         [{ valor: 'Fijo', texto: 'Fijo' }, { valor: 'Variable', texto: 'Variable' }],
         tipo, (v) => { tipo = v; },
       ));
+      conectarCategoria(form, 'pf-cat');
       const preview = $('#pf-preview', form);
 
       /*
@@ -11610,7 +11610,8 @@ function formFijo(r, alTerminar) {
     },
     alEnviar(d) {
       const comun = {
-        categoria: d.categoria,
+        // Da de alta la categoría si se escribió una nueva; si no, la deja tal cual.
+        categoria: categoriaElegida(d),
         medio: d.medio,
         tarjeta: d.tarjeta || '',
         cargo: d.cargo || 'Corriente',
