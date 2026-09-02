@@ -685,6 +685,33 @@ a { color: var(--acento); }
 }
 
 /*
+ * Las filas del panel ocupan el ancho ENTERO, no el de su contenido.
+ *
+ * Con el ancho justo dejaban a la derecha un hueco que parecía un descuido, y
+ * encima el hueco cambiaba de tamaño según lo que dijeran —«$-1.444,94» ocupa
+ * bastante más que «$-35,80»—, así que la forma del panel bailaba con las
+ * cifras. Repartiendo el sobrante entre ellos, cada fila se lee como una
+ * unidad y su silueta ya no depende del mes que se mire.
+ */
+.panel-mandos > * { flex: 1 1 auto; min-width: 0; }
+.panel-mandos .segmentado { width: 100%; }
+/*
+ * Y dentro del segmentador, los tres botones se reparten el ancho: si no, se
+ * quedaban apiñados a la izquierda de una pastilla ancha y vacía.
+ *
+ * Con el mismo GROSOR de letra los tres, elegido o no. El botón elegido se
+ * ponía en negrita, la negrita ocupa más, y al cambiar de persona los tres se
+ * reajustaban 4 px —el mismo baile que se acaba de quitar del panel, en
+ * pequeño—. Se distingue igual de bien por el fondo y el color, que es como lo
+ * hace el propio iPhone. Repartir en tercios exactos también lo arreglaba,
+ * pero dejaba «Ambos» cortado en una pantalla estrecha.
+ */
+.panel-mandos .segmentado button { flex: 1 1 auto; padding: 0 12px; font-weight: 600; }
+.panel-mandos .segmentado button[aria-pressed="true"] { font-weight: 600; }
+
+.panel .chips-panel .chip-panel { flex: 1 1 auto; justify-content: center; }
+
+/*
  * El selector de mes se viste como un chip y no como un campo de formulario:
  * los campos son de rellenar y este es de tocar y seguir. Hay que deshacer a
  * mano lo que los controles heredan —ancho completo y 44 px de alto— o
