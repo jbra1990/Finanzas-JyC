@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-SKKMYFs8XPV1FsX6rh8WoryomTR6dXFG1oSuQYhr7Ao='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Um9lVsarKnafMoJKIf2kxMy+f5/XuBtl1k37zJJ0oAA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -1325,7 +1325,43 @@ tr.detalle > td {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .lista .titulo > .chip,
+.lista .titulo > .visto,
+.lista .titulo > .sello-pagado,
 .lista .titulo > .tiene-nota { vertical-align: middle; margin-left: 7px; }
+
+/*
+ * El visto de «ya cotejado contra el estado de cuenta». Se queda puesto al
+ * salir del modo comprobar, que es cuando hace falta: dice de un vistazo qué
+ * queda por revisar sin tener que volver a entrar.
+ */
+.lista .titulo > .visto {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ok) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent);
+  color: var(--ok-texto);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* «Pagada»: el estado de una tarjeta cuyo mes ya se saldó. */
+.lista .titulo > .sello-pagado {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: var(--radio-pill);
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 42%, transparent);
+  color: var(--ok-texto);
+  font-size: 10.5px;
+  font-weight: 620;
+  letter-spacing: 0.01em;
+}
 .lista .meta {
   font-size: 11.5px; color: var(--tinta-3); margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -2186,7 +2222,7 @@ body.con-cajon { overflow: hidden; }
 
 <script>
 const M = {};
-window.__SEMILLA__ = {"version":2,"config":{"version_esquema":"2","moneda":"USD","mes_inicio_historico":"2025-05","usuarios":"J,C","interes_diferido_por_defecto":"0","base_anual_polizas":"360","retencion_fuente_polizas":"0.02"},"categorias":[{"nombre":"Aperitivos","grupo":"Hogar","tipo":"Gasto","presupuesto":16.0,"activa":"Si"},{"nombre":"Auto","grupo":"Transporte","tipo":"Gasto","presupuesto":25.0,"activa":"Si"},{"nombre":"Casa","grupo":"Hogar","tipo":"Gasto","presupuesto":6.0,"activa":"Si"},{"nombre":"Combustible","grupo":"Transporte","tipo":"Gasto","presupuesto":76.0,"activa":"Si"},{"nombre":"Digital","grupo":"Ocio","tipo":"Gasto","presupuesto":2.0,"activa":"Si"},{"nombre":"Electrodomesticos","grupo":"Hogar","tipo":"Gasto","presupuesto":17.0,"activa":"Si"},{"nombre":"Entretenimineto","grupo":"Ocio","tipo":"Gasto","presupuesto":7.0,"activa":"Si"},{"nombre":"Farmacia","grupo":"Salud","tipo":"Gasto","presupuesto":52.0,"activa":"Si"},{"nombre":"Gimnasio","grupo":"Salud","tipo":"Gasto","presupuesto":3.0,"activa":"Si"},{"nombre":"Higiene y cuidado","grupo":"Hogar","tipo":"Gasto","presupuesto":33.0,"activa":"Si"},{"nombre":"Intereses bancarios","grupo":"Financiero","tipo":"Gasto","presupuesto":15.0,"activa":"Si"},{"nombre":"Juguetes","grupo":"Ocio","tipo":"Gasto","presupuesto":2.0,"activa":"Si"},{"nombre":"Mantenimiento","grupo":"Transporte","tipo":"Gasto","presupuesto":109.0,"activa":"Si"},{"nombre":"Mascotas","grupo":"Mascotas","tipo":"Gasto","presupuesto":19.0,"activa":"Si"},{"nombre":"Regalos","grupo":"Ocio","tipo":"Gasto","presupuesto":16.0,"activa":"Si"},{"nombre":"Repuestos","grupo":"Transporte","tipo":"Gasto","presupuesto":37.0,"activa":"Si"},{"nombre":"Restaurantes","grupo":"Hogar","tipo":"Gasto","presupuesto":104.0,"activa":"Si"},{"nombre":"Ropa","grupo":"Ocio","tipo":"Gasto","presupuesto":43.0,"activa":"Si"},{"nombre":"Salud","grupo":"Salud","tipo":"Gasto","presupuesto":12.0,"activa":"Si"},{"nombre":"Seguro Tarjeta","grupo":"Financiero","tipo":"Gasto","presupuesto":3.0,"activa":"Si"},{"nombre":"Streaming","grupo":"Ocio","tipo":"Gasto","presupuesto":34.0,"activa":"Si"},{"nombre":"Suplementos","grupo":"Salud","tipo":"Gasto","presupuesto":2.0,"activa":"Si"},{"nombre":"Tramites entidades","grupo":"Financiero","tipo":"Gasto","presupuesto":7.0,"activa":"Si"},{"nombre":"Veterinario","grupo":"Mascotas","tipo":"Gasto","presupuesto":0.0,"activa":"Si"},{"nombre":"Viajes","grupo":"Ocio","tipo":"Gasto","presupuesto":123.0,"activa":"Si"},{"nombre":"Viveres","grupo":"Hogar","tipo":"Gasto","presupuesto":380.0,"activa":"Si"},{"nombre":"Sueldo","grupo":"Ingresos","tipo":"Ingreso","presupuesto":0.0,"activa":"Si"},{"nombre":"Otros ingresos","grupo":"Ingresos","tipo":"Ingreso","presupuesto":0.0,"activa":"Si"},{"nombre":"Rendimientos","grupo":"Ingresos","tipo":"Ingreso","presupuesto":0.0,"activa":"Si"}],"cuentas":[{"id":"PACIFICO-1","nombre":"Banco del Pacífico 1","tipo":"Banco","banco":"Pacífico","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si"},{"id":"PACIFICO-2","nombre":"Banco del Pacífico 2","tipo":"Banco","banco":"Pacífico","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si"},{"id":"BCO-PICH","nombre":"Banco Pichincha","tipo":"Banco","banco":"Pichincha","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si"},{"id":"EFECTIVO","nombre":"Efectivo","tipo":"Efectivo","banco":"","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si"},{"id":"TC-PICH","nombre":"TC Pichincha","tipo":"Tarjeta","banco":"Pichincha","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"3","dia_pago":"18","activa":"Si"},{"id":"TC-BOLI","nombre":"TC Bolivariano","tipo":"Tarjeta","banco":"Bolivariano","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"fin","dia_pago":"15","activa":"Si"}],"ingresos":[],"gastosTarjeta":[],"cuotas":[],"gastosEfectivo":[],"inversiones":[],"movimientos":[],"vehiculoGastos":[],"vehiculoRecorrido":[]};
+window.__SEMILLA__ = {"version":2,"config":{"moneda":"USD","usuarios":"J,C","interes_diferido_por_defecto":"0","base_anual_polizas":"360","retencion_fuente_polizas":"0.02","aplicar_retencion":"1","tema":"oscuro","version_esquema":"2","sync_url":"","sync_clave":"","sync_id":"jc","dispositivo":"QDUQ","mes_inicio_historico":"2025-05","plan_manuales":"[{\"detalle\":\"Concierto Carlos vives\",\"clase\":\"plazos\",\"monto\":46.67,\"cuotas\":6,\"desdeMes\":\"2026-08\",\"categoria\":\"Entretenimineto\",\"tipo\":\"Fijo\",\"cadencia\":30,\"id\":\"plazo-mtbtlk2d\",\"desde\":\"2026-08-27\",\"activo\":true,\"clave\":\"plazo-mtbtlk2d\",\"hastaMes\":\"2027-01\",\"cadenciaTexto\":\"6 cuotas · hasta Enero 2027\",\"veces\":0,\"fechas\":[],\"mesesConRegistro\":{},\"dispersion\":0,\"variacion\":0,\"tipoAuto\":\"Fijo\",\"reparto\":{\"Préstamo\":1},\"fiable\":true,\"pagos\":[],\"pagadas\":0,\"marcadas\":0,\"vigente\":true,\"mensual\":true,\"montoAuto\":280,\"porMes\":280,\"ultima\":\"2026-08-01\",\"diasDesde\":0,\"proxima\":\"2026-08-01\",\"ajustado\":true,\"manual\":true,\"medio\":\"Tarjeta\",\"total\":280,\"ultimaCuota\":280,\"restante\":1680},{\"detalle\":\"Crédito hipotecario\",\"clase\":\"plazos\",\"total\":41139.6,\"monto\":342.83,\"cuotas\":120,\"desdeMes\":\"2026-01\",\"categoria\":\"Intereses bancarios\",\"medio\":\"Préstamo\",\"tipo\":\"Fijo\",\"cadencia\":30,\"id\":\"plazo-mtbyafd6\",\"desde\":\"2026-08-27\",\"activo\":true,\"pagos\":[\"2026-08\"]},{\"detalle\":\"Mantenimiento nissan\",\"clase\":\"plazos\",\"total\":103.5,\"monto\":34.5,\"cuotas\":3,\"desdeMes\":\"2026-08\",\"categoria\":\"Mantenimiento\",\"medio\":\"Tarjeta\",\"usuario\":\"J\",\"tipo\":\"Fijo\",\"cadencia\":30,\"id\":\"plazo-mtdjy8zs\",\"desde\":\"2026-08-28\",\"activo\":true},{\"detalle\":\"Pago arreglo casa\",\"clase\":\"plazos\",\"total\":200,\"monto\":200,\"cuotas\":1,\"desdeMes\":\"2026-08\",\"categoria\":\"Casa\",\"medio\":\"Efectivo\",\"usuario\":\"J\",\"tipo\":\"Fijo\",\"cadencia\":30,\"id\":\"plazo-mte9zf44\",\"desde\":\"2026-08-29\",\"activo\":true},{\"detalle\":\"Compras temu\",\"clase\":\"plazos\",\"total\":46,\"monto\":46,\"cuotas\":1,\"desdeMes\":\"2026-09\",\"categoria\":\"Electrodomesticos\",\"medio\":\"Efectivo\",\"usuario\":\"J\",\"tipo\":\"Fijo\",\"cadencia\":30,\"id\":\"plazo-mtea0m6j\",\"desde\":\"2026-08-29\",\"activo\":true,\"clave\":\"plazo-mtea0m6j\",\"hastaMes\":\"2026-08\",\"cadenciaTexto\":\"Cuota mensual\",\"veces\":0,\"fechas\":[],\"mesesConRegistro\":{},\"dispersion\":0,\"variacion\":0,\"tipoAuto\":\"Fijo\",\"reparto\":{\"Efectivo\":1},\"fiable\":true,\"pagos\":[\"2026-09\"],\"pagadas\":0,\"marcadas\":0,\"vigente\":true,\"mensual\":true,\"montoAuto\":46,\"ultimaCuota\":46,\"restante\":46,\"pagado\":0,\"porMes\":46,\"ultima\":\"2026-08-01\",\"diasDesde\":0,\"proxima\":\"2026-08-01\",\"ajustado\":true,\"manual\":true},{\"categoria\":\"Terreno\",\"medio\":\"Efectivo\",\"tarjeta\":\"\",\"cargo\":\"Corriente\",\"usuario\":\"J\",\"detalle\":\"Estudio de suelos\",\"clase\":\"unico\",\"monto\":362.25,\"mes\":\"2026-09\",\"tipo\":\"Fijo\",\"cadencia\":0,\"id\":\"unico-mtjx8lrv\",\"desde\":\"2026-09-02\",\"activo\":true},{\"categoria\":\"Tramites entidades\",\"medio\":\"Efectivo\",\"tarjeta\":\"\",\"cargo\":\"Corriente\",\"usuario\":\"J\",\"detalle\":\"Revisión vehicular\",\"clase\":\"unico\",\"monto\":15,\"mes\":\"2026-09\",\"tipo\":\"Fijo\",\"cadencia\":0,\"id\":\"unico-mtkp6qen\",\"desde\":\"2026-09-02\",\"activo\":true}]","estado_TC-BOLI_2026-08":"440.67","plan_ajustes":"{\"plazo-mtbtlk2d\":{\"activo\":false}}","plan_no_plazo-mtbtlk2d":"","estado_TC-PICH_2026-08":1071.7},"categorias":[{"nombre":"Aperitivos","grupo":"Hogar","tipo":"Gasto","presupuesto":26.0,"activa":"Si","_ts":1786909701794},{"nombre":"Auto","grupo":"Transporte","tipo":"Gasto","presupuesto":0.0,"activa":"Si","_ts":1786909701794},{"nombre":"Casa","grupo":"Hogar","tipo":"Gasto","presupuesto":17.0,"activa":"Si","_ts":1786909701794},{"nombre":"Combustible","grupo":"Transporte","tipo":"Gasto","presupuesto":109.0,"activa":"Si","_ts":1786909701794},{"nombre":"Digital","grupo":"Ocio","tipo":"Gasto","presupuesto":82.0,"activa":"Si","_ts":1786909701794},{"nombre":"Electrodomesticos","grupo":"Hogar","tipo":"Gasto","presupuesto":59.0,"activa":"Si","_ts":1786909701794},{"nombre":"Entretenimineto","grupo":"Ocio","tipo":"Gasto","presupuesto":1.0,"activa":"Si","_ts":1786909701794},{"nombre":"Farmacia","grupo":"Salud","tipo":"Gasto","presupuesto":21.0,"activa":"Si","_ts":1786909701794},{"nombre":"Gimnasio","grupo":"Salud","tipo":"Gasto","presupuesto":30.0,"activa":"Si","_ts":1786909701794},{"nombre":"Higiene y cuidado","grupo":"Hogar","tipo":"Gasto","presupuesto":75.0,"activa":"Si","_ts":1786909701794},{"nombre":"Intereses bancarios","grupo":"Financiero","tipo":"Gasto","presupuesto":11.0,"activa":"Si","_ts":1786909701794},{"nombre":"Juguetes","grupo":"Ocio","tipo":"Gasto","presupuesto":0.0,"activa":"Si","_ts":1786909701794},{"nombre":"Mantenimiento","grupo":"Transporte","tipo":"Gasto","presupuesto":211.0,"activa":"Si","_ts":1786909701794},{"nombre":"Mascotas","grupo":"Mascotas","tipo":"Gasto","presupuesto":1.0,"activa":"Si","_ts":1786909701794},{"nombre":"Regalos","grupo":"Ocio","tipo":"Gasto","presupuesto":16.0,"activa":"Si","_ts":1786909701794},{"nombre":"Repuestos","grupo":"Transporte","tipo":"Gasto","presupuesto":49.0,"activa":"Si","_ts":1786909701794},{"nombre":"Restaurantes","grupo":"Hogar","tipo":"Gasto","presupuesto":120.0,"activa":"Si","_ts":1786909701794},{"nombre":"Ropa","grupo":"Ocio","tipo":"Gasto","presupuesto":55.0,"activa":"Si","_ts":1786909701794},{"nombre":"Salud","grupo":"Salud","tipo":"Gasto","presupuesto":0.0,"activa":"Si","_ts":1786909701794},{"nombre":"Seguro tarjeta","grupo":"Financiero","tipo":"Gasto","presupuesto":3.0,"activa":"Si","_ts":1786909701794},{"nombre":"Streaming","grupo":"Ocio","tipo":"Gasto","presupuesto":53.0,"activa":"Si","_ts":1786909701794},{"nombre":"Suplementos","grupo":"Salud","tipo":"Gasto","presupuesto":34.0,"activa":"Si","_ts":1786909701794},{"nombre":"Tramites entidades","grupo":"Financiero","tipo":"Gasto","presupuesto":0.0,"activa":"Si","_ts":1786909701794},{"nombre":"Veterinario","grupo":"Mascotas","tipo":"Gasto","presupuesto":0.0,"activa":"Si","_ts":1786909701794},{"nombre":"Viajes","grupo":"Ocio","tipo":"Gasto","presupuesto":311.0,"activa":"Si","_ts":1786909701794},{"nombre":"Viveres","grupo":"Hogar","tipo":"Gasto","presupuesto":413.0,"activa":"Si","_ts":1786909701794},{"nombre":"Sueldo","grupo":"Ingresos","tipo":"Ingreso","presupuesto":0.0,"activa":"Si","_ts":1786909701794},{"nombre":"Otros ingresos","grupo":"Ingresos","tipo":"Ingreso","presupuesto":0.0,"activa":"Si","_ts":1786909701794},{"nombre":"Rendimientos","grupo":"Ingresos","tipo":"Ingreso","presupuesto":0.0,"activa":"Si","_ts":1786909701794},{"nombre":"Bebidas","grupo":"Otros","tipo":"Gasto","presupuesto":0.0,"activa":"Si","_ts":1786972505142},{"nombre":"Materiales de construccion","grupo":"Otros","tipo":"Gasto","presupuesto":75.0,"activa":"Si","_ts":1787422314381},{"nombre":"Terreno","grupo":"Otros","tipo":"Gasto","presupuesto":0.0,"activa":"Si","_ts":1788342983996},{"nombre":"Ofrenda","grupo":"Otros","tipo":"Gasto","presupuesto":0.0,"activa":"Si","_ts":1788717417380},{"nombre":"Plan celular","grupo":"Otros","tipo":"Gasto","presupuesto":0.0,"activa":"Si","_ts":1788867651803},{"nombre":"Movilizacion","grupo":"Otros","tipo":"Gasto","presupuesto":0.0,"activa":"Si","_ts":1788969319008},{"nombre":"Gastos medicos","grupo":"Otros","tipo":"Gasto","presupuesto":0.0,"activa":"Si","_ts":1789168987083}],"cuentas":[{"id":"PACIFICO-1","nombre":"Banco del Pacífico 1","tipo":"Banco","banco":"Pacífico","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si","_ts":1788024920628},{"id":"PACIFICO-2","nombre":"Banco del Pacífico 2","tipo":"Banco","banco":"Pacífico","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si","_ts":1786909701794},{"id":"BCO-PICH","nombre":"Banco Pichincha","tipo":"Banco","banco":"Pichincha","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si","_ts":1786909701794},{"id":"EFECTIVO","nombre":"Efectivo","tipo":"Efectivo","banco":"","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"","dia_pago":"","activa":"Si","_ts":1788179607641},{"id":"TC-PICH","nombre":"TC Pichincha","tipo":"Tarjeta","banco":"Pichincha","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"3","dia_pago":"18","activa":"Si","_ts":1786909701794},{"id":"TC-BOLI","nombre":"TC Bolivariano","tipo":"Tarjeta","banco":"Bolivariano","saldo_inicial":0,"cupo":0,"usuarios":"J,C","dia_corte":"fin","dia_pago":"15","activa":"Si","_ts":1786909701794}],"ingresos":[],"gastosTarjeta":[],"cuotas":[],"gastosEfectivo":[],"inversiones":[],"movimientos":[],"vehiculoGastos":[],"vehiculoRecorrido":[]};
 const __fetchOriginal = window.fetch;
 window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
@@ -3070,6 +3106,36 @@ function pagoDelMes(tarjetaId, mes, usuario = 'ambos') {
   return redondear(total);
 }
 
+/**
+ * El pago con el que se saldó el consumo de una tarjeta en un mes, si ya se
+ * hizo.
+ *
+ * Se reconoce por la referencia que deja `formPagoTarjeta` —«TC-PICH:2026-08»—
+ * y no por las marcas de las cuotas: el movimiento es el que sabe CUÁNDO se
+ * pagó y DESDE QUÉ CUENTA salió, que es lo que hay que poder enseñar después.
+ *
+ * @returns {object|null} el movimiento del pago, o null si sigue pendiente
+ */
+function pagoDeTarjeta(tarjetaId, mes) {
+  const ref = `${tarjetaId}:${mes}`;
+  const conReferencia = db.movimientos.find((m) => m.tipo === 'Pago de tarjeta'
+    && m.ref_id === ref);
+  if (conReferencia) return conReferencia;
+
+  /*
+   * El pago también se puede haber apuntado a mano desde Cuentas, como un
+   * movimiento de tipo «Pago de tarjeta». Ese no lleva referencia, así que se
+   * reconoce por la tarjeta a la que entró y por caer en el mes en que vencía
+   * este corte —agosto se paga en septiembre, no en agosto—.
+   */
+  const vence = fechaPagoMes(mes, tarjetaId);
+  const mesDelPago = vence ? vence.slice(0, 7) : sumarMeses(mes, 1);
+  return db.movimientos.find((m) => m.tipo === 'Pago de tarjeta'
+    && !m.ref_id
+    && m.cuenta_destino === tarjetaId
+    && String(m.fecha).slice(0, 7) === mesDelPago) || null;
+}
+
 // --- Comprobación contra el estado de cuenta ---------------------------------
 
 /*
@@ -3447,7 +3513,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDelMes, patrimonioNeto, planificarCuotas, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, totalAhorrado, totalInvertido, totalPorCategoria, totalPorUsuario };
+return { acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planificarCuotas, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, totalAhorrado, totalInvertido, totalPorCategoria, totalPorUsuario };
 })();
 
 M["charts"] = (function () {
@@ -8516,7 +8582,7 @@ M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
 const {db, tarjetas, usuarios} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, pagoDeTarjeta} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
 const {crear, esc, $, segmentado, opciones} = M["ui"];
 const {formGastoTarjeta, formIngreso} = M["forms"];
@@ -8748,6 +8814,7 @@ function seccionRepartoMes(mes) {
       total,
       movs: db.cuotas.filter((c) => c.tarjeta === t.id && c.mes === mes).length,
       vence: fechaPagoMes(mes, t.id),
+      pago: pagoDeTarjeta(t.id, mes),
       partes: gente.map((u) => ({ usuario: u, monto: pagoDelMes(t.id, mes, u) })),
     };
   });
@@ -8772,10 +8839,17 @@ function seccionRepartoMes(mes) {
         <li class="con-acciones">
           <span class="insignia">${esc(iniciales(f.tarjeta.nombre))}</span>
           <div class="principal">
-            <div class="titulo">${esc(f.tarjeta.nombre.replace(/^TC /, ''))}</div>
+            <div class="titulo">${esc(f.tarjeta.nombre.replace(/^TC /, ''))}${
+  f.pago ? '<span class="sello-pagado">Pagada</span>' : ''}</div>
             <div class="meta">${f.movs} ${f.movs === 1 ? 'movimiento' : 'movimientos'}${
-  // Fecha corta: el año se sobreentiende y la línea no llega a cortarse.
-  f.vence ? ` · se paga el ${esc(fechaCorta(f.vence))}` : ''}</div>
+  /*
+   * Si ya se pagó, lo que importa no es cuándo vencía sino cuándo se pagó y
+   * de dónde salió la plata; la fecha de vencimiento ya no dice nada.
+   * Fecha corta: el año se sobreentiende y la línea no llega a cortarse.
+   */
+  f.pago
+    ? ` · pagada el ${esc(fechaCorta(f.pago.fecha))} desde ${esc(nombreCuenta(f.pago.cuenta_origen))}`
+    : (f.vence ? ` · se paga el ${esc(fechaCorta(f.vence))}` : '')}</div>
           </div>
           <div class="monto">${money(f.total)}</div>
           <div class="acciones" style="justify-content:stretch;flex-direction:column;align-items:stretch">
@@ -8789,6 +8863,11 @@ function seccionRepartoMes(mes) {
       <strong>${money(total)}</strong>
     </div>
     <div class="reparto">${chipsReparto(porPersona, total)}</div>`;
+}
+
+/** 'BCO-PICH' → 'Banco Pichincha'; si la cuenta ya no existe, el propio id. */
+function nombreCuenta(id) {
+  return db.cuentas.find((c) => c.id === id)?.nombre || id || 'la cuenta';
 }
 
 /** '2026-09-18' → '18 de septiembre'. */
@@ -8819,7 +8898,12 @@ function seccionProximos(mes) {
 
   tarjetas().forEach((t) => {
     const monto = pagoDelMes(t.id, mes, 'ambos');
-    if (monto > 0) {
+    /*
+     * Una tarjeta ya pagada no es un movimiento «próximo»: sale de esta lista
+     * y pasa a enseñarse como pagada en «Tarjetas del mes», arriba. Antes se
+     * quedaba aquí como pendiente aunque el pago ya estuviera hecho.
+     */
+    if (monto > 0 && !pagoDeTarjeta(t.id, mes)) {
       const vence = fechaPagoMes(mes, t.id);
       // Cuánto pone cada uno de ese pago: el cupo es compartido, así que lo
       // útil no es solo el total sino a quién le toca qué parte.
@@ -9849,7 +9933,14 @@ function listaMovimientos(tarjetaId, mes, usuario, marcable = false) {
           </label>` : ''}
         <div class="principal">
           <div class="titulo">${esc(gasto.detalle)}
-            <span class="chip ${esc(gasto.usuario.toLowerCase())}">${esc(gasto.usuario)}</span></div>
+            <span class="chip ${esc(gasto.usuario.toLowerCase())}">${esc(gasto.usuario)}</span>${
+  /*
+   * Fuera del modo comprobar no había forma de saber qué ya se había cotejado
+   * contra el estado de cuenta: al salir, las casillas desaparecían y con
+   * ellas el rastro. Este visto se queda siempre.
+   */
+  !marcable && cuota.conciliado === 'Si'
+    ? '<span class="visto" title="Comprobado contra el estado de cuenta">✓</span>' : ''}</div>
           <div class="meta">${esc(gasto.fecha)} · ${esc(gasto.categoria)}
             ${esCuota ? ` · cuota ${cuota.n_cuota}/${gasto.cuotas} de ${money(gasto.monto_total)}` : ''}
             ${vence && vence !== venceMes ? ` · se paga el ${esc(textoFecha(vence))}` : ''}
