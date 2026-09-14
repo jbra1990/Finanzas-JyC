@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-oHJ6rfVOM3S8ztq8H0EVSvXfFtYFcV68WyuxX3GvF3Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-yc5UA/j0wp/+WTd2wHrAqDIA/LZpiX7VGJNba2FX+yc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -8558,6 +8558,7 @@ function registrarGastoTarjeta({
   });
 
   const id = idExistente || nuevoId('gastosTarjeta');
+  const previo = db.gastosTarjeta.find((x) => x.id === id);
   const fila = tocar({
     id,
     fecha,
@@ -8573,10 +8574,21 @@ function registrarGastoTarjeta({
     mes_inicio: mesInicio,
     notas,
     km: Number(km) > 0 ? Number(km) : '',
+    /*
+     * «Por diferir» la pone otro botón y no la toca este formulario. Si no se
+     * arrastrara aquí, corregir el monto o el detalle del consumo borraría la
+     * marca sin avisar y el cargo volvería a entrar en el pago del mes.
+     */
+    aplazado: previo?.aplazado || '',
   });
 
   const pagados = new Set(db.cuotas
     .filter((c) => c.gasto_id === id && c.pagado === 'Si')
+    .map((c) => c.mes));
+  // Igual que el pagado: el visto de «comprobado contra el estado de cuenta»
+  // es trabajo hecho a mano y rehacer el cronograma no debe tirarlo.
+  const comprobados = new Set(db.cuotas
+    .filter((c) => c.gasto_id === id && c.conciliado === 'Si')
     .map((c) => c.mes));
   db.cuotas = db.cuotas.filter((c) => c.gasto_id !== id);
 
@@ -8593,6 +8605,7 @@ function registrarGastoTarjeta({
     usuario,
     categoria,
     pagado: pagados.has(c.mes) ? 'Si' : '',
+    conciliado: comprobados.has(c.mes) ? 'Si' : '',
   })));
   guardar();
   return { fila, plan, n };
