@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-cCSoo9P6FfuFJkTsTAL6i47CJsklE1TTBa78PP3giow='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-oHJ6rfVOM3S8ztq8H0EVSvXfFtYFcV68WyuxX3GvF3Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -5896,6 +5896,10 @@ const ESQUEMA = [
     // Añadir una columna es aditivo —los libros viejos simplemente no la
     // traen— porque las filas se casan por el texto de la cabecera.
     ['Kilometraje', 'km', 'n'],
+    // Un consumo que se paga aparte porque el banco lo va a diferir. Sin esta
+    // columna, pasar la base por Excel borraría la marca y el cargo volvería
+    // a entrar en el pago del mes.
+    ['Aplazado', 'aplazado', 't'],
   ]],
   ['Cuotas', 'cuotas', [
     ['Gasto ID', 'gasto_id', 't'], ['N° cuota', 'n_cuota', 'n'],
