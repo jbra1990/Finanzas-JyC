@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Um9lVsarKnafMoJKIf2kxMy+f5/XuBtl1k37zJJ0oAA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-cCSoo9P6FfuFJkTsTAL6i47CJsklE1TTBa78PP3giow='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -837,6 +837,8 @@ a { color: var(--acento); }
  * etiqueta y dejaría de invitar a pulsarlo.
  */
 .tarjeta > header {
+  /* Ancla de los filetes de la esquina, que van por fuera de la pestaña. */
+  position: relative;
   display: flex;
   /* Si no cabe, se parte en dos líneas. Con `nowrap` el segundo bloque salía
      empujado FUERA de la tarjeta: en «Año» el selector acababa a 391 px de una
@@ -871,26 +873,64 @@ a { color: var(--acento); }
 }
 
 .tarjeta > header .pista {
-  flex: 0 1 auto;
+  /*
+   * TODAS del mismo tamaño, en todas las secciones. Antes cada pestaña se
+   * ajustaba a su texto y, entre las 46 que hay en la app, salían anchos de 59
+   * a 185 px y cinco alturas distintas: cada tarjeta con su esquina de un
+   * tamaño. Con base fija —ni crece ni encoge— y alto fijo de dos líneas,
+   * todas quedan iguales aunque el rótulo sea «Hoy» o «Acumulado de todos los
+   * meses».
+   */
+  flex: 0 0 var(--pista-ancho);
+  align-self: flex-start;
+  position: relative;
   display: flex;
   align-items: center;
-  max-width: 52%;
+  justify-content: flex-end;
+  /*
+   * MÍNIMO, no fijo. Con alto fijo y el texto forzado a una línea, 21 de los
+   * 40 rótulos de la app se cortaban por el principio —«do de todos los
+   * meses»— y encima sin puntos suspensivos, porque `text-overflow` no actúa
+   * dentro de un contenedor flex. Un rótulo ilegible es peor que uno de dos
+   * líneas: los que caben se quedan en el alto de la referencia y solo crecen
+   * los largos.
+   */
+  /*
+   * ALTO FIJO de una línea, no un mínimo. Con mínimo, los rótulos largos
+   * partían la pestaña en dos y esas tarjetas desentonaban junto a las de
+   * rótulo corto. Para que quepan todos en una línea sin recortar ninguno, la
+   * letra baja a 11 px y los rótulos que no entraban se reescribieron más
+   * cortos.
+   */
+  height: var(--pista-alto);
   /* Red de seguridad: si algún día vuelve a partirse en dos líneas, la pestaña
      se queda igual en la esquina derecha en vez de irse al otro lado. */
   margin: 0 0 0 auto;
-  padding: 12px 16px;
-  border-radius: 0 0 0 20px;
+  padding: 0 15px;
+  border-radius: 0;
   background: var(--ficha-tapa);
-  border-left: 1px solid var(--ficha-filo);
+  /* Sin filo a la izquierda: ahí ya no hay corte, sigue la curva del filete y
+     una raya vertical delataba que son dos piezas. */
   border-bottom: 1px solid var(--ficha-filo);
   /* Apagado: es el dato de contexto, no debe competir con el rótulo. */
   color: var(--tinta-3);
-  font-size: 12px;
-  font-weight: 560;
-  line-height: 1.35;
+  font-size: 11px;
+  font-weight: 570;
+  letter-spacing: -0.005em;
+  line-height: 1.2;
   text-align: right;
+  white-space: nowrap;
+  /*
+   * NO se fuerza a una línea. Se intentó, para que todas las pestañas midieran
+   * exactamente igual, y el resultado fue que 21 de los 40 rótulos se cortaban
+   * por el principio —«do de todos los meses»— y encima sin puntos
+   * suspensivos, porque `text-overflow` no funciona dentro de un contenedor
+   * flex. Un rótulo ilegible es peor que uno de dos líneas.
+   *
+   * Así que el alto es un MÍNIMO: los que caben en una línea —la mayoría— se
+   * quedan en 32 px, y solo los largos crecen.
+   */
 }
-
 /* Lo que no es rótulo ni dato —una cifra grande, un botón, un selector—. */
 .tarjeta > header > *:not(h2):not(.pista) {
   align-self: center;
@@ -1663,7 +1703,8 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
   padding: 9px 15px 10px;
   border-radius: 0 26px 0 20px;
   background: var(--ficha-tapa);
-  border-left: 1px solid var(--ficha-filo);
+  /* Sin filo a la izquierda: ahí ya no hay corte, sigue la curva del filete y
+     una raya vertical delataba que son dos piezas. */
   border-bottom: 1px solid var(--ficha-filo);
   font-size: 12px;
   font-weight: 560;
@@ -2196,6 +2237,247 @@ body.con-cajon { overflow: hidden; }
   }
 }
 
+/* --- Cerradura ----------------------------------------------------------- */
+
+/*
+ * Con la llave echada no hay app debajo: `#vista` se vacía y esto ocupa la
+ * pantalla entera. Se esconde lo demás para que no asome la cabecera ni la
+ * barra de abajo mientras se pide la clave.
+ */
+body.bloqueada #nav,
+body.bloqueada .cabecera,
+body.bloqueada #btn-menu { display: none !important; }
+
+.cerradura {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--fondo);
+}
+.cerradura-caja {
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+}
+.cerradura-icono { font-size: 34px; line-height: 1; margin-bottom: 14px; }
+.cerradura-caja h1 {
+  font-size: 21px;
+  font-weight: 660;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+}
+.cerradura-caja .pista { margin: 0 0 18px; }
+.cerradura-caja form { display: flex; flex-direction: column; gap: 10px; }
+.cerradura-caja input {
+  width: 100%;
+  padding: 13px 15px;
+  border-radius: 14px;
+  border: 1px solid var(--borde);
+  background: var(--superficie-2);
+  color: var(--tinta);
+  font-size: 16px;   /* 16px o menos hace que iOS haga zoom al enfocar */
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+.cerradura-caja input:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 1px;
+}
+.cerradura-error {
+  margin: 12px 0 0;
+  color: var(--critico);
+  font-size: 13px;
+  font-weight: 550;
+}
+.cerradura-nota { margin: 20px 0 0; font-size: 11.5px; }
+
+/*
+ * El velo. iOS fotografía la pantalla al mandar la app al fondo y esa foto se
+ * ve en el carrusel de apps: sin esto, los saldos quedan a la vista de quien
+ * pase el dedo por ahí. Sin transición a propósito —tiene que estar puesto
+ * ANTES de que se tome la foto, no difuminándose todavía—.
+ */
+body.velada #vista,
+body.velada .cabecera { filter: blur(18px); }
+
+/* --- Consumos por diferir ------------------------------------------------ */
+
+/*
+ * El renglón del panel: el consumo del mes sigue siendo el que dice el banco,
+ * y debajo se resta aparte lo que no se va a pagar todavía. Separarlo así, en
+ * vez de descontarlo de la cifra grande, es lo que permite seguir comparando
+ * con el estado de cuenta sin hacer cuentas de cabeza.
+ */
+.panel-aplazado {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 12.5px;
+  color: var(--panel-tinta-2);
+}
+.panel-aplazado strong {
+  font-size: 15px;
+  font-weight: 640;
+  color: var(--panel-tinta);
+  font-variant-numeric: tabular-nums;
+}
+
+.lista .titulo > .chip.por-diferir {
+  background: color-mix(in srgb, var(--alerta) 18%, transparent);
+  border-color: color-mix(in srgb, var(--alerta) 45%, transparent);
+  color: var(--alerta);
+  font-size: 10.5px;
+  font-weight: 620;
+  padding: 2px 9px;
+}
+
+/* --- Los filetes cóncavos del rótulo de esquina --------------------------- */
+
+/*
+ * Lo que hace que el hueco oscuro parezca excavado en la tarjeta y no una caja
+ * pegada encima: en los dos puntos donde el oscuro toca el filo de la tarjeta,
+ * lo claro lo ABRAZA con una curva hacia dentro. Un `border-radius` normal
+ * curva hacia fuera y ahí deja un ángulo recto, que es lo que delataba los
+ * intentos anteriores.
+ *
+ * El truco es un cuadradito del color oscuro con un mordisco circular: dentro
+ * del círculo transparente —se ve la tarjeta— y fuera oscuro. Pegado al filo,
+ * ese mordisco es exactamente la curva cóncava.
+ */
+:root {
+  /*
+   * Medido sobre la referencia: la franja oscura ocupa el 10,6 % del ancho de
+   * la tarjeta de alto y algo menos del 60 % de ancho. En una tarjeta de 356 px
+   * —pantalla de 390— eso son 38 px de alto, que es UNA línea de texto. Lo que
+   * la engordaba era dejar que el rótulo se partiera en dos.
+   */
+  /*
+   * Iguales entre sí, pero no a costa del título: con 170 px clavados, en una
+   * pantalla de 320 el rótulo se quedaba sin sitio y se salía de la tarjeta en
+   * cuatro secciones. Con `min()` todas siguen midiendo lo mismo y encogen a
+   * la vez cuando la pantalla no da.
+   */
+  --pista-ancho: min(184px, 49%);
+  --pista-alto: 31px;
+  --pista-radio: 16px;
+  /*
+   * La curva de la izquierda es una S, no un arco. Medida sobre la referencia:
+   * 120 px de alcance por 76 de caída —1,58:1— y, sobre todo, la pendiente
+   * arranca casi plana, se empina en el medio y se vuelve a tumbar al final.
+   * Eso es un arco CÓNCAVO arriba encadenado con uno CONVEXO abajo, cada uno
+   * con la mitad de la caída. Con un solo arco la curva salía tumbada por un
+   * extremo y cortada por el otro, que es lo que se veía mal.
+   *
+   * Cada mitad: la mitad del alto de la franja, y de ancho la mitad del
+   * alcance total (1,6 × 32 ≈ 52 → 26 cada una).
+   */
+  --media-s-ancho: 26px;
+  --media-s-alto: 16px;
+  /*
+   * La de abajo, en cambio, SÍ es un solo arco: arranca plano y se va
+   * empinando hacia el filo derecho, sin volver a tumbarse. Medido, 56 px de
+   * ancho por 42 de caída —1,3:1—, así que es más ancho que alto; tenerlo al
+   * revés lo dejaba en un pico corto.
+   */
+  --filete-der: 34px;
+}
+
+/*
+ * Los filetes cuelgan del ENCABEZADO, no de la pestaña.
+ *
+ * Estuvieron colgando de la pestaña y no se pintaba ninguno: la pestaña lleva
+ * `overflow: hidden` para cortar con puntos suspensivos el rótulo que no quepa,
+ * y eso recortaba también estos dos, que por definición viven FUERA de su caja.
+ * La esquina salía entonces en ángulo recto, sin curva ninguna.
+ */
+.tarjeta > header .pista::before,
+.tarjeta > header .pista::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+
+/*
+ * A la izquierda: la S, calcada de la referencia.
+ *
+ * No es un arco ni dos arcos tangentes: trazando la curva de la imagen píxel a
+ * píxel sale una curva suave, un TRAMO RECTO en medio —la pendiente se
+ * sostiene entre el 35 % y el 67 % del recorrido— y una contracurva alargada
+ * al cerrar. Eso no lo da ningún `border-radius` ni ningún degradado radial,
+ * que siempre curvan de principio a fin. Por eso va recortado con los 24
+ * puntos que se midieron sobre la imagen.
+ *
+ * La proporción también es de la medición: 1,42 de largo por 1 de alto.
+ */
+.tarjeta > header .pista::before {
+  /*
+   * Cuelga de la PESTAÑA, no del encabezado: así su alto es siempre el de
+   * ella. Colgando del encabezado se quedaba clavado en 32 px y, cuando un
+   * rótulo largo partía la pestaña en dos líneas, la curva terminaba a media
+   * altura y dejaba un escalón donde tenían que empalmar.
+   */
+  top: 0;
+  right: 100%;
+  width: calc(var(--pista-alto) * 1.42);
+  height: 100%;
+  background: var(--ficha-tapa);
+  clip-path: polygon(
+    0% 0%,
+    100% 0%,
+    100% 100%,
+    100.0% 99.3%,
+    95.9% 98.2%,
+    91.7% 96.7%,
+    87.6% 94.1%,
+    83.2% 92.3%,
+    79.1% 89.4%,
+    74.9% 85.3%,
+    70.8% 80.6%,
+    66.7% 76.2%,
+    62.5% 70.3%,
+    58.4% 63.0%,
+    54.3% 57.5%,
+    49.9% 49.8%,
+    45.7% 44.3%,
+    41.6% 36.6%,
+    37.5% 31.1%,
+    33.3% 24.5%,
+    29.2% 19.8%,
+    25.1% 15.0%,
+    20.9% 11.7%,
+    16.5% 8.8%,
+    12.4% 6.6%,
+    8.3% 4.8%,
+    4.1% 1.8%,
+    0.0% 0.7%);
+}
+
+/*
+ * Debajo, contra el borde derecho: cierra el hueco por abajo, siguiendo la
+ * esquina redondeada con la que el cuerpo de la tarjeta vuelve a subir.
+ */
+/*
+ * También cuelga de la pestaña, por lo mismo que el de arriba: anclado al
+ * alto fijo del encabezado se quedaba en 32 px y, con un rótulo de dos
+ * líneas, caía DENTRO de la pestaña y le pintaba encima a la segunda línea.
+ */
+.tarjeta > header .pista::after {
+  top: 100%;
+  right: 0;
+  width: var(--filete-der);
+  height: var(--filete-der);
+  background: radial-gradient(var(--filete-der) var(--filete-der) at left bottom,
+    transparent 99%, var(--ficha-tapa) 100%);
+}
+
 </style>
 </head>
 <body>
@@ -2229,6 +2511,177 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
 
+M["cerradura"] = (function () {
+/**
+ * Cerradura: clave de acceso y cifrado de la base en el propio aparato.
+ *
+ * EL PROBLEMA QUE RESUELVE
+ * Todo lo que la app guarda —sueldos, consumos, cupos, saldos— vive en
+ * `localStorage`, que es texto plano. Cualquiera que agarre el teléfono
+ * desbloqueado, o que saque una copia del almacenamiento del navegador, lo lee
+ * entero sin pasar por la app. Una pantalla de PIN que solo tape la vista no
+ * arregla eso: los datos seguirían ahí, legibles, debajo.
+ *
+ * Por eso aquí se cifra de verdad. Con la cerradura puesta, en `localStorage`
+ * ya no hay un JSON sino un sobre con bytes ilegibles, y la única forma de
+ * abrirlo es la clave, que NO se guarda en ninguna parte.
+ *
+ * CÓMO
+ *   clave + sal → PBKDF2-SHA256 (310 000 vueltas) → llave AES-GCM de 256 bits
+ *
+ * PBKDF2 con muchas vueltas es lo que encarece probar claves a lo bruto: quien
+ * se lleve el sobre tiene que pagar ese coste por cada intento. AES-GCM además
+ * viene autenticado, así que si alguien manosea el sobre, al abrirlo falla en
+ * vez de devolver basura silenciosamente.
+ *
+ * LO QUE ESTO NO PROTEGE
+ * Nada de esto sirve con la app ya abierta y desbloqueada delante de alguien:
+ * ahí los datos están descifrados en memoria, que es lo que permite usarlos.
+ * Protege el aparato apagado, perdido o robado, y la copia del almacenamiento.
+ *
+ * Y SI SE OLVIDA LA CLAVE, NO HAY VUELTA. No hay puerta trasera ni pregunta de
+ * seguridad: sin la clave, el sobre no se abre. Por eso al ponerla se obliga a
+ * descargar un respaldo antes.
+ */
+
+const VUELTAS = 310000;
+const MARCA = 'FJC1';        // primeros bytes del sobre, para reconocerlo
+const MIN_CLAVE = 6;
+
+/** La llave derivada vive solo en memoria, mientras la app está abierta. */
+let llave = null;
+
+const cripto = globalThis.crypto?.subtle;
+
+/** ¿Puede este navegador cifrar? Sin esto la cerradura no se ofrece. */
+function hayCripto() {
+  return Boolean(cripto && globalThis.crypto?.getRandomValues);
+}
+
+const bytes = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n));
+
+/*
+ * A base64 POR TROZOS. El atajo de una línea —`String.fromCharCode(...bytes)`—
+ * desparrama cada byte como un argumento, y con una base de cientos de kilos
+ * eso revienta la pila de llamadas: «Maximum call stack size exceeded». La
+ * base entera pasa por aquí en cada guardado, así que tiene que aguantar
+ * cualquier tamaño.
+ */
+function aTexto(buf) {
+  const u8 = new Uint8Array(buf);
+  const TROZO = 0x8000;
+  let salida = '';
+  for (let i = 0; i < u8.length; i += TROZO) {
+    salida += String.fromCharCode.apply(null, u8.subarray(i, i + TROZO));
+  }
+  return btoa(salida);
+}
+
+const aBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+
+/** clave + sal → llave AES-GCM. Es la parte cara, a propósito. */
+async function derivar(clave, sal) {
+  const material = await cripto.importKey(
+    'raw', new TextEncoder().encode(clave), 'PBKDF2', false, ['deriveKey'],
+  );
+  return cripto.deriveKey(
+    { name: 'PBKDF2', salt: sal, iterations: VUELTAS, hash: 'SHA-256' },
+    material,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
+/** ¿Lo guardado es un sobre cifrado o el JSON de siempre? */
+function esSobre(crudo) {
+  if (typeof crudo !== 'string' || crudo[0] !== '{') return false;
+  try {
+    return JSON.parse(crudo)?.fjc === MARCA;
+  } catch {
+    return false;
+  }
+}
+
+/** ¿Hay una llave abierta en memoria ahora mismo? */
+function abierta() {
+  return llave !== null;
+}
+
+/** Olvida la llave. La base cifrada se queda donde está; deja de poder leerse. */
+function cerrar() {
+  llave = null;
+}
+
+/**
+ * Estrena cerradura: deriva la llave de una clave nueva y la deja abierta.
+ * La sal se sortea aquí y viaja dentro del sobre: no es un secreto, su trabajo
+ * es que dos bases con la misma clave no compartan llave.
+ */
+async function estrenar(clave) {
+  if (String(clave).length < MIN_CLAVE) {
+    throw new Error(`La clave necesita al menos ${MIN_CLAVE} caracteres.`);
+  }
+  const sal = bytes(16);
+  llave = await derivar(clave, sal);
+  return aTexto(sal);
+}
+
+/**
+ * Abre un sobre con la clave que teclee la persona.
+ * @returns {string|null} el JSON de dentro, o null si la clave no es
+ */
+async function abrir(crudo, clave) {
+  let sobre;
+  try {
+    sobre = JSON.parse(crudo);
+  } catch {
+    return null;
+  }
+  if (sobre?.fjc !== MARCA) return null;
+  try {
+    const posible = await derivar(clave, aBytes(sobre.sal));
+    // Si la clave no es, AES-GCM no descifra: la etiqueta de autenticación no
+    // cuadra y `decrypt` lanza. Eso es lo que distingue «clave equivocada» de
+    // «archivo roto», sin tener que guardar ninguna pista de la clave.
+    const plano = await cripto.decrypt(
+      { name: 'AES-GCM', iv: aBytes(sobre.iv) }, posible, aBytes(sobre.ct),
+    );
+    llave = posible;
+    return new TextDecoder().decode(plano);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Mete un texto en un sobre con la llave que ya esté abierta.
+ * El vector de inicialización se sortea en CADA escritura: reutilizarlo con la
+ * misma llave rompería AES-GCM por completo.
+ */
+async function sellar(texto, sal) {
+  if (!llave) throw new Error('La cerradura está cerrada.');
+  const iv = bytes(12);
+  const ct = await cripto.encrypt(
+    { name: 'AES-GCM', iv }, llave, new TextEncoder().encode(texto),
+  );
+  return JSON.stringify({
+    fjc: MARCA, v: 1, sal, iv: aTexto(iv), ct: aTexto(ct),
+  });
+}
+
+/** La sal que trae un sobre, para volver a sellar con la misma llave. */
+function salDe(crudo) {
+  try {
+    return JSON.parse(crudo)?.sal || null;
+  } catch {
+    return null;
+  }
+}
+
+return { MIN_CLAVE, abierta, abrir, cerrar, esSobre, estrenar, hayCripto, salDe, sellar };
+})();
+
 M["store"] = (function () {
 /**
  * Estado de la aplicación y persistencia.
@@ -2237,6 +2690,7 @@ M["store"] = (function () {
  * base viva: se importa para cargar datos y se exporta para respaldar/reportar.
  */
 
+const cerradura = M["cerradura"];
 const CLAVE = 'finanzas.jc.v1';
 const RUTA_SEMILLA = 'data/seed.json';
 
@@ -2396,9 +2850,39 @@ function comprobarAlmacenamiento() {
   return almacenamiento.ok;
 }
 
+/*
+ * Con la cerradura puesta, escribir deja de ser instantáneo: cifrar es
+ * asíncrono. `guardar()` se sigue llamando igual desde toda la app —sin await,
+ * como siempre—, así que aquí se encadenan las escrituras para que no se pisen
+ * entre sí y la última en pedirse sea la última en quedar.
+ */
+let colaEscritura = Promise.resolve();
+let salActual = null;
+
+/** Deja pendiente lo que aún no se ha escrito, para poder forzarlo al salir. */
+function escrituraPendiente() {
+  return colaEscritura;
+}
+
+function escribirCifrado(texto) {
+  colaEscritura = colaEscritura
+    .then(() => cerradura.sellar(texto, salActual))
+    .then((sobre) => { seguro.escribir(CLAVE, sobre); })
+    .catch((err) => { marcarFallo(err); });
+  return colaEscritura;
+}
+
 function guardar() {
   sellarNuevos();
-  const escrito = seguro.escribir(CLAVE, JSON.stringify(db));
+  const texto = JSON.stringify(db);
+
+  if (cerradura.abierta()) {
+    escribirCifrado(texto);
+    notificar();
+    return;
+  }
+
+  const escrito = seguro.escribir(CLAVE, texto);
   // Que `setItem` no lance no significa que el dato se conserve: hay
   // navegadores que lo descartan en silencio. En ese caso manda la
   // comprobación de arranque y la bandera no se limpia.
@@ -2406,6 +2890,70 @@ function guardar() {
     almacenamiento.ok = true;
     almacenamiento.motivo = '';
   }
+  notificar();
+}
+
+// --- Cerradura ---------------------------------------------------------------
+
+/** ¿La base de este aparato está guardada cifrada? */
+function estaCifrada() {
+  return cerradura.esSobre(seguro.leer(CLAVE));
+}
+
+/** ¿Hay cerradura puesta Y abierta en esta sesión? */
+const cerraduraAbierta = () => cerradura.abierta();
+
+/**
+ * Pone la cerradura: deriva la llave y reescribe la base ya cifrada.
+ * A partir de aquí, en `localStorage` no queda texto legible.
+ */
+async function ponerCerradura(clave) {
+  salActual = await cerradura.estrenar(clave);
+  await escribirCifrado(JSON.stringify(db));
+  return true;
+}
+
+/**
+ * Abre la base cifrada con la clave que teclee la persona.
+ * @returns {boolean} false si la clave no es la correcta
+ */
+async function abrirCerradura(clave) {
+  const crudo = seguro.leer(CLAVE);
+  const plano = await cerradura.abrir(crudo, clave);
+  if (plano === null) return false;
+  salActual = cerradura.salDe(crudo);
+  adoptar(JSON.parse(plano));
+  return true;
+}
+
+/** Quita la cerradura: vuelve a dejar la base en claro. Pide la clave actual. */
+async function quitarCerradura(clave) {
+  const crudo = seguro.leer(CLAVE);
+  if (cerradura.esSobre(crudo) && await cerradura.abrir(crudo, clave) === null) {
+    return false;
+  }
+  cerradura.cerrar();
+  salActual = null;
+  await colaEscritura;
+  seguro.escribir(CLAVE, JSON.stringify(db));
+  return true;
+}
+
+/**
+ * Echa la llave: olvida la clave y vacía la base de la memoria.
+ *
+ * Lo segundo importa tanto como lo primero. Sin vaciarla, los datos seguirían
+ * en las variables de la pestaña y cualquier vista que se pintara por detrás
+ * los enseñaría con la cerradura echada.
+ */
+async function echarLlave() {
+  await colaEscritura;
+  cerradura.cerrar();
+  db.config = { ...CONFIG_POR_DEFECTO, ...Object.fromEntries(
+    CONFIG_LOCAL.map((k) => [k, db.config?.[k]]).filter(([, v]) => v !== undefined),
+  ) };
+  COLECCIONES.forEach((c) => { db[c] = []; });
+  db.borrados = [];
   notificar();
 }
 
@@ -2572,6 +3120,14 @@ function retirarPichinchaAdicional() {
 async function cargar() {
   comprobarAlmacenamiento();
   const crudo = seguro.leer(CLAVE);
+  /*
+   * Si lo guardado es un sobre cifrado no hay nada que interpretar todavía:
+   * hace falta la clave. Se avisa y la app enseña la pantalla de la cerradura.
+   * Ojo con el orden —esta comprobación va ANTES del JSON.parse—: un sobre es
+   * JSON válido, así que sin esto se adoptaría como si fuera la base y la app
+   * arrancaría vacía, pisando los datos de verdad en la primera escritura.
+   */
+  if (crudo && cerradura.esSobre(crudo)) return 'cerrada';
   if (crudo) {
     try {
       adoptar(JSON.parse(crudo));
@@ -2763,7 +3319,7 @@ function usuarios() {
     .filter(Boolean);
 }
 
-return { CLAVES, COLECCIONES, CONFIG_LOCAL, alCambiar, almacenamiento, capitalizar, cargar, categoriasGasto, categoriasIngreso, codigoDispositivo, comprobarAlmacenamiento, cuenta, cuentasBancarias, db, eliminar, guardar, instantanea, instantaneaSinSecretos, limpiarTodo, nuevoId, reemplazar, tarjetas, tocar, upsert, usuarios };
+return { CLAVES, COLECCIONES, CONFIG_LOCAL, abrirCerradura, alCambiar, almacenamiento, capitalizar, cargar, categoriasGasto, categoriasIngreso, cerraduraAbierta, codigoDispositivo, comprobarAlmacenamiento, cuenta, cuentasBancarias, db, echarLlave, eliminar, escrituraPendiente, estaCifrada, guardar, instantanea, instantaneaSinSecretos, limpiarTodo, nuevoId, ponerCerradura, quitarCerradura, reemplazar, tarjetas, tocar, upsert, usuarios };
 })();
 
 M["calc"] = (function () {
@@ -3104,6 +3660,38 @@ function pagoDelMes(tarjetaId, mes, usuario = 'ambos') {
     total += c.monto;
   }
   return redondear(total);
+}
+
+/**
+ * Consumos marcados «por diferir»: están en el estado de cuenta de este mes,
+ * pero se va a pedir al banco que pasen a cuotas, así que no se pagan ahora.
+ *
+ * Se devuelven aparte en vez de descontarlos de `pagoDelMes` a propósito: el
+ * consumo del mes tiene que seguir cuadrando con lo que dice el banco, que
+ * todavía los factura enteros. Lo que cambia es cuánto se paga, no cuánto se
+ * consumió.
+ */
+function porDiferir(tarjetaId, mes, usuario = 'ambos') {
+  const filas = [];
+  for (const c of db.cuotas) {
+    if (c.tarjeta !== tarjetaId || c.mes !== mes) continue;
+    if (usuario !== 'ambos' && c.usuario !== usuario) continue;
+    const g = db.gastosTarjeta.find((x) => x.id === c.gasto_id);
+    if (g?.aplazado === 'Si') filas.push({ cuota: c, gasto: g });
+  }
+  return filas;
+}
+
+/** Cuánto suma lo que se va a diferir en ese mes. */
+function totalPorDiferir(tarjetaId, mes, usuario = 'ambos') {
+  return redondear(porDiferir(tarjetaId, mes, usuario)
+    .reduce((s, f) => s + f.cuota.monto, 0));
+}
+
+/** Lo que de verdad toca pagar del mes: el consumo menos lo que se va a diferir. */
+function aPagarAhora(tarjetaId, mes, usuario = 'ambos') {
+  return redondear(pagoDelMes(tarjetaId, mes, usuario)
+    - totalPorDiferir(tarjetaId, mes, usuario));
 }
 
 /**
@@ -3513,7 +4101,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planificarCuotas, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, totalAhorrado, totalInvertido, totalPorCategoria, totalPorUsuario };
+return { aPagarAhora, acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario };
 })();
 
 M["charts"] = (function () {
@@ -6260,7 +6848,7 @@ function detener() {
 
 /** Texto de estado para la interfaz. */
 function textoEstado() {
-  if (!archivo.vinculado) return 'Sin archivo vinculado';
+  if (!archivo.vinculado) return 'Sin vincular';
   if (archivo.error === 'permiso') return 'Toca «Reconectar» para volver a usar el archivo';
   if (archivo.error) return archivo.error;
   if (archivo.ocupado) return 'Guardando…';
@@ -7826,7 +8414,7 @@ M["forms"] = (function () {
  */
 
 const {db, guardar, nuevoId, upsert, tocar, cuentasBancarias, tarjetas, categoriasGasto, categoriasIngreso, usuarios, capitalizar} = M["store"];
-const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta} = M["calc"];
+const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta, rangoMeses} = M["calc"];
 const {modal, opciones, brindis, hoyISO, esc, $, aNumero, campoMonto} = M["ui"];
 const selUsuarios = (sel) => opciones(usuarios(), sel);
 const val = (form, sel) => aNumero($(sel, form).value);
@@ -8487,6 +9075,98 @@ function formMovimiento(alTerminar, existente = null) {
  * Paga el consumo de una tarjeta en un mes: marca sus cuotas como pagadas
  * (libera cupo) y deja el movimiento en la cuenta de origen.
  */
+/**
+ * Convierte en diferido un consumo que el banco acaba de pasar a cuotas.
+ *
+ * Es el segundo paso de «por diferir»: primero se deja fuera del pago del mes,
+ * y cuando el banco confirma el plan se viene aquí a escribirlo. El banco
+ * decide tres cosas —cuántas cuotas, de cuánto, y desde qué mes empiezan— y a
+ * veces la cuota no es el total partido en partes iguales, así que las tres se
+ * piden en vez de deducirlas.
+ *
+ * La cuota original de este mes desaparece: ese consumo ya no se paga entero
+ * aquí, se paga repartido. Es el mismo movimiento que hace el banco al
+ * reemitir, y por eso el mes deja de cuadrar con el estado viejo.
+ */
+function formDiferir(gasto, alTerminar) {
+  const actual = db.cuotas.find((c) => c.gasto_id === gasto.id);
+  const desde = sumarMeses(actual?.mes || gasto.mes_inicio || mesActual(), 1);
+  const opcMes = rangoMeses(sumarMeses(mesActual(), -6), sumarMeses(mesActual(), 24))
+    .map((m) => ({ valor: m, texto: nombreMes(m) }));
+
+  modal({
+    titulo: `Diferir «${gasto.detalle}»`,
+    cuerpo: `
+      <p class="pista" style="margin-top:0">Son ${money(gasto.monto_total)} que
+        ahora mismo se pagan de una vez en
+        <strong>${esc(nombreMes(actual?.mes || gasto.mes_inicio))}</strong>.
+        Escribe el plan que te dio el banco.</p>
+      <div class="filtros">
+        <div class="campo"><label for="df-cuotas">Número de cuotas</label>
+          <input id="df-cuotas" name="cuotas" type="number" min="2" max="48"
+                 step="1" value="3" required></div>
+        ${campoMonto('df-monto', 'monto', { etiqueta: 'Valor de cada cuota', requerido: true })}
+      </div>
+      <div class="campo ancho"><label for="df-desde">Primera cuota en</label>
+        <select id="df-desde" name="desde">${opciones(opcMes, desde)}</select></div>
+      <div class="previsualizacion" id="df-preview"></div>`,
+    aceptar: 'Diferir',
+    alAbrir(form) {
+      const preview = $('#df-preview', form);
+      const refrescar = () => {
+        const n = Math.max(2, Math.round(aNumero($('#df-cuotas', form).value)) || 2);
+        const cuota = val(form, '#df-monto');
+        const total = redondear(cuota * n);
+        const dif = redondear(total - gasto.monto_total);
+        preview.innerHTML = `
+          <div>${n} cuotas de <strong>${money(cuota)}</strong> =
+            <strong>${money(total)}</strong>.</div>
+          <div style="margin-top:6px">Desde
+            <strong>${esc(nombreMes($('#df-desde', form).value))}</strong>
+            hasta <strong>${esc(nombreMes(sumarMeses($('#df-desde', form).value, n - 1)))}</strong>.</div>
+          ${cuota > 0 && Math.abs(dif) >= 0.01 ? `
+            <div style="margin-top:6px">${dif > 0
+    ? `Son ${money(dif)} más que el consumo: el interés del diferido.`
+    : `Son ${money(-dif)} menos que el consumo. Revísalo.`}</div>` : ''}`;
+      };
+      ['change', 'input'].forEach((ev) => form.addEventListener(ev, refrescar));
+      refrescar();
+    },
+    alEnviar(d) {
+      const n = Math.max(2, Math.round(aNumero(d.cuotas)) || 2);
+      const cuota = redondear(aNumero(d.monto));
+      if (cuota <= 0) return false;
+
+      // Fuera el pago único, dentro el plan.
+      db.cuotas = db.cuotas.filter((c) => c.gasto_id !== gasto.id);
+      for (let i = 0; i < n; i += 1) {
+        db.cuotas.push(tocar({
+          gasto_id: gasto.id,
+          n_cuota: i + 1,
+          mes: sumarMeses(d.desde, i),
+          monto: cuota,
+          tarjeta: gasto.tarjeta,
+          usuario: gasto.usuario,
+          categoria: gasto.categoria,
+          pagado: '',
+          conciliado: '',
+        }));
+      }
+      tocar(Object.assign(gasto, {
+        tipo: 'Diferido',
+        cuotas: n,
+        monto_total: redondear(cuota * n),
+        mes_inicio: d.desde,
+        aplazado: '',
+      }));
+      guardar();
+      brindis(`Diferido en ${n} cuotas de ${money(cuota)}`);
+      alTerminar?.();
+      return undefined;
+    },
+  });
+}
+
 function formPagoTarjeta(tarjetaId, mes, monto, alTerminar) {
   const cuentas = cuentasBancarias();
   const tarjeta = db.cuentas.find((c) => c.id === tarjetaId);
@@ -8536,7 +9216,15 @@ function formPagoTarjeta(tarjetaId, mes, monto, alTerminar) {
     },
     alEnviar(d) {
       db.cuotas.forEach((c) => {
-        if (c.tarjeta === tarjetaId && c.mes === mes) tocar(Object.assign(c, { pagado: 'Si' }));
+        if (c.tarjeta !== tarjetaId || c.mes !== mes) return;
+        /*
+         * Lo marcado «por diferir» no entra en este pago: se queda pendiente
+         * hasta que el banco lo pase a cuotas. Darlo por pagado aquí liberaría
+         * un cupo que en realidad se sigue debiendo.
+         */
+        const suyo = db.gastosTarjeta.find((g) => g.id === c.gasto_id);
+        if (suyo?.aplazado === 'Si') return;
+        tocar(Object.assign(c, { pagado: 'Si' }));
       });
       db.movimientos.push(tocar({
         id: nuevoId('movimientos'),
@@ -8575,7 +9263,148 @@ function liquidarInversion(id, alTerminar) {
   alTerminar?.();
 }
 
-return { campoCategoria, categoriaElegida, conectarCategoria, esCombustible, formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMovimiento, formPagoTarjeta, liquidarInversion, registrarGastoTarjeta };
+return { campoCategoria, categoriaElegida, conectarCategoria, esCombustible, formDiferir, formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMovimiento, formPagoTarjeta, liquidarInversion, registrarGastoTarjeta };
+})();
+
+M["pantalla_llave"] = (function () {
+/**
+ * La pantalla de la cerradura y lo que la dispara: autobloqueo y velo.
+ *
+ * Tres capas, cada una contra un descuido distinto:
+ *
+ *   1. La pantalla de clave, al abrir la app con la base cifrada. Sin clave no
+ *      se descifra nada, así que detrás no hay datos que espiar: la app arranca
+ *      literalmente vacía.
+ *
+ *   2. El autobloqueo. De nada sirve la clave si la app se queda abierta sobre
+ *      la mesa. Se echa la llave al rato de no tocarla y al mandar la app al
+ *      fondo, que es cuando el teléfono cambia de manos.
+ *
+ *   3. El velo. iOS fotografía la pantalla al cambiar de app para el carrusel,
+ *      y esa foto enseña saldos a quien pase el dedo por el selector de apps.
+ *      Se difumina el contenido en cuanto la app pierde el foco.
+ */
+
+const {abrirCerradura, echarLlave, cerraduraAbierta, escrituraPendiente} = M["store"];
+const {$, crear, esc} = M["ui"];
+/** Minutos sin tocar la app antes de echar la llave. */
+const ESPERA_MIN = 5;
+
+/*
+ * Tras varios intentos fallidos se va metiendo espera. Contra quien se lleve el
+ * sobre y pruebe a lo bruto por su cuenta esto no hace nada —ahí lo que
+ * defiende son las 310 000 vueltas del derivado—; esto es contra el que agarra
+ * el teléfono y prueba cumpleaños a mano.
+ */
+let fallos = 0;
+const esperaPorFallos = () => Math.min(fallos, 6) * 500;
+
+let temporizador = null;
+let alDesbloquear = null;
+
+/** Pinta la pantalla de la clave y no se quita hasta que la clave sea buena. */
+function pedirClave(raiz, alAbrir) {
+  alDesbloquear = alAbrir;
+  document.body.classList.add('bloqueada');
+  raiz.innerHTML = '';
+  raiz.appendChild(crear(`
+    <div class="cerradura">
+      <div class="cerradura-caja">
+        <div class="cerradura-icono" aria-hidden="true">🔒</div>
+        <h1>Finanzas J &amp; C</h1>
+        <p class="pista">Esta base está cifrada en este aparato.
+          Escribe la clave para abrirla.</p>
+        <form id="form-llave" autocomplete="off">
+          <input type="password" id="campo-llave" name="clave"
+                 inputmode="text" autocomplete="current-password"
+                 placeholder="Clave" aria-label="Clave" required>
+          <button type="submit" class="btn primario" id="btn-llave">Abrir</button>
+        </form>
+        <p class="cerradura-error" id="llave-error" hidden></p>
+        <p class="pista cerradura-nota">Si la olvidaste no hay forma de
+          recuperarla: tendrías que restaurar un respaldo.</p>
+      </div>
+    </div>`));
+
+  const form = $('#form-llave', raiz);
+  const campo = $('#campo-llave', raiz);
+  const boton = $('#btn-llave', raiz);
+  const error = $('#llave-error', raiz);
+  campo.focus();
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    boton.disabled = true;
+    boton.textContent = 'Abriendo…';
+    error.hidden = true;
+    // El derivado tarda a propósito; sin ceder el hilo, el botón no llegaría a
+    // repintarse y parecería que el toque no hizo nada.
+    await new Promise((r) => { setTimeout(r, esperaPorFallos() + 30); });
+
+    const vale = await abrirCerradura(campo.value);
+    if (vale) {
+      fallos = 0;
+      document.body.classList.remove('bloqueada');
+      campo.value = '';
+      alDesbloquear?.();
+      return;
+    }
+    fallos += 1;
+    campo.value = '';
+    campo.focus();
+    boton.disabled = false;
+    boton.textContent = 'Abrir';
+    error.textContent = fallos >= 3
+      ? `Esa clave no es. Van ${fallos} intentos.`
+      : 'Esa clave no es.';
+    error.hidden = false;
+  });
+}
+
+/** Echa la llave ahora y vuelve a pedirla. */
+async function bloquearYa(raiz) {
+  if (!cerraduraAbierta()) return;
+  // Primero que termine de escribirse lo pendiente: si no, se perdería el
+  // último cambio al vaciar la base de memoria.
+  await escrituraPendiente();
+  await echarLlave();
+  pedirClave(raiz, alDesbloquear);
+}
+
+/**
+ * Arma el autobloqueo y el velo. Se llama una sola vez, al arrancar.
+ * Si no hay cerradura puesta no hace nada: no tendría qué cerrar.
+ */
+function vigilar(raiz) {
+  const reiniciar = () => {
+    clearTimeout(temporizador);
+    if (!cerraduraAbierta()) return;
+    temporizador = setTimeout(() => { bloquearYa(raiz); }, ESPERA_MIN * 60 * 1000);
+  };
+
+  ['pointerdown', 'keydown', 'focusin'].forEach((ev) => {
+    document.addEventListener(ev, reiniciar, { passive: true });
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      // El velo, antes de que iOS saque la foto para el carrusel.
+      document.body.classList.add('velada');
+      // Y se echa la llave: el teléfono acaba de salir de la app.
+      bloquearYa(raiz);
+    } else {
+      document.body.classList.remove('velada');
+      reiniciar();
+    }
+  });
+
+  // Al cerrar la pestaña, que no se quede a medias lo que falte por cifrar.
+  window.addEventListener('pagehide', () => { escrituraPendiente(); });
+
+  reiniciar();
+}
+
+return { ESPERA_MIN, bloquearYa, pedirClave, vigilar };
 })();
 
 M["views/resumen"] = (function () {
@@ -8827,7 +9656,7 @@ function seccionRepartoMes(mes) {
   }));
 
   const cab = `<header><h2>Tarjetas de ${esc(nombreMes(mes))}</h2>
-    <span class="pista">Cuánto puso cada uno</span></header>`;
+    <span class="pista">Cada uno puso</span></header>`;
 
   if (!total) {
     return `${cab}<p class="vacio">Todavía no hay consumo cargado en este mes.</p>`;
@@ -9427,8 +10256,7 @@ function render(raiz) {
         <div>
           <span class="pista">Gasto total ${esc(estado.año)}</span>
           <div class="heroe">${moneyHTML(gastos)}</div>
-          <span class="pista">${mesesConGasto} ${mesesConGasto === 1 ? 'mes' : 'meses'} con movimiento ·
-            promedio ${money(mesesConGasto ? gastos / mesesConGasto : 0)}</span>
+          <span class="pista">Media ${money(mesesConGasto ? gastos / mesesConGasto : 0)} al mes</span>
         </div>
         <div class="filtros" style="margin:0">
           <div class="campo" style="flex:0 0 auto">
@@ -9468,7 +10296,7 @@ function render(raiz) {
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Composición del gasto</h2><span class="pista">Categorías principales</span></header>
+        <header><h2>Composición del gasto</h2><span class="pista">Principales</span></header>
         <div id="g-apilado"></div>
       </div>
       <div class="tarjeta">
@@ -9566,10 +10394,10 @@ M["views/tarjetas"] = (function () {
 /** Vista «Tarjetas»: cupo, consumo del mes, diferidos vivos y movimientos. */
 
 const {db, tarjetas, eliminar, guardar} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir} = M["calc"];
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, opciones, aNumero, notaFila} = M["ui"];
-const {formGastoTarjeta, formPagoTarjeta} = M["forms"];
+const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
 const estado = { tarjeta: null, usuario: 'ambos', mes: null, comprobando: false };
 
 /**
@@ -9648,6 +10476,10 @@ function render(raiz) {
   const meses12 = rangoMeses(sumarMeses(mes, -11), mes);
   const pago = pagoDelMes(t.id, mes, estado.usuario);
   const pagoTotal = pagoDelMes(t.id, mes, 'ambos');
+  // Lo marcado «por diferir» sigue contando como consumo del mes —el banco lo
+  // factura— pero no entra en lo que se paga ahora.
+  const aplazado = totalPorDiferir(t.id, mes, 'ambos');
+  const aPagar = redondear(pagoTotal - aplazado);
   // El consumo del mes no se paga ese mes: vence con el corte de la tarjeta.
   const vence = fechaPagoMes(mes, t.id);
   const comp = comprobacionDelMes(t.id, mes, estado.usuario);
@@ -9678,13 +10510,18 @@ function render(raiz) {
         <div><div class="etq">Recurrentes</div>
           <div class="val">${money(sumaPorTipo(t.id, mes, estado.usuario, 'Recurrente'))}</div></div>
       </div>
-      <button class="btn pequeno" id="btn-pagar"${pagoTotal <= 0 ? ' disabled' : ''}>
-        Registrar pago de ${money(pagoTotal)}</button>
+      ${aplazado > 0 ? `
+        <div class="panel-aplazado">
+          <span>Por diferir, no se paga ahora</span>
+          <strong>−${money(aplazado)}</strong>
+        </div>` : ''}
+      <button class="btn pequeno" id="btn-pagar"${aPagar <= 0 ? ' disabled' : ''}>
+        Registrar pago de ${money(aPagar)}</button>
     </section>
 
     <section class="tarjeta">
       <header><h2>Cupo de ${esc(t.nombre)}</h2>
-        <span class="pista">Acumulado de todos los meses</span></header>
+        <span class="pista">Todos los meses</span></header>
       <div id="cupo"></div>
       <div class="rejilla kpis">
         <div class="kpi"><div class="etq">Saldo pendiente</div>
@@ -9713,7 +10550,7 @@ function render(raiz) {
 
     <section class="tarjeta">
       <header><h2>Diferidos vigentes</h2>
-        <span class="pista">Cuotas que faltan por pagar</span></header>
+        <span class="pista">Cuotas por pagar</span></header>
       <div id="diferidos"></div>
     </section>
 
@@ -9742,7 +10579,7 @@ function render(raiz) {
     render(raiz);
   }));
   $('#btn-pagar', raiz).addEventListener('click', () => {
-    formPagoTarjeta(t.id, mes, pagoTotal, () => render(raiz));
+    formPagoTarjeta(t.id, mes, aPagar, () => render(raiz));
   });
   $('#btn-comprobar', raiz).addEventListener('click', () => {
     estado.comprobando = !estado.comprobando;
@@ -9821,6 +10658,30 @@ function render(raiz) {
       // Se refresca solo el resumen: repintar la vista entera con cada clic
       // haría saltar el scroll a lo alto en mitad de la comprobación.
       refrescarResumen();
+    });
+  });
+
+  /*
+   * «Por diferir»: el consumo ya está en el estado de cuenta de este mes, pero
+   * se va a pedir al banco que lo pase a cuotas, así que no se paga ahora. El
+   * consumo del mes no se toca —tiene que seguir cuadrando con el banco—; lo
+   * que cambia es el importe del botón de pagar.
+   */
+  $$('[data-aplazar]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const gasto = db.gastosTarjeta.find((g) => g.id === btn.dataset.aplazar);
+      if (!gasto) return;
+      gasto.aplazado = gasto.aplazado === 'Si' ? '' : 'Si';
+      gasto._ts = Date.now();
+      guardar();
+      render(raiz);
+    });
+  });
+
+  $$('[data-diferir]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const gasto = db.gastosTarjeta.find((g) => g.id === btn.dataset.diferir);
+      if (gasto) formDiferir(gasto, () => render(raiz));
     });
   });
 
@@ -9940,7 +10801,9 @@ function listaMovimientos(tarjetaId, mes, usuario, marcable = false) {
    * ellas el rastro. Este visto se queda siempre.
    */
   !marcable && cuota.conciliado === 'Si'
-    ? '<span class="visto" title="Comprobado contra el estado de cuenta">✓</span>' : ''}</div>
+    ? '<span class="visto" title="Comprobado contra el estado de cuenta">✓</span>' : ''}${
+  gasto.aplazado === 'Si'
+    ? '<span class="chip por-diferir">Por diferir</span>' : ''}</div>
           <div class="meta">${esc(gasto.fecha)} · ${esc(gasto.categoria)}
             ${esCuota ? ` · cuota ${cuota.n_cuota}/${gasto.cuotas} de ${money(gasto.monto_total)}` : ''}
             ${vence && vence !== venceMes ? ` · se paga el ${esc(textoFecha(vence))}` : ''}
@@ -9949,6 +10812,10 @@ function listaMovimientos(tarjetaId, mes, usuario, marcable = false) {
         <div class="monto">${money(cuota.monto)}</div>
         ${notaFila(gasto.proposito)}
         <div class="acciones">
+          ${gasto.cuotas > 1 ? '' : gasto.aplazado === 'Si'
+    ? `<button class="btn pequeno primario" data-diferir="${esc(gasto.id)}">Diferir</button>
+       <button class="btn pequeno" data-aplazar="${esc(gasto.id)}">Pagarlo ya</button>`
+    : `<button class="btn pequeno" data-aplazar="${esc(gasto.id)}">Por diferir</button>`}
           <button class="btn pequeno" data-corregir="${esc(gasto.id)}">Corregir</button>
           <button class="btn pequeno peligro" data-borrar="${esc(gasto.id)}">Eliminar</button>
         </div>
@@ -10003,7 +10870,7 @@ function render(raiz) {
 
     <section class="tarjeta">
       <header><h2>Calculadora de póliza</h2>
-        <span class="pista">Simula antes de invertir</span></header>
+        <span class="pista">Simula antes</span></header>
       <div class="filtros">
         <div class="campo"><label for="c-capital">Capital</label>
           <input id="c-capital" type="text" value="5000" inputmode="decimal"></div>
@@ -10037,7 +10904,7 @@ function render(raiz) {
     </section>
 
     <section class="tarjeta">
-      <header><h2>Pólizas activas</h2><span class="pista">Ordenadas por vencimiento</span></header>
+      <header><h2>Pólizas activas</h2><span class="pista">Por vencimiento</span></header>
       <div id="lista-activas"></div>
     </section>
 
@@ -10205,7 +11072,7 @@ function render(raiz) {
         <div id="g-cuentas"></div>
       </div>
       <div class="tarjeta">
-        <header><h2>Evolución del ahorro</h2><span class="pista">Saldo acumulado por mes</span></header>
+        <header><h2>Evolución del ahorro</h2><span class="pista">Acumulado por mes</span></header>
         <div id="g-evolucion"></div>
       </div>
     </section>
@@ -10233,7 +11100,7 @@ function render(raiz) {
 
     <section class="tarjeta">
       <header><h2>Movimientos y transacciones</h2>
-        <span class="pista">Transferencias, pagos y ajustes</span></header>
+        <span class="pista">Pagos y traspasos</span></header>
       <div id="lista-movs"></div>
     </section>`;
 
@@ -10461,7 +11328,9 @@ M["views/datos"] = (function () {
  * y ajustes generales.
  */
 
-const {db, guardar, reemplazar, limpiarTodo, instantanea, instantaneaSinSecretos, tocar, CLAVES} = M["store"];
+const {db, guardar, reemplazar, limpiarTodo, instantanea, instantaneaSinSecretos, tocar, CLAVES, estaCifrada, ponerCerradura, quitarCerradura} = M["store"];
+const {hayCripto, MIN_CLAVE} = M["cerradura"];
+const {ESPERA_MIN} = M["pantalla_llave"];
 const {money, redondear, nombreMes} = M["calc"];
 const {aNumero, esc, $, $$, brindis, modal, confirmar, descargar, pedirArchivo, opciones, avisoInfo} = M["ui"];
 const {escribirLibro, leerLibro} = M["xlsx"];
@@ -10773,7 +11642,7 @@ function render(raiz) {
     </section>
 
     <section class="tarjeta">
-      <header><h2>Excel</h2><span class="pista">Importar y exportar la base</span></header>
+      <header><h2>Excel</h2><span class="pista">Importar y exportar</span></header>
       <p class="pista" style="margin:0 0 10px">
         Puedes cargar tu <strong>libro de tarjetas de siempre</strong> —el de las
         hojas por banco con las columnas de mes— y la app lo convierte en gastos
@@ -10825,6 +11694,37 @@ function render(raiz) {
             <td></td></tr></tfoot>
         </table>
       </div>
+    </section>
+
+    <section class="tarjeta">
+      <header><h2>Clave de esta app</h2>
+        <span class="pista">${estaCifrada() ? 'Puesta' : 'Sin poner'}</span></header>
+      <p class="pista" style="margin:0 0 10px">
+        ${estaCifrada()
+    ? `Los datos de este aparato están <strong>cifrados</strong>: en el
+         almacenamiento del navegador no queda nada legible. La app se cierra
+         sola a los ${ESPERA_MIN} minutos sin tocarla y al mandarla al fondo.`
+    : `Ahora mismo los datos están <strong>en claro</strong> dentro del
+         navegador: quien agarre el teléfono desbloqueado, o saque una copia
+         del almacenamiento, los lee enteros sin pasar por la app.`}
+      </p>
+      ${avisoInfo(`Con la clave puesta, la base se guarda cifrada con AES-GCM y
+        una llave derivada de tu clave (PBKDF2, 310 000 vueltas). La clave no se
+        guarda en ninguna parte: <strong>si la olvidas no hay forma de
+        recuperar los datos</strong>, tendrías que restaurar un respaldo. Por eso
+        al ponerla se descarga uno antes. El cifrado protege el aparato apagado,
+        perdido o robado; con la app ya abierta delante de alguien, no.`)}
+      <div class="filtros">
+        ${estaCifrada()
+    ? `<button class="btn" id="btn-cambiar-clave">Cambiar la clave</button>
+           <button class="btn peligro" id="btn-quitar-clave">Quitar la clave</button>`
+    : '<button class="btn primario" id="btn-poner-clave">Poner una clave</button>'}
+      </div>
+      ${hayCripto() ? '' : `
+        <div class="aviso alerta"><span class="icono">⚠</span>
+          <span>Este navegador no puede cifrar (hace falta una conexión segura,
+          https). Ábrelo desde la dirección de siempre para poder poner la
+          clave.</span></div>`}
     </section>
 
     <section class="tarjeta">
@@ -10948,6 +11848,83 @@ function render(raiz) {
   $$('[data-cat]', raiz).forEach((b) => b.addEventListener('click', () => {
     formCategoria(b.dataset.cat, () => render(raiz));
   }));
+
+  // --- Clave de la app ---
+  const campoClave = (id, etq) => `
+    <div class="campo ancho"><label for="${id}">${esc(etq)}</label>
+      <input type="password" id="${id}" name="${id}" autocomplete="new-password"
+             minlength="${MIN_CLAVE}" required></div>`;
+
+  /** Pide clave nueva por duplicado y la estrena, con respaldo obligatorio. */
+  const ponerla = () => modal({
+    titulo: 'Poner una clave',
+    cuerpo: `
+      <div class="aviso alerta"><span class="icono">⚠</span>
+        <span>Si olvidas esta clave <strong>no hay forma de recuperar los
+        datos</strong>. No se guarda en ningún sitio. Antes de seguir se
+        descarga un respaldo sin cifrar: guárdalo en sitio seguro.</span></div>
+      ${campoClave('cl-1', `Clave nueva (mínimo ${MIN_CLAVE} caracteres)`)}
+      ${campoClave('cl-2', 'Repítela')}
+      <p class="pista">Cuanto más larga, mejor. Una frase que recuerdes
+        protege mucho más que cuatro dígitos.</p>`,
+    aceptar: 'Descargar respaldo y cifrar',
+    async alEnviar(d) {
+      if (d['cl-1'] !== d['cl-2']) return avisoError('No coinciden', 'Las dos claves tienen que ser iguales.');
+      if (String(d['cl-1']).length < MIN_CLAVE) {
+        return avisoError('Muy corta', `Necesita al menos ${MIN_CLAVE} caracteres.`);
+      }
+      exportarJSON();   // la red de seguridad, antes de tocar nada
+      try {
+        await ponerCerradura(d['cl-1']);
+        brindis('Clave puesta · los datos quedan cifrados');
+        render(raiz);
+      } catch (err) {
+        avisoError('No se pudo cifrar', err.message);
+      }
+      return undefined;
+    },
+  });
+
+  const quitarla = () => modal({
+    titulo: 'Quitar la clave',
+    cuerpo: `<p>Los datos volverán a guardarse <strong>en claro</strong> en este
+      aparato, legibles para quien lo agarre.</p>
+      ${campoClave('cl-0', 'Clave actual')}`,
+    aceptar: 'Quitar la clave',
+    async alEnviar(d) {
+      if (await quitarCerradura(d['cl-0'])) {
+        brindis('Clave quitada');
+        render(raiz);
+      } else {
+        avisoError('Esa clave no es', 'No se quitó nada.');
+      }
+    },
+  });
+
+  const cambiarla = () => modal({
+    titulo: 'Cambiar la clave',
+    cuerpo: `
+      ${campoClave('cl-0', 'Clave actual')}
+      ${campoClave('cl-1', `Clave nueva (mínimo ${MIN_CLAVE} caracteres)`)}
+      ${campoClave('cl-2', 'Repite la nueva')}`,
+    aceptar: 'Cambiar',
+    async alEnviar(d) {
+      if (d['cl-1'] !== d['cl-2']) return avisoError('No coinciden', 'Las dos claves nuevas tienen que ser iguales.');
+      // Se quita y se vuelve a poner: así la clave vieja se comprueba de verdad
+      // —descifrando— en vez de darla por buena.
+      if (!await quitarCerradura(d['cl-0'])) {
+        return avisoError('Esa clave no es', 'No se cambió nada.');
+      }
+      await ponerCerradura(d['cl-1']);
+      brindis('Clave cambiada');
+      render(raiz);
+      return undefined;
+    },
+  });
+
+  $('#btn-poner-clave', raiz)?.addEventListener('click', ponerla);
+  $('#btn-quitar-clave', raiz)?.addEventListener('click', quitarla);
+  $('#btn-cambiar-clave', raiz)?.addEventListener('click', cambiarla);
 
   $('#btn-ajustes', raiz).addEventListener('click', () => {
     db.config.tema = $('#s-tema', raiz).value;
@@ -11164,7 +12141,7 @@ function render(raiz, { irA } = {}) {
 
     <section class="tarjeta">
       <header><h2>Simulación mes a mes</h2>
-        <span class="pista">Por bolsillo · lo apuntado más lo previsto</span></header>
+        <span class="pista">Apuntado y previsto</span></header>
       ${avisoInfo(`De lo que sale del historial solo se proyecta lo que
         se repite con un ritmo reconocible; una compra suelta que no vuelve no
         entra. Sí entra lo que escribas tú, incluido un pago de una sola vez.
@@ -11182,7 +12159,7 @@ function render(raiz, { irA } = {}) {
 
     <section class="tarjeta">
       <header><h2>Solo lo real</h2>
-        <span class="pista">Sin estimar nada · lo que ya está registrado</span></header>
+        <span class="pista">Solo lo ya registrado</span></header>
       ${avisoInfo(`Aquí no hay ni una cifra supuesta: el efectivo ya
         gastado, las cuotas de tarjeta de compras ya hechas, las cuotas de
         préstamo y los pagos únicos que hayas apuntado. Aunque venzan meses
@@ -11203,11 +12180,15 @@ function render(raiz, { irA } = {}) {
         <span class="pista">${mios.length ? [
     // Si todo lo escrito a mano es de una vez, no hay «al mes» que enseñar:
     // decir «$0,00 al mes» solo hace ruido.
-    suma(mios) ? `${money(suma(mios))} al mes` : '',
-    unicosVivos.length
-      ? `${money(redondear(unicosVivos.reduce((t, r) => t + r.monto, 0)))} de una vez`
-      : '',
-    `${mios.length} ${mios.length === 1 ? 'gasto' : 'gastos'}`,
+    // Tres datos no caben en la pestaña de una línea: con el mensual y el de
+    // una vez basta, el número de gastos ya se ve en la propia lista.
+    // Con las dos cifras juntas no cabe en una línea; manda la mensual, y si
+    // no hay, la de una vez.
+    suma(mios)
+      ? `${money(suma(mios))} al mes`
+      : (unicosVivos.length
+        ? `${money(redondear(unicosVivos.reduce((t, r) => t + r.monto, 0)))} una vez`
+        : ''),
   ].filter(Boolean).join(' · ') : 'Todavía ninguno'}</span></header>
       ${mios.length ? listaRecurrencias(mios, false) : `
         <p class="vacio">Aquí van los gastos que sabes que vienen aunque no estén
@@ -11224,34 +12205,34 @@ function render(raiz, { irA } = {}) {
 
     <section class="tarjeta">
       <header><h2>Fijos que deduce la app</h2>
-        <span class="pista">${money(suma(fijos))} al mes · importe conocido</span></header>
+        <span class="pista">${money(suma(fijos))} al mes fijo</span></header>
       ${listaRecurrencias(fijos, false)}
     </section>
 
     <section class="tarjeta">
       <header><h2>Variables que se repiten</h2>
-        <span class="pista">${money(suma(variables))} al mes · importe estimado</span></header>
+        <span class="pista">Aprox ${money(suma(variables))} al mes</span></header>
       ${listaRecurrencias(variables, false)}
     </section>
 
     ${descartadas.length ? `
       <section class="tarjeta">
         <header><h2>Fuera del presupuesto</h2>
-          <span class="pista">Tócalos para devolverlos</span></header>
+          <span class="pista">Tócalos para volver</span></header>
         ${listaRecurrencias(descartadas, true)}
       </section>` : ''}
 
     ${caducadas.length ? `
       <section class="tarjeta">
         <header><h2>Parece que ya no se repiten</h2>
-          <span class="pista">Sin aparecer desde hace demasiado</span></header>
+          <span class="pista">Sin aparecer</span></header>
         ${listaRecurrencias(caducadas, null)}
       </section>` : ''}
 
     ${irregulares.length ? `
       <section class="tarjeta">
         <header><h2>Se repiten sin ritmo fijo</h2>
-          <span class="pista">No entran en la previsión</span></header>
+          <span class="pista">Fuera de la previsión</span></header>
         ${listaRecurrencias(irregulares, null)}
       </section>` : ''}`;
 
@@ -12293,7 +13274,7 @@ function resultado({
       </table></div>` : ''}
 
     <header><h2>Por categoría</h2>
-      <span class="pista">Toca una para ver en qué se fue</span></header>
+      <span class="pista">Toca para el detalle</span></header>
     ${porCat.map(([c, v]) => {
     // Cada categoría lleva dentro sus propios movimientos, del más caro al
     // más barato. Antes iban todos juntos en una lista al final: con
@@ -12407,6 +13388,7 @@ const {iniciarSync, empujarDiferido, alCambiarSync, estadoSync, configurado} = M
 const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta} = M["calc"];
 const archivoExcel = M["archivo"];
 const {crearCajon} = M["cajon"];
+const {pedirClave, vigilar} = M["pantalla_llave"];
 const {alRedimensionar, ocultarTooltip} = M["charts"];
 const {$, crear, esc, ICONOS, modal, brindis, descargar} = M["ui"];
 const {formGastoTarjeta, formGastoEfectivo, formIngreso, formInversion, formMovimiento} = M["forms"];
@@ -12732,7 +13714,22 @@ async function iniciar() {
   const origen = await cargar();
   aplicarTema();
 
+  /*
+   * Con la base cifrada no se arranca la app: se pide la clave y el resto
+   * queda en suspenso. Nada de pintar vistas por detrás, que es justo lo que
+   * convierte una pantalla de bloqueo en un adorno.
+   */
+  if (origen === 'cerrada') {
+    pedirClave($('#vista'), () => { arrancarApp(origen); });
+    return;
+  }
+  arrancarApp(origen);
+}
+
+function arrancarApp(origen) {
   pintarNav();
+  // Autobloqueo y velo: solo hacen algo si hay cerradura puesta.
+  vigilar($('#vista'));
   cajon = crearCajon({ etiqueta: 'Menú de Finanzas J y C' });
   $('#btn-menu').addEventListener('click', menuPrincipal);
 
