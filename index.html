@@ -67,8 +67,12 @@
    * sin contraste para nada; y si la tarjeta es casi negra, el bloque oscuro de
    * la esquina no tiene hacia dónde separarse. Aclararla es lo que deja sitio
    * a las dos cosas: título con color propio y esquina que se distingue.
+   *
+   * 0.93 antes; se baja un punto para que deje pasar algo más de fondo. El
+   * texto blanco encima sigue por encima de 9:1 en toda la altura de la
+   * página, así que lo único que cambia es cuánto se transparenta el navy.
    */
-  --superficie: rgba(34, 57, 95, 0.93);
+  --superficie: rgba(34, 57, 95, 0.86);
   --superficie-2: rgba(255, 255, 255, 0.10);
   --superficie-3: rgba(255, 255, 255, 0.155);
 
@@ -224,8 +228,13 @@
     --tinta-cabecera: #eaf3ff;
     --tinta-cabecera-2: #9fbcda;
 
-    /* 0.075 antes; se sube con el fondo para ganar separación (ver arriba). */
-    --superficie: rgba(255, 255, 255, 0.11);
+    /*
+     * 0.075 antes; se subió con el fondo para ganar separación (ver arriba) y
+     * ahora se baja un punto, a 0.095, para que la tarjeta transparente algo
+     * más. La separación contra el fondo pasa de 1,28-1,39 a 1,23-1,32: sigue
+     * por encima del 1,18-1,25 que se descartó en su día.
+     */
+    --superficie: rgba(255, 255, 255, 0.095);
     --superficie-solida: #1e242e;
     --superficie-2: rgba(255, 255, 255, 0.095);
     --superficie-3: rgba(255, 255, 255, 0.15);
@@ -281,7 +290,8 @@
     #0d2247 0, #0a1c3c 180px, #07152e 400px, #040f22 640px, #020914 804px);
   --tinta-cabecera: #eaf3ff;
   --tinta-cabecera-2: #9fbcda;
-  --superficie: rgba(255, 255, 255, 0.11);
+  /* Mismo velo que en el bloque de arriba. */
+  --superficie: rgba(255, 255, 255, 0.095);
   --superficie-solida: #1e242e;
   --superficie-2: rgba(255, 255, 255, 0.095);
   --superficie-3: rgba(255, 255, 255, 0.15);
