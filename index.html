@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-yc5UA/j0wp/+WTd2wHrAqDIA/LZpiX7VGJNba2FX+yc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-C8fdC2fyrpV8FL8Xqsc2aj2ii38dnUJDpLtDrfcsNpU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -882,7 +882,7 @@ a { color: var(--acento); }
   line-height: 1.3;
 }
 
-.tarjeta > header .pista {
+.tarjeta > header > .pista {
   /*
    * TODAS del mismo tamaño, en todas las secciones. Antes cada pestaña se
    * ajustaba a su texto y, entre las 46 que hay en la app, salían anchos de 59
@@ -941,6 +941,21 @@ a { color: var(--acento); }
    * quedan en 32 px, y solo los largos crecen.
    */
 }
+/*
+ * La cifra grande hace de título en la cabecera del año, con su rótulo encima
+ * y su media debajo. Va sangrada como lo estaría un h2: sin esto arrancaba
+ * pegada al filo de la tarjeta.
+ *
+ * Los dos rótulos son `.pista` pero NO son la pestaña de la esquina —esa es
+ * la que cuelga directamente de la cabecera—, así que se quedan en texto
+ * pequeño y apagado, que es lo que son.
+ */
+.tarjeta > header > .heroe-cab {
+  padding: 13px 0 13px 16px;
+  min-width: 0;
+}
+.tarjeta > header > .heroe-cab .heroe { margin: 2px 0 4px; }
+
 /* Lo que no es rótulo ni dato —una cifra grande, un botón, un selector—. */
 .tarjeta > header > *:not(h2):not(.pista) {
   align-self: center;
@@ -2408,8 +2423,8 @@ body.velada .cabecera { filter: blur(18px); }
  * y eso recortaba también estos dos, que por definición viven FUERA de su caja.
  * La esquina salía entonces en ángulo recto, sin curva ninguna.
  */
-.tarjeta > header .pista::before,
-.tarjeta > header .pista::after {
+.tarjeta > header > .pista::before,
+.tarjeta > header > .pista::after {
   content: '';
   position: absolute;
   pointer-events: none;
@@ -2427,7 +2442,7 @@ body.velada .cabecera { filter: blur(18px); }
  *
  * La proporción también es de la medición: 1,42 de largo por 1 de alto.
  */
-.tarjeta > header .pista::before {
+.tarjeta > header > .pista::before {
   /*
    * Cuelga de la PESTAÑA, no del encabezado: así su alto es siempre el de
    * ella. Colgando del encabezado se quedaba clavado en 32 px y, cuando un
@@ -2479,7 +2494,7 @@ body.velada .cabecera { filter: blur(18px); }
  * alto fijo del encabezado se quedaba en 32 px y, con un rótulo de dos
  * líneas, caía DENTRO de la pestaña y le pintaba encima a la segunda línea.
  */
-.tarjeta > header .pista::after {
+.tarjeta > header > .pista::after {
   top: 100%;
   right: 0;
   width: var(--filete-der);
@@ -10280,7 +10295,7 @@ function render(raiz) {
   raiz.innerHTML = `
     <section class="tarjeta">
       <header>
-        <div>
+        <div class="heroe-cab">
           <span class="pista">Gasto total ${esc(estado.año)}</span>
           <div class="heroe">${moneyHTML(gastos)}</div>
           <span class="pista">Media ${money(mesesConGasto ? gastos / mesesConGasto : 0)} al mes</span>
