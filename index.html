@@ -175,7 +175,7 @@
    * la tarjeta. Medido sobre el resultado: 1,9:1 el bloque contra la ficha,
    * frente a 1,2:1 de antes.
    */
-  --ficha-tapa: rgba(3, 9, 22, 0.82);
+  --ficha-tapa: rgba(8, 20, 42, 0.45);
   --ficha-fuera: rgba(255, 255, 255, 0.06);
   --ficha-dentro: rgba(255, 255, 255, 0.10);
   /* Un filo de luz en el canto interior: define el bloque aunque el tono
@@ -275,8 +275,10 @@
     --cara-anillo-b: rgba(255, 255, 255, 0.28);
     --cara-sombra: 0 14px 38px rgba(0, 0, 0, 0.4);
     /* La pestaña de la esquina también de vidrio: un parche opaco encima de
-       una tarjeta translúcida canta. */
-    --ficha-tapa: rgba(4, 11, 26, 0.6);
+       una tarjeta translúcida canta. Pero no tan oscura que se confunda con el
+       fondo de la página, que es lo que pasaba a 0,6: la esquina parecía un
+       mordisco en la tarjeta en vez de un rótulo. */
+    --ficha-tapa: rgba(6, 16, 36, 0.42);
 
     --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
     --panel-plano: #0e2749;
@@ -347,9 +349,8 @@
   --cara-anillo-a: rgba(255, 255, 255, 0.5);
   --cara-anillo-b: rgba(255, 255, 255, 0.28);
   --cara-sombra: 0 14px 38px rgba(0, 0, 0, 0.4);
-  /* La pestaña de la esquina también de vidrio: un parche opaco encima de
-     una tarjeta translúcida canta. */
-  --ficha-tapa: rgba(4, 11, 26, 0.6);
+  /* Ver el bloque de arriba: ni opaca ni tan oscura como el fondo. */
+  --ficha-tapa: rgba(6, 16, 36, 0.42);
 
   --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
   --panel-plano: #0e2749;
@@ -930,9 +931,16 @@ a { color: var(--acento); }
   pointer-events: none;
   border-radius: inherit;
   padding: 1px;
+  /*
+   * La luz pega fuerte en una esquina y se apaga en el resto, pero nunca hasta
+   * desaparecer: el canto tiene que verse en todo el contorno. Donde más
+   * importa es arriba a la derecha, que es por donde la pestaña de la esquina
+   * toca el fondo de la página; con el filo apagado ahí, las dos cosas se
+   * fundían y la esquina parecía un mordisco.
+   */
   background: linear-gradient(140deg,
-    var(--cara-anillo-a) 0%, rgba(255, 255, 255, 0.06) 32%,
-    rgba(255, 255, 255, 0.04) 66%, var(--cara-anillo-b) 100%);
+    var(--cara-anillo-a) 0%, rgba(255, 255, 255, 0.14) 30%,
+    rgba(255, 255, 255, 0.1) 62%, var(--cara-anillo-b) 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
