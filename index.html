@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-VmctDI3Ja0fEZuPkzqwSKfGfTSBEZFj0mOb5v+RDzRE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-MirjClQupGNmufOCrAv+rQRZOMDCOfTWFV/N0T5TyHU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -1886,6 +1886,43 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * Los topes del mes. Tres bloques, uno por vigilancia, con una franja de color
+ * al canto: en una pantalla de teléfono el color del borde se ve antes que
+ * cualquier cifra, y la pregunta que se hace uno antes de comprar —«¿voy
+ * bien?»— se responde de un vistazo.
+ */
+.topes { display: grid; gap: 10px; margin-bottom: 12px; }
+.tope {
+  padding: 11px 13px 10px;
+  border-radius: var(--radio-l);
+  border: 1px solid var(--borde);
+  border-left: 3px solid var(--ok);
+  background: var(--superficie-2);
+}
+.tope[data-estado="alerta"] { border-left-color: var(--alerta); }
+.tope[data-estado="critico"] { border-left-color: var(--critico); }
+.tope-cab {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin-bottom: 8px;
+}
+.tope-rotulo { font-size: 12.5px; font-weight: 570; }
+.tope-cifra {
+  font-size: 12.5px; font-weight: 640; white-space: nowrap;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+}
+.tope .medidor { margin: 0; }
+.tope-pie {
+  margin-top: 7px;
+  font-size: 11.5px; color: var(--tinta-3);
+  font-variant-numeric: tabular-nums;
+}
+.tope-pie strong { color: var(--tinta-2); font-weight: 620; }
+.tope-pie strong.mal { color: var(--critico); }
+/* A la derecha: el botón flotante de «+» vive en la esquina de abajo a la
+   izquierda y tapaba este. */
+.topes-pie { display: flex; justify-content: flex-end; }
+
 /* El mismo medidor dentro del panel oscuro. */
 .panel .medidor-pista { background: rgba(255, 255, 255, 0.15); }
 .panel .medidor-pie { color: var(--panel-tinta-2); }
@@ -2256,6 +2293,40 @@ body.con-cajon { overflow: hidden; }
   animation: subir 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 @keyframes subir { from { opacity: 0; transform: translate(-50%, 12px); } }
+
+/* El aviso de haberse pasado de un tope. Por encima del brindis de «guardado»,
+   que sale a la vez, y con sitio para una frase entera. */
+.alarma {
+  position: fixed;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(174px + env(safe-area-inset-bottom));
+  z-index: 96;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border-radius: var(--radio-l);
+  border: 1px solid color-mix(in srgb, var(--critico) 55%, transparent);
+  background: var(--superficie-solida, var(--panel-plano));
+  color: var(--tinta);
+  font-size: 13px;
+  font-weight: 540;
+  line-height: 1.35;
+  text-align: left;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  animation: subir 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.alarma-marca {
+  flex: none;
+  display: grid; place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--critico) 24%, transparent);
+  color: var(--critico);
+  font-size: 13px; font-weight: 800; line-height: 1;
+}
 
 /* --- Estado de sincronización -------------------------------------------- */
 
@@ -4135,6 +4206,107 @@ function acumuladoHistorico(filtros = {}) {
   return { meses, serie, ingresos, gastos, balance: redondear(ingresos - gastos) };
 }
 
+/* --- Topes del mes --------------------------------------------------------
+ *
+ * El presupuesto por categoría dice en qué se puede gastar; el tope dice
+ * CUÁNTO, y es lo que sirve para frenar a mitad de mes. Son tres, porque el
+ * dinero se va por tres sitios distintos y duelen de forma distinta: lo que
+ * sale del bolsillo, lo que se firma con la tarjeta —que no se nota hasta que
+ * llega el corte— y la suma de los dos.
+ */
+
+/** Las tres vigilancias: clave interna, dónde se guarda y cómo se llama. */
+const TOPES = [
+  { clave: 'efectivo', config: 'tope_efectivo', rotulo: 'Efectivo y débito' },
+  { clave: 'tarjeta', config: 'tope_tarjetas', rotulo: 'Tarjetas' },
+  { clave: 'total', config: 'tope_mes', rotulo: 'Todo el mes' },
+];
+
+/** A partir de qué % del tope se avisa, antes de llegar a pasarse. */
+function umbralAviso() {
+  const n = Number(db.config.tope_aviso);
+  return Number.isFinite(n) && n > 0 && n < 100 ? n : 85;
+}
+
+/** Cuántos días trae un mes «2026-09». */
+function diasDelMes(mes) {
+  const [a, m] = String(mes).split('-').map(Number);
+  return new Date(a, m, 0).getDate();
+}
+
+/**
+ * Qué parte del mes va corrida, de 0 a 1. Solo tiene sentido en el mes en
+ * curso: en uno cerrado es 1 y en uno futuro, 0.
+ */
+function mesCorrido(mes) {
+  const hoy = mesActual();
+  if (mes < hoy) return 1;
+  if (mes > hoy) return 0;
+  return new Date().getDate() / diasDelMes(mes);
+}
+
+/**
+ * Cómo va el mes contra los tres topes.
+ *
+ * `ritmo` es lo que de verdad cambia una decisión: no basta con no haberse
+ * pasado, hay que no ir camino de pasarse. Si el día 10 de 30 ya se llevó la
+ * mitad del tope, el mes acaba al 150 % aunque hoy el semáforo esté en verde.
+ *
+ * @returns {Array<object>} una fila por tope, sin las que no tienen tope puesto
+ */
+function topesDelMes(mes = mesActual(), usuario = 'ambos') {
+  const filas = gastosEnMeses([mes], { usuario });
+  const gastado = { efectivo: 0, tarjeta: 0, total: 0 };
+  for (const g of filas) {
+    const donde = g.tipo === 'Tarjeta' ? 'tarjeta' : 'efectivo';
+    gastado[donde] += g.monto;
+    gastado.total += g.monto;
+  }
+
+  const corrido = mesCorrido(mes);
+  const umbral = umbralAviso();
+
+  return TOPES.map(({ clave, config, rotulo }) => {
+    const tope = redondear(aNumeroSuelto(db.config[config]));
+    const real = redondear(gastado[clave]);
+    const uso = tope > 0 ? (real / tope) * 100 : 0;
+    /*
+     * Al ritmo de hoy, en qué acaba el mes. Los primeros días la cuenta se
+     * dispara —un gasto el día 1 proyecta treinta— así que no se enseña hasta
+     * que el mes lleva algo recorrido.
+     */
+    const proyeccion = corrido >= 0.2 ? redondear(real / corrido) : null;
+    const estado = tope <= 0 ? 'sin-tope'
+      : uso > 100 ? 'pasado'
+        : uso >= umbral ? 'cerca'
+          : proyeccion !== null && proyeccion > tope ? 'ritmo'
+            : 'bien';
+    return {
+      clave,
+      rotulo,
+      tope,
+      real,
+      uso,
+      estado,
+      resto: redondear(tope - real),
+      exceso: redondear(real - tope),
+      proyeccion,
+      corrido,
+      // Lo que queda por día para no pasarse, si aún queda mes y margen.
+      porDia: tope > real && corrido < 1
+        ? redondear((tope - real) / Math.max(1, diasDelMes(mes) * (1 - corrido)))
+        : 0,
+    };
+  }).filter((f) => f.estado !== 'sin-tope');
+}
+
+/** Número a partir de lo guardado en config, que siempre viaja como texto. */
+function aNumeroSuelto(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const n = Number(String(v ?? '').replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
+
 /** Comparativo presupuesto vs. real del mes. */
 function presupuestoVsReal(mes, filtros = {}) {
   const reales = new Map(totalPorCategoria([mes], filtros).map((x) => [x.nombre, x.valor]));
@@ -4154,7 +4326,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { aPagarAhora, acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario };
+return { TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -5018,6 +5190,22 @@ function brindis(texto) {
 }
 
 /**
+ * El mismo aviso, pero de los que hay que leer: se pasó un tope del mes.
+ *
+ * Va aparte de `brindis` porque no compite con él —el de «guardado» sale a la
+ * vez— y porque dura más: un aviso que se va en dos segundos no frena a nadie.
+ * Se toca para cerrarlo antes.
+ */
+function alarma(texto) {
+  document.querySelector('.alarma')?.remove();
+  const n = crear(`<div class="alarma" role="alert"><span class="alarma-marca"
+    aria-hidden="true">!</span><span>${esc(texto)}</span></div>`);
+  n.addEventListener('click', () => n.remove());
+  document.body.appendChild(n);
+  setTimeout(() => n.remove(), 7000);
+}
+
+/**
  * Convierte a número lo que se escriba en un campo de dinero, aceptando la
  * coma decimal además del punto: «12,50», «12.50» y «1.234,56» valen igual.
  * El último separador que aparece es el decimal; el otro son los miles.
@@ -5282,7 +5470,7 @@ const ICONOS = {
   datos: '<path d="M12 7c4.4 0 8-1.1 8-2.5S16.4 2 12 2 4 3.1 4 4.5 7.6 7 12 7Zm8-2.5v15c0 1.4-3.6 2.5-8 2.5s-8-1.1-8-2.5v-15" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M20 12c0 1.4-3.6 2.5-8 2.5S4 13.4 4 12" fill="none" stroke="currentColor" stroke-width="1.8"/>',
 };
 
-return { $, $$, ICONOS, aNumero, avisoInfo, brindis, campoMonto, confirmar, crear, descargar, esc, filaMovimiento, hoyISO, marcaNota, modal, notaFila, notaTexto, opciones, pedirArchivo, segmentado };
+return { $, $$, ICONOS, aNumero, alarma, avisoInfo, brindis, campoMonto, confirmar, crear, descargar, esc, filaMovimiento, hoyISO, marcaNota, modal, notaFila, notaTexto, opciones, pedirArchivo, segmentado };
 })();
 
 M["xlsx"] = (function () {
@@ -8503,8 +8691,8 @@ M["forms"] = (function () {
  */
 
 const {db, guardar, nuevoId, upsert, tocar, cuentasBancarias, tarjetas, categoriasGasto, categoriasIngreso, usuarios, capitalizar} = M["store"];
-const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta, rangoMeses} = M["calc"];
-const {modal, opciones, brindis, hoyISO, esc, $, aNumero, campoMonto} = M["ui"];
+const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta, rangoMeses, topesDelMes, umbralAviso, TOPES} = M["calc"];
+const {modal, opciones, brindis, alarma, hoyISO, esc, $, aNumero, campoMonto} = M["ui"];
 const selUsuarios = (sel) => opciones(usuarios(), sel);
 const val = (form, sel) => aNumero($(sel, form).value);
 
@@ -8520,6 +8708,112 @@ function mesesSeleccionables() {
 /** Formato de edición: sin separador de miles, con coma decimal. */
 const paraEditar = (n) => (n === undefined || n === null || n === ''
   ? '' : String(redondear(n)).replace('.', ','));
+
+// --- Topes del mes -----------------------------------------------------------
+
+/**
+ * Avisa si el gasto que se acaba de guardar cruzó alguno de los topes.
+ *
+ * Solo salta en el CRUCE, comparando cómo estaba el mes antes de guardar: un
+ * aviso que sale en cada gasto del resto del mes deja de leerse a la tercera
+ * vez. El semáforo del Resumen es el que enseña el estado permanente.
+ *
+ * @param {Array} antes  lo que devolvía `topesDelMes()` antes de guardar
+ * @param {string} mes   el mes al que fue a parar el gasto
+ */
+function avisarSiCruza(antes, mes) {
+  if (mes !== mesActual()) return;
+  const previo = new Map(antes.map((t) => [t.clave, t.estado]));
+  const peor = { pasado: 3, cerca: 2, ritmo: 1, bien: 0 };
+  for (const t of topesDelMes()) {
+    if (peor[t.estado] <= (peor[previo.get(t.clave)] ?? 0)) continue;
+    if (t.estado === 'pasado') {
+      alarma(`Te pasaste del tope de ${t.rotulo.toLowerCase()}: `
+        + `${money(t.real)} de ${money(t.tope)}, ${money(t.exceso)} de más.`);
+      return;
+    }
+    if (t.estado === 'cerca') {
+      alarma(`${t.rotulo}: llevas ${money(t.real)} de ${money(t.tope)} `
+        + `(${t.uso.toFixed(0)} %). Te quedan ${money(t.resto)}.`);
+      return;
+    }
+    if (t.estado === 'ritmo') {
+      alarma(`${t.rotulo}: a este ritmo el mes acaba en ${money(t.proyeccion)}, `
+        + `y el tope es ${money(t.tope)}. Máximo ${money(t.porDia)} al día.`);
+      return;
+    }
+  }
+}
+
+/**
+ * Los tres techos del mes. No sustituyen al presupuesto por categoría —ese
+ * dice en qué se gasta—; dicen cuánto, que es lo que se puede mirar a mitad
+ * de mes para decidir si se compra o no se compra.
+ */
+function formTopes(alTerminar) {
+  const ahora = topesDelMes();
+  const puesto = (clave) => ahora.find((t) => t.clave === clave);
+
+  modal({
+    titulo: 'Topes del mes',
+    cuerpo: `
+      <p class="pista" style="margin-top:0">Deja en blanco el que no quieras
+      vigilar. El aviso salta al cruzarlos, y el semáforo del Resumen los
+      enseña todo el mes.</p>
+      <div class="filtros">
+        ${campoMonto('tp-efectivo', 'tope_efectivo', {
+    etiqueta: 'Efectivo y débito', valor: paraEditar(Number(db.config.tope_efectivo) || ''),
+  })}
+        ${campoMonto('tp-tarjetas', 'tope_tarjetas', {
+    etiqueta: 'Tarjetas', valor: paraEditar(Number(db.config.tope_tarjetas) || ''),
+  })}
+      </div>
+      <div class="filtros">
+        ${campoMonto('tp-mes', 'tope_mes', {
+    etiqueta: 'Todo el mes', valor: paraEditar(Number(db.config.tope_mes) || ''),
+  })}
+        <div class="campo"><label for="tp-aviso">Avisar al llegar al (%)</label>
+          <input id="tp-aviso" name="tope_aviso" type="number" min="50" max="99"
+                 step="1" inputmode="numeric" value="${umbralAviso()}"></div>
+      </div>
+      <div class="previsualizacion" id="tp-previa"></div>`,
+    aceptar: 'Guardar topes',
+    alAbrir(form) {
+      const previa = $('#tp-previa', form);
+      const refrescar = () => {
+        const filas = TOPES.map(({ clave, rotulo }) => {
+          const tope = val(form, `#tp-${clave === 'tarjeta' ? 'tarjetas' : clave === 'total' ? 'mes' : clave}`);
+          const real = puesto(clave)?.real ?? 0;
+          return { rotulo, tope, real };
+        }).filter((f) => f.tope > 0);
+        previa.innerHTML = filas.length
+          ? filas.map((f) => `<div>${esc(f.rotulo)}: llevas
+              <strong>${money(f.real)}</strong> de <strong>${money(f.tope)}</strong>
+              ${f.real > f.tope
+    ? `· <span style="color:var(--critico)">${money(f.real - f.tope)} de más</span>`
+    : `· quedan ${money(f.tope - f.real)}`}</div>`).join('')
+          : '<div>Sin ningún tope puesto no hay nada que vigilar.</div>';
+      };
+      ['change', 'input'].forEach((ev) => form.addEventListener(ev, refrescar));
+      refrescar();
+    },
+    alEnviar(d) {
+      const guardarTope = (campo, valor) => {
+        const n = redondear(aNumero(valor));
+        if (n > 0) db.config[campo] = String(n);
+        else delete db.config[campo];
+      };
+      guardarTope('tope_efectivo', d.tope_efectivo);
+      guardarTope('tope_tarjetas', d.tope_tarjetas);
+      guardarTope('tope_mes', d.tope_mes);
+      const aviso = Math.round(aNumero(d.tope_aviso));
+      db.config.tope_aviso = String(aviso >= 50 && aviso <= 99 ? aviso : 85);
+      guardar();
+      brindis('Topes guardados');
+      alTerminar?.();
+    },
+  });
+}
 
 // --- Categoría al vuelo ------------------------------------------------------
 
@@ -8829,6 +9123,9 @@ function formGastoTarjeta(alTerminar, existente = null) {
       refrescar();
     },
     alEnviar(d) {
+      // Cómo iba el mes ANTES de guardar, para saber si este gasto es el que
+      // cruza el tope y no repetir el aviso en todos los siguientes.
+      const topesAntes = topesDelMes();
       const { fila, plan, n } = registrarGastoTarjeta({
         id: g?.id,
         fecha: d.fecha,
@@ -8848,6 +9145,7 @@ function formGastoTarjeta(alTerminar, existente = null) {
       brindis(g
         ? `Gasto corregido · ${money(plan.totalPagado)}`
         : `Gasto registrado · ${money(plan.totalPagado)} en ${n} ${n === 1 ? 'pago' : 'cuotas'}`);
+      avisarSiCruza(topesAntes, plan.cuotas[0]?.mes || d.mes_inicio);
       // Se devuelve el gasto guardado para que la vista pueda ir a buscarlo:
       // con el corte de la tarjeta, una compra de hoy puede caer en el estado
       // del mes siguiente y quedaría fuera de lo que se está mirando.
@@ -8897,6 +9195,7 @@ function formGastoEfectivo(alTerminar, existente = null) {
       conectarKm(form, 'e-categoria', 'e-km');
     },
     alEnviar(d) {
+      const topesAntes = topesDelMes();
       upsert('gastosEfectivo', {
         id: g?.id || nuevoId('gastosEfectivo'),
         fecha: d.fecha,
@@ -8910,6 +9209,7 @@ function formGastoEfectivo(alTerminar, existente = null) {
         km: Number(d.km) > 0 ? Number(d.km) : '',
       });
       brindis(g ? 'Gasto corregido' : `Gasto en efectivo · ${money(aNumero(d.monto))}`);
+      avisarSiCruza(topesAntes, claveMes(d.fecha));
       alTerminar?.();
     },
   });
@@ -9365,7 +9665,7 @@ function liquidarInversion(id, alTerminar) {
   alTerminar?.();
 }
 
-return { campoCategoria, categoriaElegida, conectarCategoria, esCombustible, formDiferir, formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMovimiento, formPagoTarjeta, liquidarInversion, registrarGastoTarjeta };
+return { campoCategoria, categoriaElegida, conectarCategoria, esCombustible, formDiferir, formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMovimiento, formPagoTarjeta, formTopes, liquidarInversion, registrarGastoTarjeta };
 })();
 
 M["pantalla_llave"] = (function () {
@@ -9513,10 +9813,10 @@ M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
 const {db, tarjetas, usuarios} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, pagoDeTarjeta} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, pagoDeTarjeta, topesDelMes, umbralAviso} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
 const {crear, esc, $, segmentado, opciones} = M["ui"];
-const {formGastoTarjeta, formIngreso} = M["forms"];
+const {formGastoTarjeta, formIngreso, formTopes} = M["forms"];
 let usuarioFiltro = 'ambos';
 /*
  * El mes que se está mirando. Vacío significa «el de hoy», que es donde tiene
@@ -9595,6 +9895,8 @@ function render(raiz, { irA }) {
           <div class="val">${money(tarjetas().reduce((s, t) => s + pagoDelMes(t.id, mes, usuarioFiltro), 0))}</div></div>
       </div>
     </section>
+
+    <section class="tarjeta" id="topes"></section>
 
     <section class="tarjeta" id="reparto-mes"></section>
 
@@ -9707,6 +10009,9 @@ function render(raiz, { irA }) {
   alRedimensionar(pintarGraficos);
 
   // Cuánto lleva cada tarjeta este mes y de quién es cada parte.
+  $('#topes', raiz).innerHTML = seccionTopes(mes, usuarioFiltro);
+  $('#btn-topes', raiz)?.addEventListener('click', () => formTopes(() => render(raiz, { irA })));
+
   $('#reparto-mes', raiz).innerHTML = seccionRepartoMes(mes);
 
   // Próximos vencimientos e hitos
@@ -9726,6 +10031,59 @@ function render(raiz, { irA }) {
   $('[data-accion="ingreso"]', raiz).addEventListener('click',
     () => formIngreso(recargar));
   $('[data-accion="pagar"]', raiz).addEventListener('click', () => irA('tarjetas'));
+}
+
+/*
+ * El semáforo del mes: cuánto se lleva gastado contra los tres topes.
+ *
+ * Es la parte que de verdad cambia una decisión, así que va arriba del todo y
+ * no escondida en una tabla. Lo importante no es el porcentaje sino las dos
+ * frases de abajo: cuánto queda y cuánto se puede gastar al día sin pasarse.
+ * Con el tope ya rebasado, cuánto de más.
+ */
+function seccionTopes(mes, usuario) {
+  const filas = topesDelMes(mes, usuario);
+  const cab = `<header><h2>Topes de ${esc(nombreMes(mes))}</h2>
+    <span class="pista">Cuánto queda</span></header>`;
+
+  if (!filas.length) {
+    return `${cab}
+      <p class="vacio" style="margin-bottom:10px">Sin topes puestos la app no
+      puede avisarte de nada. Pon un techo al efectivo, a las tarjetas o al mes
+      entero y te avisa al cruzarlo.</p>
+      <div class="topes-pie"><button class="btn pequeno" id="btn-topes">Poner topes</button></div>`;
+  }
+
+  const dias = Math.max(0, Math.round((1 - filas[0].corrido) * 30.4));
+  return `${cab}
+    <div class="topes">${filas.map((f) => {
+    const color = f.estado === 'pasado' ? 'critico'
+      : f.estado === 'cerca' || f.estado === 'ritmo' ? 'alerta' : 'bien';
+    const pie = f.estado === 'pasado'
+      ? `<strong class="mal">${money(f.exceso)} de más</strong>`
+      : f.estado === 'ritmo'
+        ? `<strong class="mal">a este ritmo acabas en ${money(f.proyeccion)}</strong>`
+        : `Quedan <strong>${money(f.resto)}</strong>${f.porDia > 0
+          ? ` · ${money(f.porDia)} al día` : ''}`;
+    return `
+      <div class="tope" data-estado="${color}">
+        <div class="tope-cab">
+          <span class="tope-rotulo">${esc(f.rotulo)}</span>
+          <span class="tope-cifra">${money(f.real)} de ${money(f.tope)}</span>
+        </div>
+        <div class="medidor" data-estado="${color === 'bien' ? '' : color === 'critico' ? 'critico' : 'alerta'}">
+          <div class="medidor-pista">
+            <div class="medidor-relleno" style="width:${Math.min(100, f.uso).toFixed(1)}%"></div>
+          </div>
+        </div>
+        <div class="tope-pie">${pie}</div>
+      </div>`;
+  }).join('')}</div>
+    <div class="aviso"><span class="icono">Σ</span>
+      <span class="crece">${mes === mesActual() && dias > 0
+    ? `Quedan unos ${dias} días de mes. El aviso salta al llegar al ${umbralAviso()} %.`
+    : 'Mes cerrado: esto es cómo acabó.'}</span></div>
+    <div class="topes-pie"><button class="btn pequeno" id="btn-topes">Ajustar topes</button></div>`;
 }
 
 /**
@@ -11446,6 +11804,7 @@ const {hayCripto, MIN_CLAVE} = M["cerradura"];
 const {ESPERA_MIN} = M["pantalla_llave"];
 const {money, redondear, nombreMes} = M["calc"];
 const {aNumero, esc, $, $$, brindis, modal, confirmar, descargar, pedirArchivo, opciones, avisoInfo} = M["ui"];
+const {formTopes} = M["forms"];
 const {escribirLibro, leerLibro} = M["xlsx"];
 const {ESQUEMA, construirLibro, libroADatos} = M["esquema"];
 const archivoExcel = M["archivo"];
@@ -11788,6 +12147,11 @@ function render(raiz) {
     <section class="tarjeta">
       <header><h2>Categorías y presupuesto</h2>
         <button class="btn pequeno" id="btn-cat">+ Categoría</button></header>
+      <p class="pista" style="margin:0 0 10px">El presupuesto por categoría dice
+      <strong>en qué</strong> se gasta. Los topes dicen <strong>cuánto</strong>, y son
+      los que avisan a mitad de mes.
+      <button class="btn pequeno" id="btn-topes-datos"
+              style="margin-left:6px">Topes del mes</button></p>
       <div class="tabla-scroll">
         <table>
           <thead><tr><th>Categoría</th><th>Grupo</th><th>Tipo</th>
@@ -12038,6 +12402,8 @@ function render(raiz) {
   $('#btn-poner-clave', raiz)?.addEventListener('click', ponerla);
   $('#btn-quitar-clave', raiz)?.addEventListener('click', quitarla);
   $('#btn-cambiar-clave', raiz)?.addEventListener('click', cambiarla);
+
+  $('#btn-topes-datos', raiz)?.addEventListener('click', () => formTopes(() => render(raiz)));
 
   $('#btn-ajustes', raiz).addEventListener('click', () => {
     db.config.tema = $('#s-tema', raiz).value;
