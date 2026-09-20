@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-C8fdC2fyrpV8FL8Xqsc2aj2ii38dnUJDpLtDrfcsNpU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-VmctDI3Ja0fEZuPkzqwSKfGfTSBEZFj0mOb5v+RDzRE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -1326,26 +1326,38 @@ tr.detalle > td {
   color: var(--tinta-2);
 }
 
-/* El detalle en filas que ya llevan botones: su propia línea, a todo el ancho
-   de la fila, para no competir con «Corregir» ni con el importe. */
-.nota-extra {
-  flex: 1 0 100%;
-  margin-top: 4px;
+/*
+ * El detalle en filas que ya llevan botones: una «i» del tamaño de un botón
+ * pequeño, en la propia fila. Cerrada no añade ni un píxel de alto, que es lo
+ * que permite que todas las filas midan igual.
+ */
+.ver-nota {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--serie-2);
+  background: transparent;
+  color: var(--serie-2);
   font-size: 12px;
-}
-.nota-extra > summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 0;
+  font-weight: 700;
+  font-style: italic;
+  font-family: inherit;
+  line-height: 1;
   cursor: pointer;
-  list-style: none;
-  color: var(--tinta-2);
-  font-weight: 560;
 }
-.nota-extra > summary::-webkit-details-marker { display: none; }
-.nota-extra > p {
-  margin: 4px 0 2px;
+.ver-nota:hover { border-color: var(--acento); color: var(--acento); }
+.ver-nota[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--serie-2) 20%, transparent);
+}
+
+/* Abierto sí rompe línea: el texto va a todo el ancho, bajo la fila. */
+.nota-abierta {
+  flex: 1 0 100%;
+  margin: 6px 0 0;
   padding: 7px 10px;
   border-left: 2px solid var(--serie-2);
   border-radius: 0 var(--radio-s) var(--radio-s) 0;
@@ -1353,7 +1365,7 @@ tr.detalle > td {
   font-size: 12.5px;
   color: var(--tinta-2);
 }
-/* En una fila que no envuelve, el desplegable necesita romper línea él solo. */
+/* En una fila que no envuelve, el detalle abierto necesita su propia línea. */
 .lista li { flex-wrap: wrap; }
 
 .pie-desglose {
@@ -1498,6 +1510,19 @@ tr.detalle > td {
    en vez de cortarse: la fecha de pago quedaba en «se paga el 1…». */
 .lista li.con-acciones .titulo,
 .lista li.con-acciones .meta { white-space: normal; }
+
+/*
+ * Salvo en las listas donde importa que TODAS las filas midan igual —los
+ * ingresos, el efectivo, los movimientos—: ahí el texto vuelve a una línea
+ * con puntos suspensivos, porque una lista de cuatrocientas filas a distintas
+ * alturas no se puede recorrer con la vista. Va después de la regla de arriba
+ * a propósito: misma especificidad, gana la última.
+ */
+.lista li.fila-plana .titulo,
+.lista li.fila-plana .meta { white-space: nowrap; }
+/* La «i» abre el grupo de botones por la izquierda; el resto queda a la
+   derecha, donde estaba. */
+.lista li.fila-plana .acciones .ver-nota { margin-right: auto; }
 /* Desplegable de selección múltiple: se abre para elegir y se cierra, y el
    rótulo dice qué hay marcado sin necesidad de abrirlo. Con la lista siempre
    abierta, el resultado quedaba media pantalla más abajo. */
@@ -1671,6 +1696,9 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
 .lista li.con-acciones .acciones {
   flex: 1 0 100%;
   display: flex; justify-content: flex-end; gap: 8px;
+  /* En 320 px no caben cuatro botones y la «i» en una línea: sin esto el
+     último se salía de la pantalla en vez de bajar. */
+  flex-wrap: wrap; row-gap: 8px;
 }
 
 /*
@@ -5159,15 +5187,47 @@ function filaMovimiento({
  *
  * En Cuentas y en Tarjetas la fila no se puede convertir en un desplegable
  * entero: tocarla en cualquier sitio abriría el detalle, y encima hay botones
- * de corregir y de borrar. Así que el detalle va como su propio desplegable,
- * en una línea aparte dentro de la misma fila.
+ * de corregir y de borrar. Así que el detalle se reduce a una «i» que va EN LA
+ * FILA, entre el importe y los botones, y el texto sale debajo al tocarla.
+ *
+ * Antes esto era un `<details>` con su propio renglón —«i Detalle»— que valía
+ * `flex: 1 0 100%`: ocupaba una línea entera aun cerrado y empujaba los
+ * botones a una tercera. Las filas con nota medían el triple que las demás y
+ * la lista quedaba a saltos. El párrafo ahora nace con `hidden`, así que
+ * cerrado no ocupa nada y todas las filas miden lo mismo.
  */
-function notaFila(nota) {
+function marcaNota(nota) {
   if (!nota) return '';
-  return `<details class="nota-extra">
-    <summary><span class="tiene-nota" aria-hidden="true">i</span>Detalle</summary>
-    <p>${esc(nota)}</p></details>`;
+  return `<button type="button" class="ver-nota" aria-expanded="false"
+    aria-label="Ver el detalle">i</button>`;
 }
+
+/** El texto que abre esa «i». Va suelto en la fila, que es quien le da el ancho. */
+function notaTexto(nota) {
+  if (!nota) return '';
+  return `<p class="nota-abierta" hidden>${esc(nota)}</p>`;
+}
+
+/** Los dos juntos, para filas donde la marca y el texto van seguidos. */
+function notaFila(nota) {
+  return marcaNota(nota) + notaTexto(nota);
+}
+
+/*
+ * Un solo oyente para toda la app: las listas se repintan enteras a cada
+ * cambio y colgar un oyente por fila obligaría a cada vista a acordarse de
+ * volver a ponerlos.
+ */
+document.addEventListener('click', (ev) => {
+  const boton = ev.target.closest?.('.ver-nota');
+  if (!boton) return;
+  const fila = boton.closest('li') || boton.parentElement;
+  const nota = fila?.querySelector('.nota-abierta');
+  if (!nota) return;
+  const seCierra = !nota.hidden;
+  nota.hidden = seCierra;
+  boton.setAttribute('aria-expanded', String(!seCierra));
+});
 
 /**
  * Un aviso informativo, plegado por defecto: un círculo con «i» que se toca
@@ -5222,7 +5282,7 @@ const ICONOS = {
   datos: '<path d="M12 7c4.4 0 8-1.1 8-2.5S16.4 2 12 2 4 3.1 4 4.5 7.6 7 12 7Zm8-2.5v15c0 1.4-3.6 2.5-8 2.5s-8-1.1-8-2.5v-15" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M20 12c0 1.4-3.6 2.5-8 2.5S4 13.4 4 12" fill="none" stroke="currentColor" stroke-width="1.8"/>',
 };
 
-return { $, $$, ICONOS, aNumero, avisoInfo, brindis, campoMonto, confirmar, crear, descargar, esc, filaMovimiento, hoyISO, modal, notaFila, opciones, pedirArchivo, segmentado };
+return { $, $$, ICONOS, aNumero, avisoInfo, brindis, campoMonto, confirmar, crear, descargar, esc, filaMovimiento, hoyISO, marcaNota, modal, notaFila, notaTexto, opciones, pedirArchivo, segmentado };
 })();
 
 M["xlsx"] = (function () {
@@ -10438,7 +10498,7 @@ M["views/tarjetas"] = (function () {
 const {db, tarjetas, eliminar, guardar} = M["store"];
 const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir} = M["calc"];
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
-const {esc, $, $$, segmentado, confirmar, opciones, aNumero, notaFila} = M["ui"];
+const {esc, $, $$, segmentado, confirmar, opciones, aNumero, notaFila, marcaNota, notaTexto} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
 const estado = { tarjeta: null, usuario: 'ambos', mes: null, comprobando: false };
 
@@ -10852,8 +10912,8 @@ function listaMovimientos(tarjetaId, mes, usuario, marcable = false) {
             ${pendiente ? '' : ' · pagada'}</div>
         </div>
         <div class="monto">${money(cuota.monto)}</div>
-        ${notaFila(gasto.proposito)}
         <div class="acciones">
+          ${marcaNota(gasto.proposito)}
           ${gasto.cuotas > 1 ? '' : gasto.aplazado === 'Si'
     ? `<button class="btn pequeno primario" data-diferir="${esc(gasto.id)}">Diferir</button>
        <button class="btn pequeno" data-aplazar="${esc(gasto.id)}">Pagarlo ya</button>`
@@ -10861,6 +10921,7 @@ function listaMovimientos(tarjetaId, mes, usuario, marcable = false) {
           <button class="btn pequeno" data-corregir="${esc(gasto.id)}">Corregir</button>
           <button class="btn pequeno peligro" data-borrar="${esc(gasto.id)}">Eliminar</button>
         </div>
+        ${notaTexto(gasto.proposito)}
       </li>`;
   }).join('')}</ul>
     <div class="aviso"><span class="icono">Σ</span>
@@ -11064,7 +11125,7 @@ M["views/cuentas"] = (function () {
 const {db, cuentasBancarias, eliminar, upsert, cuenta} = M["store"];
 const {money, moneyHTML, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes} = M["calc"];
 const {dona, linea, alRedimensionar} = M["charts"];
-const {esc, $, $$, confirmar, modal, brindis, aNumero, notaFila} = M["ui"];
+const {esc, $, $$, confirmar, modal, brindis, aNumero, marcaNota, notaTexto} = M["ui"];
 const {formMovimiento, formIngreso, formGastoEfectivo} = M["forms"];
 function render(raiz) {
   const cuentas = cuentasBancarias();
@@ -11259,18 +11320,28 @@ function listaSimple(filas, mapear, vacio) {
   if (!filas.length) return `<p class="vacio">${esc(vacio)}</p>`;
   return `<ul class="lista">${filas.map((f) => {
     const v = mapear(f);
+    /*
+     * Los botones van en su propia línea. Con todo en una sola, «Corregir» y
+     * «✕» dejaban al concepto entre 45 y 115 px de los 390 de la pantalla:
+     * «Sueld…» y una fecha cortada a «2025…». Bajándolos, el texto recupera
+     * el ancho entero y todas las filas siguen midiendo lo mismo, que es lo
+     * que hace legible una lista larga.
+     */
     return `
-      <li>
+      <li class="con-acciones fila-plana">
         <div class="principal">
           <div class="titulo">${esc(v.titulo)}</div>
           <div class="meta">${esc(v.meta)}</div>
         </div>
         <div class="monto ${v.signo}">${money(v.monto)}</div>
-        ${notaFila(v.nota)}
-        <button class="btn pequeno" data-corregir="${esc(v.id)}"
-                data-coleccion="${esc(v.coleccion)}">Corregir</button>
-        <button class="btn pequeno peligro" data-borrar="${esc(v.id)}"
-                data-coleccion="${esc(v.coleccion)}" aria-label="Eliminar">✕</button>
+        <div class="acciones">
+          ${marcaNota(v.nota)}
+          <button class="btn pequeno" data-corregir="${esc(v.id)}"
+                  data-coleccion="${esc(v.coleccion)}">Corregir</button>
+          <button class="btn pequeno peligro" data-borrar="${esc(v.id)}"
+                  data-coleccion="${esc(v.coleccion)}" aria-label="Eliminar">✕</button>
+        </div>
+        ${notaTexto(v.nota)}
       </li>`;
   }).join('')}</ul>`;
 }
