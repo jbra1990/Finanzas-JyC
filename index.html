@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ql7gtC5bg4qWQQKPZcrM1PCb9LXx9yJIEja+O/QNGL8='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LJwJ1Y2ehHIXFy9k+T/YoBQU/HFq/fUHi+TwRobOQ9Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -8238,6 +8238,14 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
      * adivina—; lo que la app supone que se repetirá, no.
      */
     reales: cero(),
+    /*
+     * De lo real, la parte que TODAVÍA NO HA OCURRIDO: un gasto a plazos o un
+     * pago único escritos a mano. Cuenta como real —el importe y el mes están
+     * decididos— pero no ha pasado por ninguna cuenta ni por ningún estado de
+     * cuenta, así que es lo que explica que esta tabla no cuadre con Resumen,
+     * que solo enseña lo que el banco ya facturó.
+     */
+    aMano: cero(),
     realLineas: [],
   }]));
 
@@ -8258,7 +8266,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
     m.comprometido += monto;
     m.medios[medio] += monto;
     m.reales[medio] += monto;
-    m.realLineas.push({ detalle, monto, medio, fecha, nota, proposito });
+    m.realLineas.push({ detalle, monto, medio, fecha, nota, proposito, aMano: false });
   };
 
   for (const c of db.cuotas) {
@@ -8308,6 +8316,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
         if (casilla.medios[medio] !== undefined) casilla.medios[medio] += monto * parte;
         if (conocido && casilla.reales[medio] !== undefined) {
           casilla.reales[medio] += monto * parte;
+          casilla.aMano[medio] += monto * parte;
         }
       });
       casilla.lineas.push({ clave: r.clave, detalle: r.detalle, monto, cuando, reparto: r.reparto });
@@ -8317,6 +8326,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
           monto,
           medio: Object.keys(r.reparto || { Efectivo: 1 })[0],
           nota: cuando,
+          aMano: true,
         });
       }
       aporta = true;
@@ -8387,6 +8397,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
     MEDIOS.forEach((k) => {
       x.medios[k] = redondear(x.medios[k]);
       x.reales[k] = redondear(x.reales[k]);
+      x.aMano[k] = redondear(x.aMano[k]);
     });
     /*
      * El total de lo real NO es «comprometido»: eso solo cuenta lo ya
@@ -8414,6 +8425,8 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
         redondear(filas.reduce((s, x) => s + x.medios[k], 0))])),
       reales: Object.fromEntries(MEDIOS.map((k) => [k,
         redondear(filas.reduce((s, x) => s + x.reales[k], 0))])),
+      aMano: Object.fromEntries(MEDIOS.map((k) => [k,
+        redondear(filas.reduce((s, x) => s + x.aMano[k], 0))])),
       real: redondear(filas.reduce((s, x) => s + x.real, 0)),
     },
   };
@@ -13032,6 +13045,7 @@ function render(raiz, { irA } = {}) {
     granTotal: plan.totales.real,
     acumulado: true,
   })}
+      ${notaAMano(plan)}
     </section>
 
     <section class="tarjeta">
@@ -13277,6 +13291,42 @@ function listaRecurrencias(filas, fuera) {
  * importe y de qué bolsillo salen. Sin esto la tabla dice «$1.132,09 en
  * tarjeta» y no hay manera de saber de qué.
  */
+/*
+ * Por qué esta tabla no cuadra con Resumen.
+ *
+ * «Solo lo real» cuenta también lo que uno ESCRIBE —un gasto a plazos, un pago
+ * único—, porque el importe y el mes están decididos aunque el cargo no haya
+ * llegado. Resumen, en cambio, enseña lo que la tarjeta ya facturó: tiene que
+ * cuadrar con el estado de cuenta del banco, que es para lo que sirve.
+ *
+ * Las dos cifras son correctas y miden cosas distintas. Lo que faltaba era
+ * decir cuánto vale esa diferencia, que es lo que hacía pensar en un error.
+ */
+function notaAMano(plan) {
+  const total = MEDIOS.reduce((s, k) => s + (plan.totales.aMano?.[k] || 0), 0);
+  if (total <= 0) return '';
+
+  const hoy = mesActual();
+  const deEsteMes = plan.filas.find((f) => f.mes === hoy);
+  const porMedio = MEDIOS
+    .filter((k) => (deEsteMes?.aMano?.[k] || 0) > 0)
+    .map((k) => `<strong>${money(deEsteMes.aMano[k])}</strong> en ${k.toLowerCase()}`);
+  // «a, b y c»: con « y » entre todos parecía una lista de dos cosas mal escrita.
+  const lista = porMedio.length > 1
+    ? `${porMedio.slice(0, -1).join(', ')} y ${porMedio[porMedio.length - 1]}`
+    : porMedio[0];
+
+  return `<div class="aviso"><span class="icono">i</span>
+    <span class="crece">${lista
+    ? `Este mes, ${lista} son gastos que escribiste a mano y que todavía no ha
+       cobrado nadie. `
+    : 'Parte de estas cifras son gastos que escribiste a mano y que todavía no ha '
+      + 'cobrado nadie. '}Cuentan como reales —el importe y el mes están
+    decididos— pero por eso esta tabla no cuadra con Resumen, que solo enseña lo
+    que la tarjeta ya facturó. En el detalle de cada mes van marcados «a mano».
+    En todos los meses de la tabla suman ${money(redondear(total))}.</span></div>`;
+}
+
 function detalleReal(fila) {
   if (!fila) return '';
   if (!fila.realLineas.length) {
@@ -13285,6 +13335,9 @@ function detalleReal(fila) {
   }
   return `<ul class="desglose">${fila.realLineas.map((l) => filaMovimiento({
     titulo: l.detalle,
+    // Lo escrito a mano se marca: es lo único de esta tabla que todavía no ha
+    // pasado por una cuenta, y por tanto lo que hace que no cuadre con Resumen.
+    extra: l.aMano ? '<span class="chip">a mano</span>' : '',
     meta: `${esc(l.medio)}${l.nota ? ` · ${esc(l.nota)}` : ''}${
   l.fecha ? ` · ${esc(textoFecha(l.fecha))}` : ''}`,
     monto: money(l.monto),
