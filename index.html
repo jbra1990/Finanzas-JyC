@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-MirjClQupGNmufOCrAv+rQRZOMDCOfTWFV/N0T5TyHU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ql7gtC5bg4qWQQKPZcrM1PCb9LXx9yJIEja+O/QNGL8='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -1919,6 +1919,71 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
 }
 .tope-pie strong { color: var(--tinta-2); font-weight: 620; }
 .tope-pie strong.mal { color: var(--critico); }
+/*
+ * La sombra de lo ya firmado, mes a mes. Barras y no tabla: lo que hay que ver
+ * de un golpe es hasta dónde llega y si va bajando o no.
+ */
+.comprometidos { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 7px; }
+.comprometidos li {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.cm-mes { flex: 0 0 58px; color: var(--tinta-3); }
+.cm-barra {
+  flex: 1;
+  height: 9px;
+  border-radius: var(--radio-pill);
+  background: var(--superficie-3);
+  overflow: hidden;
+}
+.cm-barra > i {
+  display: block; height: 100%;
+  border-radius: var(--radio-pill);
+  background: var(--serie-4);
+}
+.cm-monto { flex: 0 0 auto; font-weight: 640; letter-spacing: -0.01em; }
+
+/* Gasto hormiga: la cifra que manda es la del año, no la del corte, así que va
+   a la derecha y en grande, donde el ojo ya busca el importe. */
+.hormigas { list-style: none; margin: 0 0 12px; padding: 0; }
+.hormigas li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--grid);
+}
+.hormigas li:last-child { border-bottom: 0; }
+.hormigas .principal { flex: 1; min-width: 0; }
+.hormigas .titulo {
+  font-weight: 570; font-size: 13px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hormigas .meta {
+  margin-top: 2px; font-size: 11px; color: var(--tinta-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hormigas .monto {
+  flex: none; text-align: right;
+  font-weight: 640; font-size: 14px;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+  color: var(--alerta);
+}
+.hormigas .monto .pie {
+  display: block;
+  font-size: 10px; font-weight: 550; letter-spacing: 0;
+  color: var(--tinta-3);
+}
+
+/* Lo ya firmado dentro del tope de tarjetas: segunda línea, más apagada, para
+   que no compita con «cuánto queda». */
+.tope-comprometido {
+  display: block;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--grid);
+  font-size: 11px;
+  color: var(--tinta-3);
+}
 /* A la derecha: el botón flotante de «+» vive en la esquina de abajo a la
    izquierda y tapaba este. */
 .topes-pie { display: flex; justify-content: flex-end; }
@@ -4206,6 +4271,135 @@ function acumuladoHistorico(filtros = {}) {
   return { meses, serie, ingresos, gastos, balance: redondear(ingresos - gastos) };
 }
 
+/* --- Lo que ya está comprometido ------------------------------------------
+ *
+ * Una compra a plazos se siente gratis el día que se hace y solo duele
+ * repartida. Antes de empezar octubre ya se debe lo que se firmó en junio, y
+ * eso no aparece en ningún sitio hasta que llega el estado de cuenta.
+ */
+
+/** Índice gasto → tipo, para no recorrer la lista dentro de otro bucle. */
+function tipoPorGasto() {
+  const m = new Map();
+  for (const g of db.gastosTarjeta) m.set(g.id, g.tipo || 'Corriente');
+  return m;
+}
+
+/**
+ * De lo que se va a facturar en ese mes, cuánto se decidió ANTES: cuotas de
+ * diferidos y cargos recurrentes. Lo corriente no cuenta —es lo que se está
+ * gastando ahora— y es justamente lo que queda libre.
+ */
+function comprometidoEnMes(mes, tarjetaId = null, usuario = 'ambos') {
+  const tipos = tipoPorGasto();
+  let total = 0;
+  for (const c of db.cuotas) {
+    if (c.mes !== mes) continue;
+    if (tarjetaId && c.tarjeta !== tarjetaId) continue;
+    if (usuario !== 'ambos' && c.usuario !== usuario) continue;
+    if (tipos.get(c.gasto_id) !== 'Corriente') total += Number(c.monto) || 0;
+  }
+  return redondear(total);
+}
+
+/**
+ * Lo comprometido mes a mes de aquí en adelante, para ver de un vistazo hasta
+ * dónde llega la sombra de lo ya firmado.
+ *
+ * @returns {Array<{mes: string, monto: number}>} sin los meses ya limpios del final
+ */
+function comprometidoProximos(cuantos = 6, tarjetaId = null, usuario = 'ambos') {
+  const desde = mesActual();
+  const filas = Array.from({ length: cuantos }, (_, i) => {
+    const mes = sumarMeses(desde, i);
+    return { mes, monto: comprometidoEnMes(mes, tarjetaId, usuario) };
+  });
+  // La cola de meses en cero no dice nada: se recorta.
+  let fin = filas.length;
+  while (fin > 1 && filas[fin - 1].monto === 0) fin -= 1;
+  return filas.slice(0, fin);
+}
+
+/* --- Gasto hormiga --------------------------------------------------------
+ *
+ * Lo que no detecta ningún tope: compras pequeñas y repetidas. Cada una es
+ * irrelevante —nadie decide dejar de gastarse $11 en un café— y la suma del
+ * año no lo es. Hace falta contarlas, no medirlas.
+ */
+
+/** Techo del ticket medio para considerarlo hormiga, y mínimo de visitas. */
+const HORMIGA = { ticket: 25, visitas: 6 };
+
+/** «Juan Valdez», «juan valdez» y «JUAN VALDEZ  » son el mismo sitio. */
+function claveComercio(nombre) {
+  return String(nombre || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Los comercios de gasto hormiga en un rango de meses.
+ *
+ * Cuenta COMPRAS, no cuotas: un diferido a seis meses es una visita, no seis.
+ * Por eso mira los gastos y no las cuotas, al revés que el resto de la app.
+ *
+ * @returns {Array<object>} por total gastado, de más a menos
+ */
+function gastoHormiga(meses, filtros = {}) {
+  const set = new Set(meses);
+  const ticketMax = filtros.ticket ?? HORMIGA.ticket;
+  const minVisitas = filtros.visitas ?? HORMIGA.visitas;
+  const grupos = new Map();
+
+  const anotar = (nombre, monto, categoria, mes) => {
+    if (!set.has(mes) || !(monto > 0)) return;
+    const clave = claveComercio(nombre);
+    if (!clave) return;
+    const g = grupos.get(clave) || {
+      nombre: String(nombre).trim(), visitas: 0, total: 0, categorias: new Set(), meses: new Set(),
+    };
+    g.visitas += 1;
+    g.total += monto;
+    if (categoria) g.categorias.add(categoria);
+    g.meses.add(mes);
+    grupos.set(clave, g);
+  };
+
+  // `medio` es el mismo mando que en Análisis: todo, solo tarjeta o solo
+  // efectivo. Aquí no vale `tarjeta`, que sirve para elegir UNA tarjeta.
+  const medio = filtros.medio || 'ambos';
+  if (medio !== 'efectivo') {
+    for (const g of db.gastosTarjeta) {
+      if (!pasaUsuario(filtros, g.usuario) || !pasaTarjeta(filtros, g.tarjeta)) continue;
+      anotar(g.detalle, Number(g.monto_total) || 0, g.categoria, claveMes(g.fecha));
+    }
+  }
+  if (medio !== 'tarjeta' && (!filtros.tarjeta || filtros.tarjeta === 'todas')) {
+    for (const g of db.gastosEfectivo) {
+      if (!pasaUsuario(filtros, g.usuario)) continue;
+      anotar(g.detalle, Number(g.monto) || 0, g.categoria, claveMes(g.fecha));
+    }
+  }
+
+  const nMeses = Math.max(1, meses.length);
+  return [...grupos.values()]
+    .map((g) => {
+      const total = redondear(g.total);
+      return {
+        nombre: g.nombre,
+        visitas: g.visitas,
+        total,
+        ticket: redondear(total / g.visitas),
+        // Al ritmo del corte, cuánto sale al año. Es la cifra que sorprende.
+        alAnio: redondear((total / nMeses) * 12),
+        mesesConVisita: g.meses.size,
+        categoria: [...g.categorias][0] || '',
+      };
+    })
+    .filter((g) => g.visitas >= minVisitas && g.ticket <= ticketMax)
+    .sort((a, b) => b.total - a.total);
+}
+
 /* --- Topes del mes --------------------------------------------------------
  *
  * El presupuesto por categoría dice en qué se puede gastar; el tope dice
@@ -4326,7 +4520,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+return { HORMIGA, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastoHormiga, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -8691,7 +8885,7 @@ M["forms"] = (function () {
  */
 
 const {db, guardar, nuevoId, upsert, tocar, cuentasBancarias, tarjetas, categoriasGasto, categoriasIngreso, usuarios, capitalizar} = M["store"];
-const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta, rangoMeses, topesDelMes, umbralAviso, TOPES} = M["calc"];
+const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta, rangoMeses, topesDelMes, umbralAviso, TOPES, comprometidoEnMes} = M["calc"];
 const {modal, opciones, brindis, alarma, hoyISO, esc, $, aNumero, campoMonto} = M["ui"];
 const selUsuarios = (sel) => opciones(usuarios(), sel);
 const val = (form, sel) => aNumero($(sel, form).value);
@@ -9528,8 +9722,19 @@ function formDiferir(gasto, alTerminar) {
             hasta <strong>${esc(nombreMes(sumarMeses($('#df-desde', form).value, n - 1)))}</strong>.</div>
           ${cuota > 0 && Math.abs(dif) >= 0.01 ? `
             <div style="margin-top:6px">${dif > 0
-    ? `Son ${money(dif)} más que el consumo: el interés del diferido.`
-    : `Son ${money(-dif)} menos que el consumo. Revísalo.`}</div>` : ''}`;
+    ? `Son ${money(dif)} más que el consumo: el interés del diferido${
+      gasto.monto_total > 0
+        ? `, un ${((dif / gasto.monto_total) * 100).toFixed(1)} % sobre lo comprado`
+        : ''}.`
+    : `Son ${money(-dif)} menos que el consumo. Revísalo.`}</div>` : ''}
+          ${cuota > 0 ? `<div class="df-sombra">En qué deja los próximos meses,
+            contando lo que ya está comprometido:<br>${
+  Array.from({ length: Math.min(n, 6) }, (_, i) => {
+    const m = sumarMeses($('#df-desde', form).value, i);
+    return `${nombreMes(m, true)} <strong>${money(redondear(
+      comprometidoEnMes(m, gasto.tarjeta) + cuota,
+    ))}</strong>`;
+  }).join(' · ')}</div>` : ''}`;
       };
       ['change', 'input'].forEach((ev) => form.addEventListener(ev, refrescar));
       refrescar();
@@ -9813,7 +10018,7 @@ M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
 const {db, tarjetas, usuarios} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, pagoDeTarjeta, topesDelMes, umbralAviso} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, pagoDeTarjeta, topesDelMes, umbralAviso, comprometidoEnMes} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
 const {crear, esc, $, segmentado, opciones} = M["ui"];
 const {formGastoTarjeta, formIngreso, formTopes} = M["forms"];
@@ -10059,6 +10264,12 @@ function seccionTopes(mes, usuario) {
     <div class="topes">${filas.map((f) => {
     const color = f.estado === 'pasado' ? 'critico'
       : f.estado === 'cerca' || f.estado === 'ritmo' ? 'alerta' : 'bien';
+    /*
+     * Del tope de tarjetas, la parte que ya estaba decidida antes de empezar
+     * el mes. Un tope de $1.100 con $500 en cuotas no deja $1.100 para gastar,
+     * deja $600, y esa es la cifra con la que se decide si se compra o no.
+     */
+    const comprometido = f.clave === 'tarjeta' ? comprometidoEnMes(mes, null, usuario) : 0;
     const pie = f.estado === 'pasado'
       ? `<strong class="mal">${money(f.exceso)} de más</strong>`
       : f.estado === 'ritmo'
@@ -10076,7 +10287,10 @@ function seccionTopes(mes, usuario) {
             <div class="medidor-relleno" style="width:${Math.min(100, f.uso).toFixed(1)}%"></div>
           </div>
         </div>
-        <div class="tope-pie">${pie}</div>
+        <div class="tope-pie">${pie}${f.clave === 'tarjeta' && comprometido > 0 ? `
+          <span class="tope-comprometido">De ese tope, <strong>${money(comprometido)}</strong>
+          ya están comprometidos en cuotas: libres
+          <strong>${money(Math.max(0, redondear(f.tope - comprometido)))}</strong>.</span>` : ''}</div>
       </div>`;
   }).join('')}</div>
     <div class="aviso"><span class="icono">Σ</span>
@@ -10854,7 +11068,7 @@ M["views/tarjetas"] = (function () {
 /** Vista «Tarjetas»: cupo, consumo del mes, diferidos vivos y movimientos. */
 
 const {db, tarjetas, eliminar, guardar} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir, comprometidoProximos} = M["calc"];
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, opciones, aNumero, notaFila, marcaNota, notaTexto} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
@@ -11008,6 +11222,8 @@ function render(raiz) {
       </div>
     </section>
 
+    <section class="tarjeta" id="comprometido"></section>
+
     <section class="tarjeta">
       <header><h2>Diferidos vigentes</h2>
         <span class="pista">Cuotas por pagar</span></header>
@@ -11099,6 +11315,8 @@ function render(raiz) {
   pintar();
   alRedimensionar(pintar);
 
+  $('#comprometido', raiz).innerHTML = seccionComprometido(t, estado.usuario);
+
   $('#diferidos', raiz).innerHTML = listaDiferidos(t.id, estado.usuario);
   $('#movs', raiz).innerHTML = listaMovimientos(t.id, mes, estado.usuario, estado.comprobando);
 
@@ -11171,6 +11389,42 @@ function sumaPorTipo(tarjetaId, mes, usuario, tipo) {
     .filter((c) => usuario === 'ambos' || c.usuario === usuario)
     .filter((c) => db.gastosTarjeta.find((g) => g.id === c.gasto_id)?.tipo === tipo)
     .reduce((s, c) => s + c.monto, 0));
+}
+
+/*
+ * Lo que ya se debe de los meses que vienen, antes de gastar nada en ellos.
+ *
+ * Una compra a plazos se siente gratis el día que se firma: entra una cuota
+ * pequeña y el resto queda fuera de la vista hasta que llega el mes. Aquí se
+ * ve entera la sombra de lo ya decidido, que es lo que de verdad limita
+ * cuánto se puede gastar en octubre o en noviembre.
+ */
+function seccionComprometido(t, usuario) {
+  const filas = comprometidoProximos(6, t.id, usuario);
+  // El rótulo de la esquina cabe en una línea de unos 140 px: más largo, la
+  // pestaña se estira y desencaja la cabecera en pantallas de 320.
+  const cab = `<header><h2>Ya comprometido</h2>
+    <span class="pista">Próximos meses</span></header>`;
+
+  const total = redondear(filas.reduce((s, f) => s + f.monto, 0));
+  if (total <= 0) {
+    return `${cab}<p class="vacio">Nada a plazos en ${esc(t.nombre)}: todo lo
+      que gastes estos meses lo decides tú sobre la marcha.</p>`;
+  }
+
+  const tope = Math.max(...filas.map((f) => f.monto), 1);
+  return `${cab}
+    <p class="pista" style="margin:-4px 0 12px">Esto se debe ANTES de comprar
+    nada: son cuotas de diferidos y cargos recurrentes ya firmados.</p>
+    <ul class="comprometidos">${filas.map((f) => `
+      <li>
+        <span class="cm-mes">${esc(nombreMes(f.mes, true))}</span>
+        <span class="cm-barra"><i style="width:${((f.monto / tope) * 100).toFixed(1)}%"></i></span>
+        <span class="cm-monto">${f.monto > 0 ? money(f.monto) : '—'}</span>
+      </li>`).join('')}</ul>
+    <div class="aviso"><span class="icono">Σ</span>
+      <span class="crece">${money(total)} repartidos hasta
+      ${esc(nombreMes(filas[filas.length - 1].mes))}.</span></div>`;
 }
 
 function listaDiferidos(tarjetaId, usuario) {
@@ -13544,7 +13798,7 @@ M["views/analisis"] = (function () {
  * enseñar.
  */
 
-const {nombreMes, money, moneyHTML, redondear, rangoMeses, mesActual, mesesConDatos, textoFecha, detalleDeGastos} = M["calc"];
+const {nombreMes, money, moneyHTML, redondear, rangoMeses, mesActual, mesesConDatos, textoFecha, detalleDeGastos, gastoHormiga, HORMIGA} = M["calc"];
 const {esc, $, $$, segmentado, modal, brindis, opciones, descargar, filaMovimiento} = M["ui"];
 const {informeMensual, compartir} = M["informe"];
 /*
@@ -13603,6 +13857,8 @@ function render(raiz) {
       <button class="btn primario pequeno" id="btn-pdf">PDF del mes</button>
     </div>
 
+    <section class="tarjeta" id="an-hormiga"></section>
+
     <section class="tarjeta" id="an-resultado"></section>`;
 
   $('#an-quien', raiz).appendChild(segmentado(
@@ -13649,7 +13905,53 @@ function render(raiz) {
 
   $('#btn-pdf', raiz).addEventListener('click', () => formInforme(corte.hasta, corte.quien));
 
+  $('#an-hormiga', raiz).innerHTML = seccionHormiga(resumen.meses, {
+    usuario: corte.quien, medio: corte.medio,
+  });
+
   $('#an-resultado', raiz).innerHTML = resultado(resumen);
+}
+
+/*
+ * Gasto hormiga: lo pequeño que se repite.
+ *
+ * Ningún tope lo detecta, porque cada compra es irrelevante por sí sola. Lo
+ * que lo hace visible es contarlas y proyectarlas: «$11,85 en un café» no
+ * mueve a nadie, «$284 al año en cafés» sí. Por eso la cifra grande de cada
+ * fila es la del año y no la del corte.
+ *
+ * Se cuentan COMPRAS, no cuotas: un diferido a seis meses es una visita.
+ */
+function seccionHormiga(meses, filtros) {
+  const filas = gastoHormiga(meses, filtros);
+  const cab = `<header><h2>Gasto hormiga</h2>
+    <span class="pista">Lo que se repite</span></header>`;
+
+  if (!filas.length) {
+    return `${cab}<p class="vacio">En este corte no hay ningún sitio con
+      ${HORMIGA.visitas} visitas o más y un ticket medio por debajo de
+      ${money(HORMIGA.ticket)}. Prueba con más meses.</p>`;
+  }
+
+  const alAnio = redondear(filas.reduce((s, f) => s + f.alAnio, 0));
+  const visitas = filas.reduce((s, f) => s + f.visitas, 0);
+  return `${cab}
+    <p class="pista" style="margin:-4px 0 12px">Sitios con ${HORMIGA.visitas}
+    visitas o más y un ticket medio por debajo de ${money(HORMIGA.ticket)}.
+    Cada compra es pequeña; la de la derecha es la suma de un año a este ritmo.</p>
+    <ul class="hormigas">${filas.map((f) => `
+      <li>
+        <div class="principal">
+          <div class="titulo">${esc(f.nombre)}</div>
+          <div class="meta">${f.visitas} ${f.visitas === 1 ? 'visita' : 'visitas'} ·
+            ${money(f.ticket)} de media · ${money(f.total)} en el corte${
+  f.categoria ? ` · ${esc(f.categoria)}` : ''}</div>
+        </div>
+        <div class="monto">${money(f.alAnio)}<span class="pie">al año</span></div>
+      </li>`).join('')}</ul>
+    <div class="aviso alerta"><span class="icono">Σ</span>
+      <span class="crece">${visitas} compras pequeñas que, al ritmo de este
+      corte, son <strong>${money(alAnio)}</strong> en un año.</span></div>`;
 }
 
 /** Cómo se llama el corte que se está mirando, para la cabecera. */
