@@ -76,6 +76,28 @@
   --superficie-2: rgba(255, 255, 255, 0.10);
   --superficie-3: rgba(255, 255, 255, 0.155);
 
+  /*
+   * VIDRIO DE VERDAD. El desenfoque solo se nota si hay algo detrás que
+   * deformar: sobre un degradado liso, `backdrop-filter` no tiene trabajo y la
+   * tarjeta se queda en «gris translúcido». Por eso el fondo lleva tres
+   * manchas de luz fijas —`--luz-*`— y la tarjeta se mueve por encima de
+   * ellas al deslizar, que es de donde sale el efecto.
+   *
+   * `--cara-*` es la cara del vidrio: el degradado propio, el brillo de la
+   * esquina por donde entra la luz, el filo de arriba y el anillo del canto.
+   */
+  --luz-1: rgba(70, 130, 215, 0.20);
+  --luz-2: rgba(130, 98, 200, 0.14);
+  --luz-3: rgba(46, 156, 178, 0.10);
+  --cara-1: rgba(34, 57, 95, 0.88);
+  --cara-2: rgba(28, 49, 84, 0.80);
+  --cara-3: rgba(34, 57, 95, 0.86);
+  --cara-brillo: rgba(255, 255, 255, 0.10);
+  --cara-canto: rgba(255, 255, 255, 0.14);
+  --cara-anillo-a: rgba(255, 255, 255, 0.34);
+  --cara-anillo-b: rgba(255, 255, 255, 0.18);
+  --cara-sombra: 0 16px 40px rgba(8, 20, 44, 0.34);
+
   /* El panel es el mismo objeto en los dos temas. */
   --panel: linear-gradient(148deg, #4d8ccb 0%, #1d4a7e 30%, #10294f 64%, #081734 100%);
   --panel-plano: #10294f;
@@ -239,6 +261,23 @@
     --superficie-2: rgba(255, 255, 255, 0.095);
     --superficie-3: rgba(255, 255, 255, 0.15);
 
+    /* Vidrio: ver el bloque de :root. En oscuro las manchas pueden subir de
+       tono porque el fondo es casi negro y no hay nada que lavar. */
+    --luz-1: rgba(74, 140, 225, 0.30);
+    --luz-2: rgba(140, 104, 214, 0.22);
+    --luz-3: rgba(46, 156, 178, 0.16);
+    --cara-1: rgba(255, 255, 255, 0.145);
+    --cara-2: rgba(255, 255, 255, 0.095);
+    --cara-3: rgba(255, 255, 255, 0.125);
+    --cara-brillo: rgba(255, 255, 255, 0.15);
+    --cara-canto: rgba(255, 255, 255, 0.16);
+    --cara-anillo-a: rgba(255, 255, 255, 0.5);
+    --cara-anillo-b: rgba(255, 255, 255, 0.28);
+    --cara-sombra: 0 14px 38px rgba(0, 0, 0, 0.4);
+    /* La pestaña de la esquina también de vidrio: un parche opaco encima de
+       una tarjeta translúcida canta. */
+    --ficha-tapa: rgba(4, 11, 26, 0.6);
+
     --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
     --panel-plano: #0e2749;
 
@@ -295,6 +334,23 @@
   --superficie-solida: #1e242e;
   --superficie-2: rgba(255, 255, 255, 0.095);
   --superficie-3: rgba(255, 255, 255, 0.15);
+  /* Vidrio: ver el bloque de :root. En oscuro las manchas pueden subir de
+     tono porque el fondo es casi negro y no hay nada que lavar. */
+  --luz-1: rgba(74, 140, 225, 0.30);
+  --luz-2: rgba(140, 104, 214, 0.22);
+  --luz-3: rgba(46, 156, 178, 0.16);
+  --cara-1: rgba(255, 255, 255, 0.145);
+  --cara-2: rgba(255, 255, 255, 0.095);
+  --cara-3: rgba(255, 255, 255, 0.125);
+  --cara-brillo: rgba(255, 255, 255, 0.15);
+  --cara-canto: rgba(255, 255, 255, 0.16);
+  --cara-anillo-a: rgba(255, 255, 255, 0.5);
+  --cara-anillo-b: rgba(255, 255, 255, 0.28);
+  --cara-sombra: 0 14px 38px rgba(0, 0, 0, 0.4);
+  /* La pestaña de la esquina también de vidrio: un parche opaco encima de
+     una tarjeta translúcida canta. */
+  --ficha-tapa: rgba(4, 11, 26, 0.6);
+
   --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
   --panel-plano: #0e2749;
   --tinta: #eaf3ff;
@@ -355,6 +411,29 @@ html, body {
 }
 
 body { background: transparent; padding-bottom: env(safe-area-inset-bottom); }
+
+/*
+ * Las luces del fondo. Van FIJAS, así que las tarjetas se deslizan por encima
+ * y lo que se ve a través del vidrio cambia al hacer scroll: eso es lo que
+ * hace que se lea como vidrio y no como un cristal esmerilado pegado.
+ *
+ * Son degradados radiales, no un `filter: blur()`. El resultado se parece y
+ * cuesta una fracción: un filtro sobre una capa a pantalla completa se
+ * recalcula en cada repintado y en un teléfono se nota.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(38vmax 38vmax at 8% 14%, var(--luz-1), transparent 62%),
+    radial-gradient(34vmax 34vmax at 97% 40%, var(--luz-2), transparent 62%),
+    radial-gradient(30vmax 30vmax at 20% 86%, var(--luz-3), transparent 62%);
+}
+/* Todo lo demás, por encima de las luces. */
+.app { position: relative; z-index: 1; }
 
 h1, h2, h3, h4 {
   margin: 0;
@@ -817,16 +896,55 @@ a { color: var(--acento); }
  */
 .tarjeta {
   position: relative;
-  background: var(--superficie);
-  -webkit-backdrop-filter: blur(18px) saturate(1.25);
-  backdrop-filter: blur(18px) saturate(1.25);
-  border: 1px solid var(--borde);
+  /*
+   * La cara del vidrio: un brillo en la esquina por donde entra la luz y un
+   * degradado que va de claro a casi nada y vuelve a subir abajo, como se
+   * comporta una lámina de verdad. Debajo, el desenfoque de las luces del
+   * fondo; encima, el filo del canto.
+   */
+  background:
+    radial-gradient(120% 90% at 12% 0%, var(--cara-brillo) 0%, transparent 58%),
+    linear-gradient(158deg, var(--cara-1) 0%, var(--cara-2) 60%, var(--cara-3) 100%);
+  -webkit-backdrop-filter: blur(28px) saturate(1.55);
+  backdrop-filter: blur(28px) saturate(1.55);
+  /* El borde lo pinta el anillo de `::after`; este solo reserva el sitio. */
+  border: 1px solid transparent;
   border-radius: var(--radio-xl);
   padding: 16px;
   margin: 14px 0;
-  box-shadow: var(--sombra);
+  box-shadow: var(--cara-sombra), inset 0 1px 0 var(--cara-canto);
   /* Recorta la esquina oscura contra el redondeo de la tarjeta. */
   overflow: hidden;
+}
+
+/*
+ * El canto. Un borde de color plano no se parece a un canto de vidrio: la luz
+ * pega fuerte en una esquina y se apaga en el resto. Se consigue con un
+ * degradado recortado a un píxel de ancho con dos máscaras que se restan.
+ */
+.tarjeta::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(140deg,
+    var(--cara-anillo-a) 0%, rgba(255, 255, 255, 0.06) 32%,
+    rgba(255, 255, 255, 0.04) 66%, var(--cara-anillo-b) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/*
+ * Sin desenfoque no hay vidrio, solo un velo casi transparente por el que se
+ * leería el fondo a través del texto. Ahí se vuelve al velo sólido de antes.
+ */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .tarjeta { background: var(--superficie); }
 }
 
 /*
