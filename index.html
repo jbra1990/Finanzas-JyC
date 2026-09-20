@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LJwJ1Y2ehHIXFy9k+T/YoBQU/HFq/fUHi+TwRobOQ9Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-3L/mod0RYB/UqSdacbpcWu27bvoUlNW3nGN1yQfryCw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2069,6 +2069,58 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
   background: var(--serie-4);
 }
 .cm-monto { flex: 0 0 auto; font-weight: 640; letter-spacing: -0.01em; }
+
+/*
+ * Cada cuánto se compra cada cosa. La cifra de la derecha es el prorrateo al
+ * mes, que es lo que hay que reservar aunque la compra sea trimestral; la
+ * fecha y el «cada cuánto» van en el cuerpo, que es lo que se lee al decidir.
+ */
+.ritmos { list-style: none; margin: 0 0 12px; padding: 0; }
+.ritmos li {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px; row-gap: 8px;
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--grid);
+}
+.ritmos li:last-child { border-bottom: 0; }
+.ritmos .principal { flex: 1; min-width: 0; }
+.ritmos .titulo {
+  font-weight: 570; font-size: 13px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ritmos .titulo > .chip { vertical-align: middle; margin-left: 7px; }
+.ritmos .meta {
+  margin-top: 2px; font-size: 11px; color: var(--tinta-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ritmos .monto {
+  flex: none; text-align: right;
+  font-weight: 640; font-size: 14px;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+.ritmos .monto .pie {
+  display: block;
+  font-size: 10px; font-weight: 550; letter-spacing: 0; color: var(--tinta-3);
+}
+.ritmos .acciones { flex: 1 0 100%; display: flex; justify-content: flex-end; }
+/* Lo que ya tocaba: la única marca de color de la lista, porque es lo único
+   sobre lo que hay que hacer algo. */
+.ritmos li.toca { border-left: 3px solid var(--alerta); padding-left: 9px; }
+.ritmos li.toca .titulo { color: var(--alerta); }
+
+/* El reparto por bolsillo dentro de «Cómo va el mes»: una línea por medio,
+   rótulo a la izquierda e importe a la derecha. */
+.desglose-medios { list-style: none; margin: 12px 0; padding: 0; }
+.desglose-medios li {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--grid);
+  font-size: 12.5px;
+}
+.desglose-medios li:last-child { border-bottom: 0; }
+.desglose-medios span { color: var(--tinta-2); }
+.desglose-medios strong {
+  font-weight: 640; font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+}
 
 /* Gasto hormiga: la cifra que manda es la del año, no la del corte, así que va
    a la derecha y en grande, donde el ojo ya busca el importe. */
@@ -7682,7 +7734,8 @@ function nombreCadencia(dias) {
   const cerca = cadenciaCercana(dias);
   if (cerca) return cerca.nombre;
   if (dias < 30) return `Cada ${Math.round(dias)} días`;
-  return `Cada ${(dias / DIAS_MES).toFixed(1)} meses`;
+  // Con coma, como el resto de los números de la app.
+  return `Cada ${(dias / DIAS_MES).toFixed(1).replace('.', ',')} meses`;
 }
 
 /**
@@ -8180,6 +8233,113 @@ function recurrencias(quien = null) {
  * vez y donde lo pone la previsión.
  */
 /** Mapa medio → importe convertido en proporciones que suman 1. */
+/* --- Ritmo de compra ------------------------------------------------------
+ *
+ * `recurrencias` agrupa por CATEGORÍA y eso es lo correcto para presupuestar:
+ * combustible se gasta todos los meses, dé igual la gasolinera. Pero deja sin
+ * responder la pregunta de al lado: ¿cada cuánto compro paños húmedos? ¿cada
+ * cuánto lavo el carro? Eso no es una categoría, es una COSA concreta dentro
+ * de ella, y tiene su propio ritmo y su propio medio de pago.
+ *
+ * Va aparte y no como una opción de `recurrencias` a propósito: esa función es
+ * la que sostiene todo el presupuesto y no conviene tocarla para añadir una
+ * vista. Comparten los mismos ayudantes, así que las cadencias que detectan
+ * una y otra son las mismas.
+ */
+
+/** Lo que se compró, que es más fino que la categoría: «Lavado de carro». */
+function conceptoDe(g) {
+  return String(g.proposito || '').trim() || String(g.detalle || '').trim();
+}
+
+/**
+ * Cada cuánto se compra cada cosa, con qué se paga y cuánto supone al mes.
+ *
+ * @returns {Array<object>} de más a menos peso mensual
+ */
+function ritmoDeCompra(quien = null) {
+  const grupos = new Map();
+
+  const anota = (concepto, fecha, monto, categoria, origen) => {
+    const clave = claveGasto(concepto);
+    const iso = String(fecha ?? '').slice(0, 10);
+    if (!clave || !(monto > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    if (!grupos.has(clave)) {
+      grupos.set(clave, {
+        clave, nombre: concepto.trim(), fechas: [], montos: [],
+        categorias: new Map(), porMedio: new Map(),
+      });
+    }
+    const g = grupos.get(clave);
+    g.fechas.push(iso);
+    g.montos.push(monto);
+    const cat = String(categoria ?? '').trim() || 'Sin categoría';
+    g.categorias.set(cat, (g.categorias.get(cat) || 0) + 1);
+    const medio = medioDe(origen);
+    g.porMedio.set(medio, (g.porMedio.get(medio) || 0) + monto);
+  };
+
+  /*
+   * Solo COMPRAS, no cuotas: un diferido a seis meses se compró una vez. Esto
+   * mide cada cuánto se repite el acto de comprar, no cada cuánto se paga.
+   */
+  for (const g of db.gastosTarjeta) {
+    if (!esDe(g.usuario, quien)) continue;
+    anota(conceptoDe(g), g.fecha, Number(g.monto_total) || 0, g.categoria, g.tarjeta);
+  }
+  for (const g of db.gastosEfectivo) {
+    if (!esDe(g.usuario, quien)) continue;
+    anota(conceptoDe(g), g.fecha, Number(g.monto) || 0, g.categoria, g.cuenta);
+  }
+
+  const hoy = new Date().toISOString().slice(0, 10);
+
+  return [...grupos.values()]
+    .map((g) => {
+      const fechas = [...new Set(g.fechas)].sort();
+      if (fechas.length < MIN_OCURRENCIAS) return null;
+      const huecos = fechas.slice(1).map((f, i) => diasEntre(fechas[i], f)).filter((d) => d > 0);
+      if (!huecos.length) return null;
+
+      const cadencia = Math.round(mediana(huecos));
+      if (cadencia <= 0) return null;
+      const dispersion = mediana(huecos.map((h) => Math.abs(h - cadencia))) / cadencia;
+      const monto = redondear(mediana(g.montos));
+      const ultima = fechas[fechas.length - 1];
+      const diasDesde = diasEntre(ultima, hoy);
+
+      const medios = [...g.porMedio.entries()].sort((a, b) => b[1] - a[1]);
+      const total = medios.reduce((sum, [, v]) => sum + v, 0);
+
+      return {
+        clave: g.clave,
+        nombre: g.nombre,
+        categoria: [...g.categorias.entries()].sort((a, b) => b[1] - a[1])[0][0],
+        veces: fechas.length,
+        cadencia,
+        cadenciaTexto: nombreCadencia(cadencia),
+        monto,
+        porMes: porMesDe(monto, cadencia),
+        // Con qué se paga y en qué proporción: «casi siempre con tarjeta».
+        medio: medios[0][0],
+        medioParte: total > 0 ? medios[0][1] / total : 1,
+        reparto: repartoDe(g.porMedio),
+        ultima,
+        diasDesde,
+        // Cuándo tocaría la próxima, y si ya se pasó.
+        proxima: sumarDias(ultima, cadencia),
+        vencida: diasDesde > cadencia,
+        dispersion,
+        // Con los intervalos muy desiguales no es un ritmo, es casualidad.
+        fiable: dispersion <= 0.6,
+        // Un ritmo que no se cumple desde hace mucho ya no es un ritmo.
+        vigente: diasDesde <= Math.max(cadencia * 2.5, 45),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.porMes - a.porMes);
+}
+
 function repartoDe(porMedio) {
   const total = [...porMedio.values()].reduce((a, b) => a + b, 0);
   if (!total) return { Efectivo: 1 };
@@ -8533,7 +8693,7 @@ function mesesProyectados(n = 6) {
   return Array.from({ length: n }, (_, i) => sumarMeses(base, i));
 }
 
-return { MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, estaExcluida, fijosManuales, guardarAjuste, guardarManual, marcarPago, medioDe, mesesProyectados, presupuestoSugerido, proyeccion, recurrencias };
+return { MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, estaExcluida, fijosManuales, guardarAjuste, guardarManual, marcarPago, medioDe, mesesProyectados, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra };
 })();
 
 M["pdf"] = (function () {
@@ -12877,10 +13037,10 @@ M["views/plan"] = (function () {
  */
 
 const {db, guardar, categoriasGasto, cuentasBancarias, tarjetas, upsert, nuevoId, capitalizar} = M["store"];
-const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha} = M["calc"];
+const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes} = M["calc"];
 const {columnasApiladas, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo} = M["ui"];
-const {MEDIOS, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago} = M["plan"];
+const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago} = M["plan"];
 const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
 const vistaTarjetas = M["views/tarjetas"];
 /*
@@ -12894,6 +13054,7 @@ function render(raiz, { irA } = {}) {
   const meses = mesesProyectados(estado.horizonte);
   const plan = proyeccion(meses, { quien: estado.quien });
   const todas = recurrencias(estado.quien);
+  const ritmo = ritmoDeCompra(estado.quien);
   const mes = mesActual();
   const primero = plan.filas[0];
 
@@ -13006,6 +13167,10 @@ function render(raiz, { irA } = {}) {
       <div id="seg-quien"></div>
       <span class="pista" style="white-space:nowrap">${fiables.length} periódicos</span>
     </div>
+
+    <section class="tarjeta">${comoVaElMes(primero, estado.quien)}</section>
+
+    <section class="tarjeta" id="ritmo">${seccionRitmo(ritmo)}</section>
 
     <div class="barra-accion">
       <div id="seg-horizonte"></div>
@@ -13176,6 +13341,31 @@ function render(raiz, { irA } = {}) {
     });
   });
 
+  /*
+   * Pasar un ritmo detectado al presupuesto. Se guarda con SU cadencia —cada
+   * 90 días si es trimestral— y no prorrateado a mensual: así la previsión lo
+   * pone en el mes que toca y no una doceava parte todos los meses, que es lo
+   * que hacía imposible ver venir un gasto grande.
+   */
+  $$('[data-presupuestar]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const r = ritmo.find((x) => x.clave === btn.dataset.presupuestar);
+      if (!r) return;
+      formFijo({
+        esNuevo: true,
+        manual: true,
+        detalle: r.nombre,
+        categoria: r.categoria,
+        medio: r.medio,
+        monto: r.monto,
+        cadencia: r.cadencia,
+        tipo: r.dispersion <= 0.25 ? 'Fijo' : 'Variable',
+        clase: 'periodico',
+        usuario: estado.quien === 'Ambos' ? '' : estado.quien,
+      }, recargar);
+    });
+  });
+
   $$('[data-alternar]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => {
       const clave = btn.dataset.alternar;
@@ -13291,6 +13481,150 @@ function listaRecurrencias(filas, fuera) {
  * importe y de qué bolsillo salen. Sin esto la tabla dice «$1.132,09 en
  * tarjeta» y no hay manera de saber de qué.
  */
+/*
+ * Cada cuánto se compra cada cosa.
+ *
+ * El presupuesto por categoría dice cuánto se va en farmacia al mes. Esto dice
+ * otra cosa: que los paños húmedos se compran cada seis semanas, que el lavado
+ * del carro cae cada quince días y que ese se paga en efectivo. Es el nivel al
+ * que uno decide de verdad —«esto todavía no toca»—, y el que permite
+ * presupuestar un gasto trimestral sin prorratearlo a ciegas.
+ *
+ * Se listan solo los ritmos reconocibles: con los intervalos muy desiguales no
+ * hay ritmo, hay casualidad, y prometer una fecha sería inventar.
+ */
+function seccionRitmo(filas) {
+  const buenas = filas.filter((r) => r.fiable && r.vigente);
+  const cab = `<header><h2>Cada cuánto compras</h2>
+    <span class="pista">Ritmo detectado</span></header>`;
+
+  if (!buenas.length) {
+    return `${cab}<p class="vacio">Todavía no hay ningún concepto que se repita
+      con un ritmo reconocible. Hacen falta al menos tres compras de lo mismo, y
+      ayuda mucho rellenar «qué se compró» al registrarlas: es lo que distingue
+      los paños húmedos del jarabe dentro de la misma farmacia.</p>`;
+  }
+
+  const alMes = redondear(buenas.reduce((s, r) => s + r.porMes, 0));
+  const tocan = buenas.filter((r) => r.vencida);
+
+  return `${cab}
+    ${avisoInfo(`Se agrupa por lo que se compró —«qué se compró» del gasto—, no
+      por la tienda ni por la categoría. De cada concepto se saca cada cuánto
+      vuelve, cuánto cuesta cada vez y con qué se suele pagar. Lo que sale de
+      aquí es el gasto prorrateado al mes, que es lo que hay que reservar aunque
+      la compra sea trimestral.`)}
+    ${tocan.length ? `
+      <div class="aviso alerta"><span class="icono">!</span>
+        <span class="crece">${tocan.length === 1
+    ? `Toca ya: <strong>${esc(tocan[0].nombre)}</strong>, que suele volver
+       ${tocan[0].cadenciaTexto.toLowerCase()} y lleva ${tocan[0].diasDesde} días.`
+    : `Tocan ya ${tocan.length} cosas: ${tocan.slice(0, 3)
+      .map((r) => esc(r.nombre)).join(', ')}${tocan.length > 3 ? '…' : ''}.`}</span>
+      </div>` : ''}
+    <ul class="ritmos">${buenas.map((r) => `
+      <li${r.vencida ? ' class="toca"' : ''}>
+        <div class="principal">
+          <div class="titulo">${esc(r.nombre)}
+            <span class="chip">${esc(r.medio)}</span></div>
+          <div class="meta">${esc(r.cadenciaTexto)} · ${money(r.monto)} cada vez ·
+            ${r.veces} veces · ${esc(r.categoria)}${
+  /* Cuando se paga de las dos maneras, decirlo: el chip solo cabe uno y
+     enseñarlo a secas hacía pensar que siempre se paga así. */
+  r.medioParte < 0.85 ? ` · con ${esc(r.medio.toLowerCase())} el ${
+    Math.round(r.medioParte * 100)} %` : ''}</div>
+          <div class="meta">${r.vencida
+    ? `Tocaba el ${esc(textoFecha(r.proxima))}, hace ${r.diasDesde - r.cadencia} días`
+    : `La próxima, hacia el ${esc(textoFecha(r.proxima))}`}</div>
+        </div>
+        <div class="monto">${money(r.porMes)}<span class="pie">al mes</span></div>
+        <div class="acciones">
+          <button class="btn pequeno" data-presupuestar="${esc(r.clave)}">Presupuestarlo</button>
+        </div>
+      </li>`).join('')}</ul>
+    <div class="aviso"><span class="icono">Σ</span>
+      <span class="crece">${buenas.length} conceptos con ritmo propio.
+      Prorrateados, <strong>${money(alMes)}</strong> al mes.</span></div>`;
+}
+
+/*
+ * Cómo va el mes: lo que se lleva gastado HOY contra lo que entró.
+ *
+ * El resto de la sección mira hacia delante —qué viene, cuánto se prevé—. Esto
+ * mira hacia atrás y responde la única pregunta que se hace uno a mitad de
+ * mes: ¿puedo seguir gastando o paro?
+ *
+ * Se separa lo que YA SALIÓ de lo que está COMPROMETIDO pero aún no ha salido
+ * —la cuota del préstamo, un pago único apuntado—, porque no es lo mismo: lo
+ * primero ya no se puede evitar y lo segundo tampoco, pero uno todavía no lo
+ * ha notado en la cuenta.
+ */
+function comoVaElMes(fila, quien) {
+  const mes = fila.mes;
+  const ingresos = ingresoDelMes(mes, quien === 'Ambos' ? 'ambos' : quien);
+  // De lo real, lo que de verdad ya pasó por una cuenta o por la tarjeta.
+  const salido = Object.fromEntries(MEDIOS.map((k) => [k,
+    redondear((fila.reales[k] || 0) - (fila.aMano[k] || 0))]));
+  const totalSalido = redondear(MEDIOS.reduce((s, k) => s + salido[k], 0));
+  const comprometido = redondear(MEDIOS.reduce((s, k) => s + (fila.aMano[k] || 0), 0));
+  const libre = redondear(ingresos - totalSalido - comprometido);
+
+  const dias = diasQuedan(mes);
+  const alDia = libre > 0 && dias > 0 ? redondear(libre / dias) : 0;
+
+  const cab = `<header><h2>Cómo va ${esc(nombreMes(mes))}</h2>
+    <span class="pista">Hasta hoy</span></header>`;
+
+  const filas = [
+    ['Tarjeta, ya facturado', salido.Tarjeta],
+    ['Efectivo y débito', salido.Efectivo],
+    ['Préstamo', redondear(salido['Préstamo'] + (fila.aMano['Préstamo'] || 0))],
+  ].filter(([, v]) => v > 0);
+
+  const otroComprometido = redondear(comprometido - (fila.aMano['Préstamo'] || 0));
+
+  return `${cab}
+    <div class="rejilla kpis">
+      <div class="kpi"><div class="etq">Ingresos del mes</div>
+        <div class="valor">${money(ingresos)}</div>
+        ${ingresos <= 0 ? '<div class="delta mal">sin registrar</div>' : ''}</div>
+      <div class="kpi"><div class="etq">Gastado hasta hoy</div>
+        <div class="valor">${money(totalSalido)}</div>
+        <div class="delta">lo que ya salió</div></div>
+      <div class="kpi"><div class="etq">Comprometido</div>
+        <div class="valor">${money(comprometido)}</div>
+        <div class="delta">aún no ha salido</div></div>
+    </div>
+    <ul class="desglose-medios">${filas.map(([rotulo, valor]) => `
+      <li><span>${esc(rotulo)}</span><strong>${money(valor)}</strong></li>`).join('')}
+      ${otroComprometido > 0 ? `
+        <li><span>Escrito a mano, sin cobrar</span>
+          <strong>${money(otroComprometido)}</strong></li>` : ''}
+    </ul>
+    ${ingresos > 0 ? `
+      <div class="aviso${libre > 0 ? '' : ' alerta'}">
+        <span class="icono">${libre > 0 ? 'Σ' : '!'}</span>
+        <span class="crece">${libre > 0
+    ? `Te quedan <strong>${money(libre)}</strong> de lo que entró este mes${
+      dias > 0 ? `, y ${dias} ${dias === 1 ? 'día' : 'días'} de mes: hasta
+      <strong>${money(alDia)}</strong> al día sin pasarte.` : '.'}`
+    : `Llevas gastado y comprometido <strong>${money(-libre)}</strong> más de lo que
+       entró este mes. Lo que gastes de aquí en adelante sale del ahorro.`}</span>
+      </div>`
+    : `<div class="aviso alerta"><span class="icono">!</span>
+        <span class="crece">Sin ingresos registrados en ${esc(nombreMes(mes))} no se
+        puede decir cuánto te queda. Apunta el sueldo en Cuentas → + Ingreso y
+        esta caja empieza a responder «¿puedo seguir gastando?».</span></div>`}`;
+}
+
+/** Días que faltan para acabar el mes; 0 si el mes ya está cerrado. */
+function diasQuedan(mes) {
+  if (mes !== mesActual()) return 0;
+  const hoy = new Date();
+  const [a, m] = mes.split('-').map(Number);
+  return new Date(a, m, 0).getDate() - hoy.getDate();
+}
+
 /*
  * Por qué esta tabla no cuadra con Resumen.
  *
@@ -13411,7 +13745,12 @@ const CADENCIAS = [
  * lo sabe quien paga, así que tiene que poder escribirlo.
  */
 function formFijo(r, alTerminar) {
-  const nuevo = !r;
+  /*
+   * `esNuevo` deja precargar el formulario con una propuesta —lo que sale del
+   * ritmo detectado— sin que se confunda con editar algo que ya existe: los
+   * campos vienen puestos, pero al guardar nace un registro nuevo con su id.
+   */
+  const nuevo = !r || r.esNuevo === true;
   const CLASES = ['periodico', 'plazos', 'unico'];
   const clasePrevia = CLASES.includes(r?.clase) ? r.clase : 'periodico';
   const cats = categoriasGasto();
@@ -13435,7 +13774,7 @@ function formFijo(r, alTerminar) {
   })}
       <div class="campo"><label for="pf-cada">Cada cuánto</label>
         <select id="pf-cada" name="cadencia">
-          ${opciones(CADENCIAS, cercana(r?.cadencia ?? 30))}</select></div>
+          ${opciones(conLaDetectada(r?.cadencia), cercana(r?.cadencia ?? 30, true))}</select></div>
     </div>
 
     <div class="filtros" data-solo="plazos" hidden>
@@ -13738,10 +14077,31 @@ function formFijo(r, alTerminar) {
   }
 }
 
-/** La periodicidad conocida más cercana a un número de días. */
-function cercana(dias) {
+/**
+ * La periodicidad conocida más cercana a un número de días.
+ *
+ * Con `exacta`, si el ritmo detectado no es ninguna de las de la lista se
+ * respeta tal cual. Redondearlo falseaba el presupuesto: los víveres cada 22
+ * días convertidos en «cada quincena» pasan de 1,4 a 2 compras al mes, un
+ * 45 % de más en la categoría más grande de la casa.
+ */
+function cercana(dias, exacta = false) {
+  if (exacta && dias > 0 && !CADENCIAS.some((c) => c.valor === Math.round(dias))) {
+    return Math.round(dias);
+  }
   return CADENCIAS.reduce((mejor, c) => (
     Math.abs(c.valor - dias) < Math.abs(mejor - dias) ? c.valor : mejor), 30);
+}
+
+/** Las periodicidades de siempre, más la detectada si no estaba. */
+function conLaDetectada(dias) {
+  const n = Math.round(Number(dias) || 0);
+  if (!n || CADENCIAS.some((c) => c.valor === n)) return CADENCIAS;
+  const suya = {
+    valor: n,
+    texto: n < 30 ? `Cada ${n} días` : `Cada ${(n / 30.44).toFixed(1).replace('.', ',')} meses`,
+  };
+  return [...CADENCIAS, suya].sort((a, b) => a.valor - b.valor);
 }
 
 function detalleMes(fila) {
