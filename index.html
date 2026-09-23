@@ -94,8 +94,11 @@
   --cara-3: rgba(34, 57, 95, 0.86);
   --cara-brillo: rgba(255, 255, 255, 0.10);
   --cara-canto: rgba(255, 255, 255, 0.14);
-  --cara-anillo-a: rgba(255, 255, 255, 0.34);
-  --cara-anillo-b: rgba(255, 255, 255, 0.18);
+  --cara-anillo-a: rgba(255, 255, 255, 0.46);
+  --cara-anillo-b: rgba(255, 255, 255, 0.30);
+  --cara-bisel-alto: rgba(255, 255, 255, 0.24);
+  --cara-bisel-bajo: rgba(255, 255, 255, 0.14);
+  --cara-bisel-lado: rgba(255, 255, 255, 0.10);
   --cara-sombra: 0 16px 40px rgba(8, 20, 44, 0.34);
 
   /* El panel es el mismo objeto en los dos temas. */
@@ -271,8 +274,11 @@
     --cara-3: rgba(255, 255, 255, 0.125);
     --cara-brillo: rgba(255, 255, 255, 0.15);
     --cara-canto: rgba(255, 255, 255, 0.16);
-    --cara-anillo-a: rgba(255, 255, 255, 0.5);
-    --cara-anillo-b: rgba(255, 255, 255, 0.28);
+    --cara-anillo-a: rgba(255, 255, 255, 0.62);
+    --cara-anillo-b: rgba(255, 255, 255, 0.42);
+    --cara-bisel-alto: rgba(255, 255, 255, 0.34);
+    --cara-bisel-bajo: rgba(255, 255, 255, 0.20);
+    --cara-bisel-lado: rgba(255, 255, 255, 0.14);
     --cara-sombra: 0 14px 38px rgba(0, 0, 0, 0.4);
     /* La pestaña de la esquina también de vidrio: un parche opaco encima de
        una tarjeta translúcida canta. Pero no tan oscura que se confunda con el
@@ -346,8 +352,11 @@
   --cara-3: rgba(255, 255, 255, 0.125);
   --cara-brillo: rgba(255, 255, 255, 0.15);
   --cara-canto: rgba(255, 255, 255, 0.16);
-  --cara-anillo-a: rgba(255, 255, 255, 0.5);
-  --cara-anillo-b: rgba(255, 255, 255, 0.28);
+  --cara-anillo-a: rgba(255, 255, 255, 0.62);
+  --cara-anillo-b: rgba(255, 255, 255, 0.42);
+  --cara-bisel-alto: rgba(255, 255, 255, 0.34);
+  --cara-bisel-bajo: rgba(255, 255, 255, 0.20);
+  --cara-bisel-lado: rgba(255, 255, 255, 0.14);
   --cara-sombra: 0 14px 38px rgba(0, 0, 0, 0.4);
   /* Ver el bloque de arriba: ni opaca ni tan oscura como el fondo. */
   --ficha-tapa: rgba(6, 16, 36, 0.42);
@@ -904,24 +913,52 @@ a { color: var(--acento); }
    * fondo; encima, el filo del canto.
    */
   background:
-    radial-gradient(120% 90% at 12% 0%, var(--cara-brillo) 0%, transparent 58%),
-    linear-gradient(158deg, var(--cara-1) 0%, var(--cara-2) 60%, var(--cara-3) 100%);
-  -webkit-backdrop-filter: blur(28px) saturate(1.55);
-  backdrop-filter: blur(28px) saturate(1.55);
+    radial-gradient(130% 80% at 14% -6%, var(--cara-brillo) 0%, transparent 56%),
+    linear-gradient(180deg, var(--cara-1) 0%, var(--cara-2) 46%, var(--cara-3) 100%);
+  -webkit-backdrop-filter: blur(26px) saturate(1.6);
+  backdrop-filter: blur(26px) saturate(1.6);
   /* El borde lo pinta el anillo de `::after`; este solo reserva el sitio. */
   border: 1px solid transparent;
   border-radius: var(--radio-xl);
   padding: 16px;
   margin: 14px 0;
-  box-shadow: var(--cara-sombra), inset 0 1px 0 var(--cara-canto);
+  box-shadow: var(--cara-sombra),
+    inset 0 1px 0 var(--cara-canto),
+    /* La cara de abajo también devuelve luz: sin esto el vidrio se apoya en
+       el fondo en vez de flotar sobre él. */
+    inset 0 -1px 0 var(--cara-bisel-bajo);
   /* Recorta la esquina oscura contra el redondeo de la tarjeta. */
   overflow: hidden;
 }
 
 /*
+ * El bisel: la luz que entra por el canto y se derrama hacia dentro.
+ *
+ * Es lo que separa un vidrio GRUESO de una lámina pintada. En una lámina el
+ * borde es una línea; en un vidrio de verdad el canto tiene espesor y lo que
+ * se ve es un degradado corto que entra unos milímetros hacia el centro,
+ * fuerte arriba —de donde viene la luz—, más flojo abajo por rebote y apenas
+ * insinuado a los lados.
+ */
+.tarjeta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 3px 14px -4px var(--cara-bisel-alto),
+    inset 0 -3px 12px -4px var(--cara-bisel-bajo),
+    inset 3px 0 12px -6px var(--cara-bisel-lado),
+    inset -3px 0 12px -6px var(--cara-bisel-lado);
+}
+
+/*
  * El canto. Un borde de color plano no se parece a un canto de vidrio: la luz
- * pega fuerte en una esquina y se apaga en el resto. Se consigue con un
- * degradado recortado a un píxel de ancho con dos máscaras que se restan.
+ * pega arriba y vuelve a pegar abajo, y en los lados casi se apaga. Se
+ * consigue con un degradado recortado a un píxel y medio de ancho con dos
+ * máscaras que se restan.
  */
 .tarjeta::after {
   content: '';
@@ -930,17 +967,17 @@ a { color: var(--acento); }
   z-index: 2;
   pointer-events: none;
   border-radius: inherit;
-  padding: 1px;
+  padding: 1.5px;
   /*
-   * La luz pega fuerte en una esquina y se apaga en el resto, pero nunca hasta
-   * desaparecer: el canto tiene que verse en todo el contorno. Donde más
-   * importa es arriba a la derecha, que es por donde la pestaña de la esquina
-   * toca el fondo de la página; con el filo apagado ahí, las dos cosas se
-   * fundían y la esquina parecía un mordisco.
+   * Vertical y no en diagonal: en el vidrio de la referencia la luz entra por
+   * arriba y vuelve a salir por abajo, y los lados quedan casi apagados. Pero
+   * nunca del todo —el filo tiene que verse en todo el contorno—, porque es
+   * lo único que separa la pestaña de la esquina del fondo de la página: con
+   * el canto apagado ahí, la esquina parecía un mordisco en la tarjeta.
    */
-  background: linear-gradient(140deg,
-    var(--cara-anillo-a) 0%, rgba(255, 255, 255, 0.14) 30%,
-    rgba(255, 255, 255, 0.1) 62%, var(--cara-anillo-b) 100%);
+  background: linear-gradient(180deg,
+    var(--cara-anillo-a) 0%, rgba(255, 255, 255, 0.14) 26%,
+    rgba(255, 255, 255, 0.1) 70%, var(--cara-anillo-b) 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
