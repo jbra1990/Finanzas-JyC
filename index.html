@@ -89,9 +89,12 @@
   --luz-1: rgba(70, 130, 215, 0.20);
   --luz-2: rgba(130, 98, 200, 0.14);
   --luz-3: rgba(46, 156, 178, 0.10);
-  --cara-1: rgba(34, 57, 95, 0.88);
-  --cara-2: rgba(28, 49, 84, 0.80);
-  --cara-3: rgba(34, 57, 95, 0.86);
+  --cara-1: rgba(34, 57, 95, 0.74);
+  --cara-2: rgba(28, 49, 84, 0.62);
+  --cara-3: rgba(34, 57, 95, 0.70);
+  /* La baldosa: el bloque sólido sobre el que se apoya cada cifra. */
+  --baldosa: rgba(10, 22, 46, 0.42);
+  --baldosa-filo: rgba(255, 255, 255, 0.07);
   --cara-brillo: rgba(255, 255, 255, 0.10);
   --cara-canto: rgba(255, 255, 255, 0.11);
   --cara-anillo-a: rgba(255, 255, 255, 0.34);
@@ -178,7 +181,7 @@
    * la tarjeta. Medido sobre el resultado: 1,9:1 el bloque contra la ficha,
    * frente a 1,2:1 de antes.
    */
-  --ficha-tapa: rgba(8, 20, 42, 0.45);
+  --ficha-tapa: rgba(255, 255, 255, 0.09);
   --ficha-fuera: rgba(255, 255, 255, 0.06);
   --ficha-dentro: rgba(255, 255, 255, 0.10);
   /* Un filo de luz en el canto interior: define el bloque aunque el tono
@@ -269,9 +272,12 @@
     --luz-1: rgba(74, 140, 225, 0.30);
     --luz-2: rgba(140, 104, 214, 0.22);
     --luz-3: rgba(46, 156, 178, 0.16);
-    --cara-1: rgba(255, 255, 255, 0.145);
-    --cara-2: rgba(255, 255, 255, 0.095);
-    --cara-3: rgba(255, 255, 255, 0.125);
+    --cara-1: rgba(255, 255, 255, 0.105);
+    --cara-2: rgba(255, 255, 255, 0.058);
+    --cara-3: rgba(255, 255, 255, 0.088);
+    /* La baldosa: el bloque sólido sobre el que se apoya cada cifra. */
+    --baldosa: rgba(6, 14, 30, 0.46);
+    --baldosa-filo: rgba(255, 255, 255, 0.08);
     --cara-brillo: rgba(255, 255, 255, 0.15);
     --cara-canto: rgba(255, 255, 255, 0.12);
     --cara-anillo-a: rgba(255, 255, 255, 0.44);
@@ -284,7 +290,7 @@
        una tarjeta translúcida canta. Pero no tan oscura que se confunda con el
        fondo de la página, que es lo que pasaba a 0,6: la esquina parecía un
        mordisco en la tarjeta en vez de un rótulo. */
-    --ficha-tapa: rgba(6, 16, 36, 0.42);
+    --ficha-tapa: rgba(255, 255, 255, 0.09);
 
     --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
     --panel-plano: #0e2749;
@@ -347,9 +353,12 @@
   --luz-1: rgba(74, 140, 225, 0.30);
   --luz-2: rgba(140, 104, 214, 0.22);
   --luz-3: rgba(46, 156, 178, 0.16);
-  --cara-1: rgba(255, 255, 255, 0.145);
-  --cara-2: rgba(255, 255, 255, 0.095);
-  --cara-3: rgba(255, 255, 255, 0.125);
+  --cara-1: rgba(255, 255, 255, 0.105);
+  --cara-2: rgba(255, 255, 255, 0.058);
+  --cara-3: rgba(255, 255, 255, 0.088);
+  /* La baldosa: el bloque sólido sobre el que se apoya cada cifra. */
+  --baldosa: rgba(6, 14, 30, 0.46);
+  --baldosa-filo: rgba(255, 255, 255, 0.08);
   --cara-brillo: rgba(255, 255, 255, 0.15);
   --cara-canto: rgba(255, 255, 255, 0.12);
   --cara-anillo-a: rgba(255, 255, 255, 0.44);
@@ -359,7 +368,7 @@
   --cara-bisel-lado: rgba(255, 255, 255, 0.09);
   --cara-sombra: 0 14px 38px rgba(0, 0, 0, 0.4);
   /* Ver el bloque de arriba: ni opaca ni tan oscura como el fondo. */
-  --ficha-tapa: rgba(6, 16, 36, 0.42);
+  --ficha-tapa: rgba(255, 255, 255, 0.09);
 
   --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
   --panel-plano: #0e2749;
@@ -1144,7 +1153,18 @@ a { color: var(--acento); }
   padding: 15px 12px;
   min-width: 0;
 }
-.tarjeta .kpi { background: var(--superficie-2); }
+/*
+ * Las baldosas de dentro. En el vidrio de iOS el contenedor es translúcido
+ * pero lo que lleva encima —los iconos del dock, los botones del widget— se
+ * apoya en algo sólido: el vidrio es el marco, no el papel donde se escribe.
+ * Aquí igual, y al revés que antes: la baldosa ya no es un velo MÁS CLARO que
+ * la tarjeta sino un bloque MÁS OSCURO, que es lo que deja la cifra estable
+ * aunque por detrás pase una luz del fondo.
+ */
+.tarjeta .kpi {
+  background: var(--baldosa);
+  border-color: var(--baldosa-filo);
+}
 
 .kpi .etq {
   font-size: 10.5px;
