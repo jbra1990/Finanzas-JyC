@@ -1091,9 +1091,16 @@ a { color: var(--acento); }
   padding: 0 15px;
   border-radius: 0;
   background: var(--ficha-tapa);
-  /* Sin filo a la izquierda: ahí ya no hay corte, sigue la curva del filete y
-     una raya vertical delataba que son dos piezas. */
-  border-bottom: 1px solid var(--ficha-filo);
+  /*
+   * SIN filo, ni abajo ni a la izquierda.
+   *
+   * El de abajo marcaba dónde acababa la pestaña cuando era un bloque OSCURO:
+   * sin él no se veía el corte. Ahora que es de luz, su propio tono ya la
+   * delimita y la raya sobra: quedaba una línea suelta cruzando la tarjeta a
+   * media altura, sin nada a lo que pertenecer. El de la izquierda nunca
+   * estuvo: ahí sigue la curva del filete y un corte recto delataría que son
+   * dos piezas.
+   */
   /* Apagado: es el dato de contexto, no debe competir con el rótulo. */
   color: var(--tinta-3);
   font-size: 11px;
@@ -1939,9 +1946,16 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
   padding: 9px 15px 10px;
   border-radius: 0 26px 0 20px;
   background: var(--ficha-tapa);
-  /* Sin filo a la izquierda: ahí ya no hay corte, sigue la curva del filete y
-     una raya vertical delataba que son dos piezas. */
-  border-bottom: 1px solid var(--ficha-filo);
+  /*
+   * SIN filo, ni abajo ni a la izquierda.
+   *
+   * El de abajo marcaba dónde acababa la pestaña cuando era un bloque OSCURO:
+   * sin él no se veía el corte. Ahora que es de luz, su propio tono ya la
+   * delimita y la raya sobra: quedaba una línea suelta cruzando la tarjeta a
+   * media altura, sin nada a lo que pertenecer. El de la izquierda nunca
+   * estuvo: ahí sigue la curva del filete y un corte recto delataría que son
+   * dos piezas.
+   */
   font-size: 12px;
   font-weight: 560;
   color: var(--tinta-2);
@@ -2849,7 +2863,14 @@ body.velada .cabecera { filter: blur(18px); }
    * altura y dejaba un escalón donde tenían que empalmar.
    */
   top: 0;
-  right: 100%;
+  /*
+   * Medio píxel de solape, no cero. La cuña y la pestaña son dos cajas
+   * pegadas, y con el fondo translúcido sus dos bordes suavizados se sumaban
+   * a menos de una superficie entera: quedaba una costura vertical más oscura
+   * justo en la unión. Con el tono oscuro de antes no se veía; con el de luz,
+   * sí. Medido, la costura baja de 7 a 1,3 sobre 255.
+   */
+  right: calc(100% - 0.5px);
   width: calc(var(--pista-alto) * 1.42);
   height: 100%;
   background: var(--ficha-tapa);
