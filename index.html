@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-dXFrS/sCkbOYpo007/4t6SO70+203DecfkVSbIgMJNc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-WLuwFy7jst435s/lFrlHbftKX00/SjO4YW/W/XuuI2k='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2252,6 +2252,64 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
   cursor: pointer;
 }
 .buscador-borrar:hover { background: var(--superficie-3); color: var(--tinta); }
+
+/*
+ * Lo que se encontró en todo el historial. La última vez va en un bloque
+ * propio y en grande: es el dato que se viene a buscar —«¿cuándo cambié esto
+ * y a qué kilometraje?»— y lo demás es contexto.
+ */
+.hallazgo-ultimo {
+  margin: 0 0 14px;
+  padding: 13px 14px;
+  border-radius: var(--radio-l);
+  border: 1px solid var(--borde);
+  border-left: 3px solid var(--acento);
+  background: var(--baldosa, var(--superficie-2));
+}
+.hallazgo-ultimo .etq {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--tinta-3);
+}
+.hallazgo-ultimo .cuando {
+  margin-top: 4px;
+  font-size: 17px; font-weight: 640; letter-spacing: -0.02em;
+}
+.hallazgo-ultimo .cuando .hace {
+  margin-left: 8px;
+  font-size: 12px; font-weight: 550; color: var(--tinta-3);
+  letter-spacing: 0;
+}
+.hallazgo-ultimo .que { margin-top: 5px; font-size: 12.5px; color: var(--tinta-2); }
+.hallazgo-ultimo .odometro {
+  display: flex; flex-wrap: wrap; gap: 4px 16px;
+  margin-top: 9px; padding-top: 9px;
+  border-top: 1px solid var(--grid);
+  font-size: 12.5px; color: var(--tinta-2);
+  font-variant-numeric: tabular-nums;
+}
+.hallazgo-ultimo .odometro strong { color: var(--tinta); font-weight: 640; }
+
+.hallazgos { list-style: none; margin: 0 0 12px; padding: 0; }
+.hallazgos li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--grid);
+}
+.hallazgos li:last-child { border-bottom: 0; }
+.hallazgos .principal { flex: 1; min-width: 0; }
+.hallazgos .titulo {
+  font-weight: 570; font-size: 13px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hallazgos .titulo > .chip { vertical-align: middle; margin-left: 7px; }
+.hallazgos .meta {
+  margin-top: 2px; font-size: 11px; color: var(--tinta-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hallazgos .monto {
+  flex: none;
+  font-weight: 640; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
 
 /* Gasto hormiga: la cifra que manda es la del año, no la del corte, así que va
    a la derecha y en grande, donde el ojo ya busca el importe. */
@@ -4581,6 +4639,150 @@ function acumuladoHistorico(filtros = {}) {
   return { meses, serie, ingresos, gastos, balance: redondear(ingresos - gastos) };
 }
 
+/* --- Búsqueda en todo el historial ----------------------------------------
+ *
+ * La pregunta que contesta esto no es «cuánto llevo gastado», es «¿cuándo fue
+ * la última vez?». Cuándo cambié la batería, cuándo compré los filtros, a qué
+ * kilometraje. Es la que uno se hace delante del mostrador del taller, y la
+ * que la app no podía responder sin ir mes por mes.
+ */
+
+/** Sin acentos ni mayúsculas, para comparar lo que uno escribe con lo apuntado. */
+function plano(t) {
+  return String(t ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim();
+}
+
+/**
+ * Todas las lecturas del odómetro que hay en la base, de cualquier sitio:
+ * los repostajes, los gastos del vehículo y el cuaderno de recorridos.
+ */
+function lecturasDeKm() {
+  const out = [];
+  const anota = (fecha, km) => {
+    const iso = String(fecha ?? '').slice(0, 10);
+    const n = Number(km) || 0;
+    if (n > 0 && /^\d{4}-\d{2}-\d{2}$/.test(iso)) out.push({ fecha: iso, km: n });
+  };
+  db.gastosTarjeta.forEach((g) => anota(g.fecha, g.km));
+  db.gastosEfectivo.forEach((g) => anota(g.fecha, g.km));
+  (db.vehiculoGastos || []).forEach((g) => anota(g.fecha, g.km));
+  (db.vehiculoRecorrido || []).forEach((r) => {
+    anota(r.fecha, r.km_inicio);
+    anota(r.fecha, r.km_fin);
+  });
+  return out.sort((a, b) => a.fecha.localeCompare(b.fecha));
+}
+
+/** El kilometraje más alto que consta, que es el de hoy. */
+function odometroHoy() {
+  return lecturasDeKm().reduce((mx, l) => Math.max(mx, l.km), 0);
+}
+
+/**
+ * El kilometraje que marcaba el carro en una fecha.
+ *
+ * Si el propio gasto lo trae, ese; si no, el de la última lectura anterior.
+ * Se dice de dónde sale: no es lo mismo «iba por 284.546» que «por entonces
+ * andaba por ahí», y al decidir si toca cambiar algo esa diferencia importa.
+ */
+function kmEnFecha(fechaISO) {
+  const iso = String(fechaISO ?? '').slice(0, 10);
+  const previas = lecturasDeKm().filter((l) => l.fecha <= iso);
+  if (!previas.length) return null;
+  return previas[previas.length - 1].km;
+}
+
+/**
+ * Busca un gasto en TODA la base, sin atarse a un mes.
+ *
+ * Mira las tres procedencias —tarjeta, efectivo y el cuaderno del vehículo—
+ * porque un cambio de aceite puede estar apuntado en cualquiera de las tres, y
+ * quien busca «aceite» no se acuerda de en cuál.
+ *
+ * @returns {Array<object>} de la más reciente a la más antigua
+ */
+function buscarHistorial(termino, { usuario = 'ambos', limite = 80 } = {}) {
+  const q = plano(termino);
+  if (q.length < 2) return [];
+  const cifra = q.replace(',', '.').replace(/[^\d.]/g, '');
+
+  const cuadra = (textos, montos) => {
+    if (textos.some((t) => plano(t).includes(q))) return true;
+    if (!cifra) return false;
+    return montos.some((n) => (Number(n) || 0).toFixed(2).includes(cifra));
+  };
+
+  const out = [];
+  for (const g of db.gastosTarjeta) {
+    if (usuario !== 'ambos' && g.usuario !== usuario) continue;
+    if (!cuadra([g.detalle, g.proposito, g.categoria, g.notas], [g.monto_total])) continue;
+    out.push({
+      fecha: String(g.fecha || '').slice(0, 10),
+      titulo: g.detalle || g.categoria || 'Gasto',
+      detalle: g.proposito || '',
+      categoria: g.categoria || '',
+      monto: Number(g.monto_total) || 0,
+      origen: 'Tarjeta',
+      km: Number(g.km) || 0,
+    });
+  }
+  for (const g of db.gastosEfectivo) {
+    if (usuario !== 'ambos' && g.usuario !== usuario) continue;
+    if (!cuadra([g.detalle, g.proposito, g.categoria, g.notas], [g.monto])) continue;
+    out.push({
+      fecha: String(g.fecha || '').slice(0, 10),
+      titulo: g.detalle || g.categoria || 'Gasto',
+      detalle: g.proposito || '',
+      categoria: g.categoria || '',
+      monto: Number(g.monto) || 0,
+      origen: 'Efectivo',
+      km: Number(g.km) || 0,
+    });
+  }
+  for (const g of db.vehiculoGastos || []) {
+    if (!cuadra([g.detalle, g.proveedor, g.tipo], [g.monto])) continue;
+    out.push({
+      fecha: String(g.fecha || '').slice(0, 10),
+      titulo: g.detalle || g.tipo || 'Vehículo',
+      detalle: g.proveedor || '',
+      categoria: g.tipo || 'Vehículo',
+      monto: Number(g.monto) || 0,
+      origen: 'Vehículo',
+      km: Number(g.km) || 0,
+    });
+  }
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  const ahora = odometroHoy();
+  return out
+    .filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.fecha))
+    /*
+     * Por fecha, de la más reciente a la más antigua. A igualdad de fecha, el
+     * apunte que TRAE kilometraje propio va primero: la cabecera enseña el
+     * primero de la lista, y un «andaba por ahí» deducido cuando existe la
+     * lectura exacta de ese mismo día es peor respuesta.
+     */
+    .sort((a, b) => b.fecha.localeCompare(a.fecha)
+      || (b.km > 0 ? 1 : 0) - (a.km > 0 ? 1 : 0))
+    .slice(0, limite)
+    .map((x) => {
+      // El del propio apunte manda; si no lo trae, el de la lectura anterior.
+      const propio = x.km > 0;
+      const km = propio ? x.km : kmEnFecha(x.fecha);
+      return {
+        ...x,
+        km: km || 0,
+        kmPropio: propio,
+        dias: diasEntre(x.fecha, hoy),
+        // Cuántos kilómetros lleva el carro desde entonces, que para un
+        // repuesto dice más que los meses.
+        kmDesde: km && ahora > km ? Math.round(ahora - km) : 0,
+      };
+    });
+}
+
 /* --- Lo que ya está comprometido ------------------------------------------
  *
  * Una compra a plazos se siente gratis el día que se hace y solo duele
@@ -4830,7 +5032,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { HORMIGA, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastoHormiga, gastosEnMeses, ingresoDelMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+return { HORMIGA, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarHistorial, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastoHormiga, gastosEnMeses, ingresoDelMes, kmEnFecha, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -14546,7 +14748,7 @@ M["views/analisis"] = (function () {
  * enseñar.
  */
 
-const {nombreMes, money, moneyHTML, redondear, rangoMeses, mesActual, mesesConDatos, textoFecha, detalleDeGastos, gastoHormiga, HORMIGA} = M["calc"];
+const {nombreMes, money, moneyHTML, redondear, rangoMeses, mesActual, mesesConDatos, textoFecha, detalleDeGastos, gastoHormiga, HORMIGA, buscarHistorial, odometroHoy} = M["calc"];
 const {esc, $, $$, segmentado, modal, brindis, opciones, descargar, filaMovimiento} = M["ui"];
 const {informeMensual, compartir} = M["informe"];
 /*
@@ -14556,6 +14758,13 @@ const {informeMensual, compartir} = M["informe"];
 const corte = {
   desde: null, hasta: null, medio: 'ambos', quien: 'ambos', categorias: new Set(),
 };
+
+/*
+ * La búsqueda en todo el historial va aparte del corte: la pregunta que
+ * contesta —«¿cuándo fue la última vez que compré esto?»— no tiene mes, y
+ * atarla a los filtros de arriba la haría inútil justo cuando hace falta.
+ */
+let busca = '';
 
 function render(raiz) {
   const hoy = mesActual();
@@ -14572,6 +14781,17 @@ function render(raiz) {
   const resumen = calcular();
 
   raiz.innerHTML = `
+    <div class="buscador">
+      <span class="buscador-lupa" aria-hidden="true">⌕</span>
+      <input id="busca-hist" type="search" inputmode="search" autocomplete="off"
+             placeholder="¿Cuándo compré…? Busca en todo el historial"
+             aria-label="Buscar en todo el historial" value="${esc(busca)}">
+      <button type="button" class="buscador-borrar" id="busca-hist-limpiar"
+              aria-label="Borrar la búsqueda"${busca ? '' : ' hidden'}>✕</button>
+    </div>
+
+    <section class="tarjeta" id="hallazgos"${busca ? '' : ' hidden'}></section>
+
     <section class="panel">
       <span class="etiqueta">${esc(rotuloCorte())}</span>
       <span class="cifra">${moneyHTML(resumen.total)}</span>
@@ -14653,11 +14873,109 @@ function render(raiz) {
 
   $('#btn-pdf', raiz).addEventListener('click', () => formInforme(corte.hasta, corte.quien));
 
+  const caja = $('#hallazgos', raiz);
+  const pintarHallazgos = () => {
+    caja.hidden = !busca;
+    if (busca) caja.innerHTML = seccionHallazgos(busca, corte.quien);
+  };
+  pintarHallazgos();
+
+  const campo = $('#busca-hist', raiz);
+  const limpiar = $('#busca-hist-limpiar', raiz);
+  campo.addEventListener('input', () => {
+    busca = campo.value;
+    limpiar.hidden = !campo.value;
+    // Solo se repinta el bloque de resultados: repintar la vista entera con
+    // cada tecla perdería el foco del campo.
+    pintarHallazgos();
+  });
+  limpiar.addEventListener('click', () => {
+    busca = '';
+    campo.value = '';
+    limpiar.hidden = true;
+    pintarHallazgos();
+    campo.focus();
+  });
+
   $('#an-hormiga', raiz).innerHTML = seccionHormiga(resumen.meses, {
     usuario: corte.quien, medio: corte.medio,
   });
 
   $('#an-resultado', raiz).innerHTML = resultado(resumen);
+}
+
+/** «hace 7 meses», «hace 12 días», «hoy». */
+function haceCuanto(dias) {
+  if (dias <= 0) return 'hoy';
+  if (dias === 1) return 'ayer';
+  if (dias < 45) return `hace ${dias} días`;
+  const meses = Math.round(dias / 30.44);
+  if (meses < 18) return `hace ${meses} meses`;
+  const anios = (dias / 365).toFixed(1).replace('.', ',');
+  return `hace ${anios} años`;
+}
+
+/** 284546 → «284.546 km». */
+const km = (n) => `${Math.round(n).toLocaleString('es-EC')} km`;
+
+/*
+ * Lo que se encontró en todo el historial.
+ *
+ * Lo primero y en grande es LA ÚLTIMA VEZ, con su fecha y su kilometraje:
+ * es lo que uno viene a saber. Debajo, las demás, por si hace falta ver cada
+ * cuánto se repite. El resto de la vista sigue siendo el corte de siempre.
+ */
+function seccionHallazgos(termino, quien) {
+  const filas = buscarHistorial(termino, { usuario: quien });
+  const cab = `<header><h2>En todo el historial</h2>
+    <span class="pista">Sin filtro de mes</span></header>`;
+
+  if (!filas.length) {
+    return `${cab}<p class="vacio">Nada que cuadre con «${esc(termino)}». Se busca
+      en los gastos de tarjeta, en los de efectivo y en el cuaderno del
+      vehículo, por nombre, por lo que se compró y por importe.</p>`;
+  }
+
+  const ultima = filas[0];
+  const total = redondear(filas.reduce((s, f) => s + f.monto, 0));
+  const ahora = odometroHoy();
+
+  return `${cab}
+    <div class="hallazgo-ultimo">
+      <div class="etq">La última vez</div>
+      <div class="cuando">${esc(textoFecha(ultima.fecha))}
+        <span class="hace">${esc(haceCuanto(ultima.dias))}</span></div>
+      <div class="que">${esc(ultima.titulo)}${
+  ultima.detalle ? ` · ${esc(ultima.detalle)}` : ''} · <strong>${money(ultima.monto)}</strong></div>
+      ${ultima.km > 0 ? `
+        <div class="odometro">
+          <span>${ultima.kmPropio ? 'El carro marcaba' : 'El carro andaba por'}
+            <strong>${esc(km(ultima.km))}</strong></span>
+          ${ultima.kmDesde > 0
+    ? `<span>desde entonces, <strong>${esc(km(ultima.kmDesde))}</strong></span>` : ''}
+        </div>
+        ${ultima.kmPropio ? '' : `<p class="pista" style="margin:6px 0 0">Ese gasto
+          no trae kilometraje propio: es la última lectura anterior a esa fecha.</p>`}` : ''}
+    </div>
+
+    <ul class="hallazgos">${filas.map((f) => `
+      <li>
+        <div class="principal">
+          <div class="titulo">${esc(f.titulo)}
+            <span class="chip">${esc(f.origen)}</span></div>
+          <div class="meta">${esc(textoFecha(f.fecha))} · ${esc(haceCuanto(f.dias))}${
+  f.categoria ? ` · ${esc(f.categoria)}` : ''}${
+  f.km > 0 ? ` · ${esc(km(f.km))}` : ''}</div>
+          ${f.detalle ? `<div class="meta">${esc(f.detalle)}</div>` : ''}
+        </div>
+        <div class="monto">${money(f.monto)}</div>
+      </li>`).join('')}</ul>
+
+    <div class="aviso"><span class="icono">Σ</span>
+      <span class="crece">${filas.length}
+      ${filas.length === 1 ? 'coincidencia' : 'coincidencias'} ·
+      <strong>${money(total)}</strong> en total${
+  ahora > 0 ? ` · el carro va por ${esc(km(ahora))}` : ''}.</span></div>`;
 }
 
 /*
