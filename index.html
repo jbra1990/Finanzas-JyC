@@ -181,7 +181,7 @@
    * la tarjeta. Medido sobre el resultado: 1,9:1 el bloque contra la ficha,
    * frente a 1,2:1 de antes.
    */
-  --ficha-tapa: rgba(255, 255, 255, 0.09);
+  --ficha-tapa: rgba(95, 145, 225, 0.16);
   --ficha-fuera: rgba(255, 255, 255, 0.06);
   --ficha-dentro: rgba(255, 255, 255, 0.10);
   /* Un filo de luz en el canto interior: define el bloque aunque el tono
@@ -290,7 +290,7 @@
        una tarjeta translúcida canta. Pero no tan oscura que se confunda con el
        fondo de la página, que es lo que pasaba a 0,6: la esquina parecía un
        mordisco en la tarjeta en vez de un rótulo. */
-    --ficha-tapa: rgba(255, 255, 255, 0.09);
+    --ficha-tapa: rgba(95, 145, 225, 0.16);
 
     --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
     --panel-plano: #0e2749;
@@ -368,7 +368,7 @@
   --cara-bisel-lado: rgba(255, 255, 255, 0.09);
   --cara-sombra: 0 14px 38px rgba(0, 0, 0, 0.4);
   /* Ver el bloque de arriba: ni opaca ni tan oscura como el fondo. */
-  --ficha-tapa: rgba(255, 255, 255, 0.09);
+  --ficha-tapa: rgba(95, 145, 225, 0.16);
 
   --panel: linear-gradient(148deg, #4a80b8 0%, #1d4a7e 32%, #0e2749 66%, #081a33 100%);
   --panel-plano: #0e2749;
@@ -1063,7 +1063,19 @@ a { color: var(--acento); }
    * todas quedan iguales aunque el rótulo sea «Hoy» o «Acumulado de todos los
    * meses».
    */
+  /*
+   * La forma entera —pestaña y cuña— la pinta `::before` de una sola vez.
+   *
+   * Eran dos cajas pegadas, y con el fondo translúcido la unión se veía: dos
+   * bordes suavizados suman menos que una superficie entera y quedaba una
+   * costura vertical más oscura. Medio píxel de solape la atenuaba sin
+   * quitarla. Dibujadas de una vez no hay unión que pueda verse.
+   *
+   * La forma NO se recorta aquí con `clip-path`: recortaría también al
+   * `::after`, que es el filete que cuelga por debajo, y lo dejaría a medias.
+   */
   flex: 0 0 var(--pista-ancho);
+  isolation: isolate;
   align-self: flex-start;
   position: relative;
   display: flex;
@@ -1090,7 +1102,7 @@ a { color: var(--acento); }
   margin: 0 0 0 auto;
   padding: 0 15px;
   border-radius: 0;
-  background: var(--ficha-tapa);
+  background: transparent;
   /*
    * SIN filo, ni abajo ni a la izquierda.
    *
@@ -2805,6 +2817,8 @@ body.velada .cabecera { filter: blur(18px); }
    */
   --pista-ancho: min(184px, 49%);
   --pista-alto: 31px;
+  /* Ancho de la cuña curva que entra por la izquierda de la pestaña. */
+  --cuna: calc(31px * 1.42);
   --pista-radio: 16px;
   /*
    * La curva de la izquierda es una S, no un arco. Medida sobre la referencia:
@@ -2843,6 +2857,47 @@ body.velada .cabecera { filter: blur(18px); }
   pointer-events: none;
 }
 
+/* La pieza entera: el rectángulo de la pestaña más la cuña curva que entra
+   por la izquierda, de un solo trazo. Detrás del texto, nunca encima. */
+.tarjeta > header > .pista::before {
+  z-index: -1;
+  top: 0;
+  right: 0;
+  left: calc(-1 * var(--cuna));
+  height: 100%;
+  background: var(--ficha-tapa);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% 100%,
+    var(--cuna) 100%,
+    calc(var(--cuna) * 1.000) 99.3%,
+    calc(var(--cuna) * 0.959) 98.2%,
+    calc(var(--cuna) * 0.917) 96.7%,
+    calc(var(--cuna) * 0.876) 94.1%,
+    calc(var(--cuna) * 0.832) 92.3%,
+    calc(var(--cuna) * 0.791) 89.4%,
+    calc(var(--cuna) * 0.749) 85.3%,
+    calc(var(--cuna) * 0.708) 80.6%,
+    calc(var(--cuna) * 0.667) 76.2%,
+    calc(var(--cuna) * 0.625) 70.3%,
+    calc(var(--cuna) * 0.584) 63.0%,
+    calc(var(--cuna) * 0.543) 57.5%,
+    calc(var(--cuna) * 0.499) 49.8%,
+    calc(var(--cuna) * 0.457) 44.3%,
+    calc(var(--cuna) * 0.416) 36.6%,
+    calc(var(--cuna) * 0.375) 31.1%,
+    calc(var(--cuna) * 0.333) 24.5%,
+    calc(var(--cuna) * 0.292) 19.8%,
+    calc(var(--cuna) * 0.251) 15.0%,
+    calc(var(--cuna) * 0.209) 11.7%,
+    calc(var(--cuna) * 0.165) 8.8%,
+    calc(var(--cuna) * 0.124) 6.6%,
+    calc(var(--cuna) * 0.083) 4.8%,
+    calc(var(--cuna) * 0.041) 1.8%,
+    0 0.7%);
+}
+
 /*
  * A la izquierda: la S, calcada de la referencia.
  *
@@ -2855,55 +2910,6 @@ body.velada .cabecera { filter: blur(18px); }
  *
  * La proporción también es de la medición: 1,42 de largo por 1 de alto.
  */
-.tarjeta > header > .pista::before {
-  /*
-   * Cuelga de la PESTAÑA, no del encabezado: así su alto es siempre el de
-   * ella. Colgando del encabezado se quedaba clavado en 32 px y, cuando un
-   * rótulo largo partía la pestaña en dos líneas, la curva terminaba a media
-   * altura y dejaba un escalón donde tenían que empalmar.
-   */
-  top: 0;
-  /*
-   * Medio píxel de solape, no cero. La cuña y la pestaña son dos cajas
-   * pegadas, y con el fondo translúcido sus dos bordes suavizados se sumaban
-   * a menos de una superficie entera: quedaba una costura vertical más oscura
-   * justo en la unión. Con el tono oscuro de antes no se veía; con el de luz,
-   * sí. Medido, la costura baja de 7 a 1,3 sobre 255.
-   */
-  right: calc(100% - 0.5px);
-  width: calc(var(--pista-alto) * 1.42);
-  height: 100%;
-  background: var(--ficha-tapa);
-  clip-path: polygon(
-    0% 0%,
-    100% 0%,
-    100% 100%,
-    100.0% 99.3%,
-    95.9% 98.2%,
-    91.7% 96.7%,
-    87.6% 94.1%,
-    83.2% 92.3%,
-    79.1% 89.4%,
-    74.9% 85.3%,
-    70.8% 80.6%,
-    66.7% 76.2%,
-    62.5% 70.3%,
-    58.4% 63.0%,
-    54.3% 57.5%,
-    49.9% 49.8%,
-    45.7% 44.3%,
-    41.6% 36.6%,
-    37.5% 31.1%,
-    33.3% 24.5%,
-    29.2% 19.8%,
-    25.1% 15.0%,
-    20.9% 11.7%,
-    16.5% 8.8%,
-    12.4% 6.6%,
-    8.3% 4.8%,
-    4.1% 1.8%,
-    0.0% 0.7%);
-}
 
 /*
  * Debajo, contra el borde derecho: cierra el hueco por abajo, siguiendo la
