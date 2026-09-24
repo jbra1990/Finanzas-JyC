@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-9pceEuXY070dxlo7Md8KxkxwBSHstMEXLokhK/Dyi+k='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-IpAdPsB3oGl/wKvZZwvu9Cyj5jH2MYotWcnZ1yM07+A='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2316,9 +2316,16 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
  * llena quiere decir que toca, y se ve sin leer una sola cifra.
  */
 .mantenimientos { list-style: none; margin: 12px 0; padding: 0; }
+/*
+ * En columna, no en dos. Con la barra y el botón robándole una columna a la
+ * derecha, el texto se quedaba en ~215 px y partía «a los 270.602 / km» en
+ * dos líneas. Aquí lo que importa es leer la frase entera, así que el texto
+ * se lleva el ancho completo y la barra pasa debajo —donde además se lee
+ * mejor como lo que es: cuánto se ha gastado del intervalo—.
+ */
 .mantenimientos li {
-  display: flex; align-items: center; gap: 12px;
-  padding: 11px 2px 11px 10px;
+  display: flex; flex-direction: column; align-items: stretch;
+  padding: 12px 2px 12px 10px;
   border-bottom: 1px solid var(--grid);
   border-left: 3px solid transparent;
 }
@@ -2326,17 +2333,19 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
 .mantenimientos li[data-estado="vencido"] { border-left-color: var(--critico); }
 .mantenimientos li[data-estado="pronto"] { border-left-color: var(--alerta); }
 .mantenimientos li[data-estado="al-dia"] { border-left-color: var(--ok); }
-.mantenimientos .principal { flex: 1; min-width: 0; }
+.mantenimientos .principal { min-width: 0; }
 .mantenimientos .titulo { font-weight: 570; font-size: 13px; }
 .mantenimientos .titulo > .chip { vertical-align: middle; margin-left: 7px; }
 .mantenimientos .meta {
-  margin-top: 2px; font-size: 11px; color: var(--tinta-3);
+  margin-top: 3px; font-size: 11.5px; line-height: 1.45; color: var(--tinta-3);
   font-variant-numeric: tabular-nums;
 }
 .mantenimientos .meta strong { color: var(--tinta-2); font-weight: 620; }
-.mant-lado { flex: 0 0 auto; display: grid; gap: 7px; justify-items: end; }
+.mant-lado {
+  display: flex; align-items: center; gap: 12px; margin-top: 10px;
+}
 .mant-barra {
-  width: 86px; height: 7px;
+  flex: 1; min-width: 0; height: 7px;
   border-radius: var(--radio-pill);
   background: var(--superficie-3);
   overflow: hidden;
@@ -2344,6 +2353,51 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
 .mant-barra > i { display: block; height: 100%; border-radius: var(--radio-pill); background: var(--ok); }
 li[data-estado="pronto"] .mant-barra > i { background: var(--alerta); }
 li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
+
+.mantenimientos .meta.cuando { color: var(--tinta-3); }
+.mantenimientos .meta.cuando strong { color: var(--tinta-2); }
+
+/*
+ * El historial del vehículo. Se lee, no se recorre: cada apunte enseña todo
+ * lo suyo y nada se corta, aunque haga falta una línea más. Nada de
+ * white-space: nowrap aquí dentro —es lo que cortaba «Cambio de aceite motor
+ * y caja» en «Cambio de aceite…»— y hay una prueba que lo vigila.
+ */
+.veh-lista { list-style: none; margin: 0; padding: 0; }
+.veh-lista li {
+  padding: 13px 2px;
+  border-bottom: 1px solid var(--grid);
+}
+.veh-lista li:last-child { border-bottom: 0; }
+.veh-cab {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+}
+.veh-que { font-weight: 600; font-size: 13.5px; line-height: 1.3; }
+.veh-monto {
+  flex: none;
+  font-weight: 640; font-size: 14px;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+.veh-datos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.veh-dato {
+  padding: 3px 9px;
+  border-radius: var(--radio-pill);
+  background: var(--superficie-2);
+  font-size: 11px;
+  color: var(--tinta-3);
+  font-variant-numeric: tabular-nums;
+}
+.veh-dato.fuerte { color: var(--tinta-2); font-weight: 570; }
+.veh-acciones { display: flex; justify-content: flex-end; gap: 4px; margin-top: 6px; }
+/* Callados a propósito: se repiten en cada apunte y el dato manda sobre ellos. */
+.veh-btn {
+  appearance: none; border: 0; background: none;
+  padding: 5px 8px; border-radius: var(--radio-chico);
+  font: inherit; font-size: 11.5px; font-weight: 560;
+  color: var(--tinta-3); cursor: pointer;
+}
+.veh-btn:hover { background: var(--superficie-2); color: var(--tinta-2); }
+.veh-btn.quita:hover { color: var(--malo); }
 
 /* Gasto hormiga: la cifra que manda es la del año, no la del corte, así que va
    a la derecha y en grande, donde el ojo ya busca el importe. */
@@ -4721,6 +4775,30 @@ function odometroHoy() {
  * Se dice de dónde sale: no es lo mismo «iba por 284.546» que «por entonces
  * andaba por ahí», y al decidir si toca cambiar algo esa diferencia importa.
  */
+/*
+ * El odómetro que *tendría* el carro en una fecha, interpolando entre la
+ * lectura de antes y la de después.
+ *
+ * Distinta de kmEnFecha a propósito: aquella responde «lo último que
+ * sabíamos», que es lo correcto para el buscador. Ésta responde «por cuánto
+ * iba», que es lo que hace falta cuando un gasto viejo vino del Excel sin
+ * odómetro. Sin interpolar, tres arreglos de tres meses distintos salían
+ * todos con el mismo kilometraje, y eso no es una estimación, es un hueco
+ * disfrazado.
+ */
+function kmEstimadoEnFecha(fechaISO) {
+  const iso = String(fechaISO ?? '').slice(0, 10);
+  const todas = lecturasDeKm();
+  const antes = todas.filter((l) => l.fecha <= iso).pop();
+  if (!antes) return null;
+  const despues = todas.find((l) => l.fecha > iso);
+  if (!despues || despues.km <= antes.km) return antes.km;
+  const tramo = diasEntre(antes.fecha, despues.fecha);
+  if (tramo <= 0) return antes.km;
+  return Math.round(antes.km
+    + ((despues.km - antes.km) * diasEntre(antes.fecha, iso)) / tramo);
+}
+
 function kmEnFecha(fechaISO) {
   const iso = String(fechaISO ?? '').slice(0, 10);
   const previas = lecturasDeKm().filter((l) => l.fecha <= iso);
@@ -4802,9 +4880,9 @@ function buscarHistorial(termino, { usuario = 'ambos', limite = 80 } = {}) {
       || (b.km > 0 ? 1 : 0) - (a.km > 0 ? 1 : 0))
     .slice(0, limite)
     .map((x) => {
-      // El del propio apunte manda; si no lo trae, el de la lectura anterior.
+      // El del propio apunte manda; si no lo trae, el estimado de esa fecha.
       const propio = x.km > 0;
-      const km = propio ? x.km : kmEnFecha(x.fecha);
+      const km = propio ? x.km : kmEstimadoEnFecha(x.fecha);
       return {
         ...x,
         km: km || 0,
@@ -4824,6 +4902,58 @@ function buscarHistorial(termino, { usuario = 'ambos', limite = 80 } = {}) {
  * que importa después: cuándo toca otra vez. Por eso vive aparte del resto de
  * los gastos aunque el dinero salga de la misma cuenta.
  */
+
+/**
+ * A cuántos kilómetros por mes anda el carro.
+ *
+ * Sale de las propias lecturas del odómetro, no de una cifra escrita a mano:
+ * la diferencia entre la primera y la última, repartida entre los meses que
+ * las separan. Se miran los últimos DOS AÑOS como mucho; con el histórico
+ * entero, un año parado hace diez años seguiría tirando de la media hacia
+ * abajo y la previsión saldría siempre tarde.
+ *
+ * @returns {object|null} null si no hay dos lecturas separadas en el tiempo
+ */
+function kmPorMes() {
+  const todas = lecturasDeKm();
+  if (todas.length < 2) return null;
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  const desdeLimite = sumarDias(hoy, -730);
+  // Si en dos años no hay material suficiente, se usa todo lo que haya.
+  const recientes = todas.filter((l) => l.fecha >= desdeLimite);
+  const uso = recientes.length >= 2 ? recientes : todas;
+
+  const primera = uso[0];
+  const ultima = uso[uso.length - 1];
+  const dias = diasEntre(primera.fecha, ultima.fecha);
+  const recorrido = ultima.km - primera.km;
+  if (dias < 30 || recorrido <= 0) return null;
+
+  return {
+    kmMes: Math.round((recorrido / dias) * 30.44),
+    desde: primera.fecha,
+    hasta: ultima.fecha,
+    meses: redondear(dias / 30.44),
+    recorrido: Math.round(recorrido),
+  };
+}
+
+/**
+ * Hacia qué fecha se llegará a un kilometraje, al ritmo al que se anda.
+ *
+ * Es una aproximación y se dice como tal —«hacia»—: el carro no recorre lo
+ * mismo todos los meses. Pero contesta la pregunta que un kilometraje solo no
+ * contesta: si toca en 3.488 km, ¿eso es el mes que viene o dentro de medio
+ * año?
+ */
+function fechaAlKilometraje(kmObjetivo) {
+  const ritmo = kmPorMes();
+  const ahora = odometroHoy();
+  if (!ritmo || !ahora || !kmObjetivo || kmObjetivo <= ahora) return null;
+  const dias = Math.round(((kmObjetivo - ahora) / ritmo.kmMes) * 30.44);
+  return sumarDias(new Date().toISOString().slice(0, 10), dias);
+}
 
 /**
  * Lo que se le hace a un carro y cada cuánto.
@@ -4983,7 +5113,7 @@ function estadoMantenimientos() {
       };
     }
 
-    const kmUltimo = ultimo.km > 0 ? ultimo.km : (kmEnFecha(ultimo.fecha) || 0);
+    const kmUltimo = ultimo.km > 0 ? ultimo.km : (kmEstimadoEnFecha(ultimo.fecha) || 0);
     const kmDesde = kmUltimo > 0 && ahora > kmUltimo ? Math.round(ahora - kmUltimo) : 0;
     const diasDesde = diasEntre(ultimo.fecha, hoy);
 
@@ -5006,6 +5136,12 @@ function estadoMantenimientos() {
       faltanKm,
       faltanDias,
       proximoKm: plan.km && kmUltimo > 0 ? Math.round(kmUltimo + plan.km) : null,
+      /*
+       * Un kilometraje solo no dice si eso es el mes que viene o dentro de
+       * medio año. Al ritmo al que se anda, hacia cuándo cae.
+       */
+      haciaFecha: plan.km && kmUltimo > 0
+        ? fechaAlKilometraje(Math.round(kmUltimo + plan.km)) : null,
       proximaFecha: plan.meses ? sumarDias(ultimo.fecha, Math.round(plan.meses * 30.44)) : null,
       uso,
       // Se avisa antes de que venza: en el 85 % del intervalo ya hay que ir
@@ -5268,7 +5404,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { HORMIGA, MANTENIMIENTOS, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaPagoCompra, fechaPagoMes, gastoHormiga, gastosEnMeses, guardarPlanMantenimiento, ingresoDelMes, kmEnFecha, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+return { HORMIGA, MANTENIMIENTOS, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoHormiga, gastosEnMeses, guardarPlanMantenimiento, ingresoDelMes, kmEnFecha, kmEstimadoEnFecha, kmPorMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -15652,7 +15788,7 @@ M["views/vehiculo"] = (function () {
  */
 
 const {db, eliminar, guardar} = M["store"];
-const {money, redondear, textoFecha, odometroHoy, estadoMantenimientos, eventosVehiculo, planesMantenimiento, guardarPlanMantenimiento, MANTENIMIENTOS} = M["calc"];
+const {money, redondear, textoFecha, odometroHoy, kmPorMes, kmEstimadoEnFecha, estadoMantenimientos, eventosVehiculo, planesMantenimiento, guardarPlanMantenimiento, MANTENIMIENTOS} = M["calc"];
 const {esc, $, $$, confirmar, modal, brindis} = M["ui"];
 const {formMantenimiento} = M["forms"];
 /** 284546 → «284.546 km». */
@@ -15678,6 +15814,7 @@ function render(raiz) {
   const eventos = eventosVehiculo();
   const gastado = redondear(eventos.reduce((s, e) => s + e.monto, 0));
   const pendientes = estados.filter((e) => e.estado === 'vencido' || e.estado === 'pronto');
+  const ritmo = kmPorMes();
 
   raiz.innerHTML = `
     <section class="panel">
@@ -15687,6 +15824,15 @@ function render(raiz) {
     ? `${eventos.length} ${eventos.length === 1 ? 'apunte' : 'apuntes'} ·
        ${money(gastado)} en total`
     : 'Todavía no hay nada apuntado'}</span>
+      ${ritmo ? `
+        <div class="panel-datos">
+          <div><div class="etq">Al mes</div>
+            <div class="val">${esc(km(ritmo.kmMes))}</div></div>
+          <div><div class="etq">Medido sobre</div>
+            <div class="val">${ritmo.meses.toFixed(0)} meses</div></div>
+          <div><div class="etq">Recorridos</div>
+            <div class="val">${esc(km(ritmo.recorrido))}</div></div>
+        </div>` : ''}
       <div class="acciones-panel">
         <button type="button" data-accion="mantenimiento">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
@@ -15703,7 +15849,7 @@ function render(raiz) {
 
     <section class="tarjeta">
       <header><h2>Qué toca</h2><span class="pista">Por kilómetros</span></header>
-      ${bloqueQueToca(estados, pendientes, odometro)}
+      ${bloqueQueToca(estados, pendientes, odometro, ritmo)}
     </section>
 
     <section class="tarjeta">
@@ -15748,7 +15894,7 @@ function render(raiz) {
  * Qué toca. Arriba lo vencido y lo que está por vencer, que es a lo que uno
  * viene; debajo, lo demás, para poder comprobar que no se olvida nada.
  */
-function bloqueQueToca(estados, pendientes, odometro) {
+function bloqueQueToca(estados, pendientes, odometro, ritmo) {
   const conDatos = estados.filter((e) => e.estado !== 'sin-datos');
   if (!conDatos.length) {
     return `<p class="vacio">Todavía no hay ningún mantenimiento apuntado. En
@@ -15776,6 +15922,7 @@ function bloqueQueToca(estados, pendientes, odometro) {
             ${esc(haceCuanto(e.diasDesde))}${e.kmUltimo > 0
     ? ` · a los ${esc(km(e.kmUltimo))}` : ''}</div>
           <div class="meta">${textoProximo(e)}</div>
+          ${textoCuando(e, ritmo) ? `<div class="meta cuando">${textoCuando(e, ritmo)}</div>` : ''}
         </div>
         <div class="mant-lado">
           <div class="mant-barra"><i style="width:${
@@ -15784,6 +15931,10 @@ function bloqueQueToca(estados, pendientes, odometro) {
         </div>
       </li>`).join('')}</ul>
 
+    ${ritmo ? `<p class="pista">Las fechas de «hacia» son una aproximación:
+      salen de los <strong>${esc(km(ritmo.kmMes))} al mes</strong> que llevas de
+      media, medidos sobre los últimos ${ritmo.meses.toFixed(0)} meses. Si cambia
+      el uso del carro, cambian.</p>` : ''}
     ${estados.some((e) => e.estado === 'sin-datos') ? `
       <p class="pista">Sin apuntar todavía:
       ${estados.filter((e) => e.estado === 'sin-datos')
@@ -15806,23 +15957,86 @@ function textoProximo(e) {
   return partes.length ? partes.join(' ') : 'Sin intervalo puesto';
 }
 
+/*
+ * La aproximación en fechas.
+ *
+ * Un mantenimiento por kilómetros no dice *cuándo*, y «faltan 3.488 km» no
+ * sirve para reservar el taller. Con los kilómetros que se recorren de media
+ * al mes, esos kilómetros se vuelven una fecha.
+ *
+ * Y cuando el mantenimiento tiene además un plazo de tiempo, aquí se dice
+ * cuál de los dos llega primero, que es lo único que hay que apuntar en el
+ * calendario. Se llama «hacia» a propósito: es una media, no una promesa.
+ */
+function textoCuando(e, ritmo) {
+  if (!ritmo || !e.haciaFecha || (e.faltanKm != null && e.faltanKm < 0)) return '';
+  const porRitmo = `a ${esc(km(ritmo.kmMes))} al mes`;
+  if (e.proximaFecha && e.faltanDias >= 0 && e.proximaFecha < e.haciaFecha) {
+    return `${porRitmo} esos kilómetros caen hacia ${esc(textoFecha(e.haciaFecha))},
+      así que llega antes la fecha: <strong>${esc(textoFecha(e.proximaFecha))}</strong>`;
+  }
+  /*
+   * Una regla de 40.000 km a 378 km/mes cae en 2033. La fecha no está mal
+   * calculada: lo que está mal es la regla, porque a este ritmo el
+   * kilometraje no va a llegar nunca antes que el desgaste. Decirlo aquí
+   * vale más que enseñar el año y callarse.
+   */
+  const anios = (new Date(e.haciaFecha) - new Date()) / (365.25 * 24 * 3600 * 1000);
+  if (!e.proximaFecha && anios >= 4) {
+    return `${porRitmo} eso no llega hasta <strong>${esc(textoFecha(e.haciaFecha))}</strong>
+      —${Math.round(anios)} años—, así que a éste conviene ponerle también un plazo`;
+  }
+  return `${porRitmo.charAt(0).toUpperCase()}${porRitmo.slice(1)}, eso cae
+    hacia <strong>${esc(textoFecha(e.haciaFecha))}</strong>`;
+}
+
+/*
+ * El historial. Cada apunte enseña TODO lo suyo —qué se hizo, cuándo, a
+ * cuántos kilómetros, dónde y cuánto costó— repartido en etiquetas que se
+ * parten en varias líneas si hace falta.
+ *
+ * Aquí no vale la fila de una sola altura del resto de la app: esto no se
+ * recorre buscando una cifra, se lee. Cortar «Cambio de aceite motor y caja»
+ * en «Cambio de aceite motor y…» quita justo el dato por el que uno entra.
+ */
+/*
+ * El kilometraje del apunte.
+ *
+ * Muchos gastos viejos vinieron del Excel sin odómetro. Dejar el hueco vacío
+ * es justo perder el dato por el que se abre esta lista —«¿a cuántos km le
+ * cambié las llantas?»—, así que cuando el apunte no lo trae se estima
+ * interpolando entre las lecturas de antes y después, y se marca con «≈» para
+ * que nadie lo confunda con una lectura de verdad.
+ */
+function kmDelApunte(e) {
+  if (e.km > 0) return `<span class="veh-dato fuerte">${esc(km(e.km))}</span>`;
+  const estimado = kmEstimadoEnFecha(e.fecha);
+  return estimado
+    ? `<span class="veh-dato" title="Estimado entre dos lecturas">≈ ${esc(km(estimado))}</span>`
+    : '';
+}
+
 function listaEventos(eventos) {
   if (!eventos.length) {
     return '<p class="vacio">Nada apuntado todavía.</p>';
   }
-  return `<ul class="lista">${eventos.map((e) => `
-    <li class="con-acciones fila-plana">
-      <div class="principal">
-        <div class="titulo">${esc(e.detalle || nombreDe(e.tipo))}
-          <span class="chip">${esc(e.origen)}</span>${e.deducido
-    ? '<span class="chip">del Excel</span>' : ''}</div>
-        <div class="meta">${esc(textoFecha(e.fecha))} · ${esc(nombreDe(e.tipo))}${
-  e.km > 0 ? ` · ${esc(km(e.km))}` : ''}${e.nota ? ` · ${esc(e.nota)}` : ''}</div>
+  return `<ul class="veh-lista">${eventos.map((e) => `
+    <li>
+      <div class="veh-cab">
+        <span class="veh-que">${esc(e.detalle || nombreDe(e.tipo))}</span>
+        <span class="veh-monto">${money(e.monto)}</span>
       </div>
-      <div class="monto">${money(e.monto)}</div>
-      <div class="acciones">
-        <button class="btn pequeno" data-ver="${esc(e.coleccion)}:${esc(e.id)}">Corregir</button>
-        <button class="btn pequeno peligro"
+      <div class="veh-datos">
+        <span class="veh-dato fuerte">${esc(textoFecha(e.fecha))}</span>
+        ${kmDelApunte(e)}
+        ${e.tipo ? `<span class="veh-dato">${esc(nombreDe(e.tipo))}</span>` : ''}
+        ${e.nota ? `<span class="veh-dato">${esc(e.nota)}</span>` : ''}
+        <span class="veh-dato">${esc(e.origen)}</span>
+        ${e.deducido ? '<span class="veh-dato">del Excel</span>' : ''}
+      </div>
+      <div class="veh-acciones">
+        <button class="veh-btn" data-ver="${esc(e.coleccion)}:${esc(e.id)}">Corregir</button>
+        <button class="veh-btn quita"
                 data-quitar="${esc(e.coleccion)}:${esc(e.id)}">Eliminar</button>
       </div>
     </li>`).join('')}</ul>`;
