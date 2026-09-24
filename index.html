@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-WLuwFy7jst435s/lFrlHbftKX00/SjO4YW/W/XuuI2k='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-9pceEuXY070dxlo7Md8KxkxwBSHstMEXLokhK/Dyi+k='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2310,6 +2310,40 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
   flex: none;
   font-weight: 640; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
 }
+
+/*
+ * Qué toca en el carro. La barra de la derecha es lo gastado del intervalo:
+ * llena quiere decir que toca, y se ve sin leer una sola cifra.
+ */
+.mantenimientos { list-style: none; margin: 12px 0; padding: 0; }
+.mantenimientos li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 2px 11px 10px;
+  border-bottom: 1px solid var(--grid);
+  border-left: 3px solid transparent;
+}
+.mantenimientos li:last-child { border-bottom: 0; }
+.mantenimientos li[data-estado="vencido"] { border-left-color: var(--critico); }
+.mantenimientos li[data-estado="pronto"] { border-left-color: var(--alerta); }
+.mantenimientos li[data-estado="al-dia"] { border-left-color: var(--ok); }
+.mantenimientos .principal { flex: 1; min-width: 0; }
+.mantenimientos .titulo { font-weight: 570; font-size: 13px; }
+.mantenimientos .titulo > .chip { vertical-align: middle; margin-left: 7px; }
+.mantenimientos .meta {
+  margin-top: 2px; font-size: 11px; color: var(--tinta-3);
+  font-variant-numeric: tabular-nums;
+}
+.mantenimientos .meta strong { color: var(--tinta-2); font-weight: 620; }
+.mant-lado { flex: 0 0 auto; display: grid; gap: 7px; justify-items: end; }
+.mant-barra {
+  width: 86px; height: 7px;
+  border-radius: var(--radio-pill);
+  background: var(--superficie-3);
+  overflow: hidden;
+}
+.mant-barra > i { display: block; height: 100%; border-radius: var(--radio-pill); background: var(--ok); }
+li[data-estado="pronto"] .mant-barra > i { background: var(--alerta); }
+li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
 
 /* Gasto hormiga: la cifra que manda es la del año, no la del corte, así que va
    a la derecha y en grande, donde el ojo ya busca el importe. */
@@ -4783,6 +4817,208 @@ function buscarHistorial(termino, { usuario = 'ambos', limite = 80 } = {}) {
     });
 }
 
+/* --- Mantenimiento del vehículo -------------------------------------------
+ *
+ * Un gasto del carro se contesta con dos cosas a la vez: cuánto costó y
+ * CUÁNDO fue —en fecha y en kilómetros—, porque de ahí sale la única pregunta
+ * que importa después: cuándo toca otra vez. Por eso vive aparte del resto de
+ * los gastos aunque el dinero salga de la misma cuenta.
+ */
+
+/**
+ * Lo que se le hace a un carro y cada cuánto.
+ *
+ * Los intervalos son los de manual, que valen como punto de partida; cada uno
+ * se puede corregir y lo corregido manda. `pistas` sirve para reconocer en el
+ * historial lo que ya está apuntado sin etiquetar: veintitrés registros
+ * traídos del Excel no se van a re-etiquetar a mano.
+ */
+const MANTENIMIENTOS = [
+  { clave: 'aceite', nombre: 'Cambio de aceite', km: 5000, meses: 6, pistas: ['aceite'] },
+  { clave: 'filtro-aire', nombre: 'Filtro de aire', km: 10000, meses: null, pistas: ['filtro de aire'] },
+  {
+    clave: 'filtro-combustible',
+    nombre: 'Filtro de combustible',
+    km: 20000,
+    meses: null,
+    pistas: ['filtro de gasolina', 'filtro de combustible'],
+  },
+  { clave: 'llantas', nombre: 'Llantas', km: 40000, meses: null, pistas: ['llanta', 'neumatico'] },
+  { clave: 'frenos', nombre: 'Frenos', km: 30000, meses: null, pistas: ['freno', 'pastilla', 'zapata'] },
+  { clave: 'bateria', nombre: 'Batería', km: null, meses: 36, pistas: ['bateria'] },
+  {
+    clave: 'alineacion',
+    nombre: 'Alineación y balanceo',
+    km: 10000,
+    meses: null,
+    pistas: ['alineacion', 'balanceo'],
+  },
+  { clave: 'bujias', nombre: 'Bujías', km: 40000, meses: null, pistas: ['bujia'] },
+  { clave: 'revision', nombre: 'Revisión general', km: null, meses: 12, pistas: ['revision'] },
+];
+
+/** Los intervalos corregidos a mano, si los hay. */
+function planesGuardados() {
+  try {
+    return JSON.parse(db.config.mantenimiento_planes || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+/** Cada mantenimiento con su intervalo, ya sea el de manual o el corregido. */
+function planesMantenimiento() {
+  const mios = planesGuardados();
+  return MANTENIMIENTOS.map((m) => {
+    const suyo = mios[m.clave] || {};
+    return {
+      ...m,
+      km: suyo.km !== undefined ? (Number(suyo.km) || null) : m.km,
+      meses: suyo.meses !== undefined ? (Number(suyo.meses) || null) : m.meses,
+      ajustado: suyo.km !== undefined || suyo.meses !== undefined,
+    };
+  });
+}
+
+/** Guarda el intervalo de uno. `null` en los dos vuelve a lo de manual. */
+function guardarPlanMantenimiento(clave, { km, meses }) {
+  const mios = planesGuardados();
+  if (km === null && meses === null) delete mios[clave];
+  else mios[clave] = { km: km || null, meses: meses || null };
+  db.config.mantenimiento_planes = JSON.stringify(mios);
+}
+
+/** A qué mantenimiento suena un texto, si suena a alguno. */
+function clasificarMantenimiento(texto) {
+  const t = plano(texto);
+  if (!t) return '';
+  const m = MANTENIMIENTOS.find((x) => x.pistas.some((pista) => t.includes(pista)));
+  return m ? m.clave : '';
+}
+
+/**
+ * Todo lo que se le ha hecho al carro, de donde sea que esté apuntado.
+ *
+ * Dos procedencias: los gastos normales que se etiquetaron como mantenimiento
+ * —los que se registran desde ahora— y el cuaderno que vino del Excel, que no
+ * lleva etiqueta y se clasifica por lo que dice.
+ */
+function eventosVehiculo() {
+  const out = [];
+
+  const anota = (o) => {
+    const fecha = String(o.fecha ?? '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
+    out.push({ ...o, fecha });
+  };
+
+  for (const g of db.gastosTarjeta) {
+    if (!g.mantenimiento) continue;
+    anota({
+      id: g.id,
+      tipo: g.mantenimiento,
+      fecha: g.fecha,
+      km: Number(g.km) || 0,
+      monto: Number(g.monto_total) || 0,
+      detalle: g.detalle || '',
+      nota: g.proposito || '',
+      // Un diferido se paga a plazos pero se hizo una sola vez.
+      origen: Number(g.cuotas) > 1 ? 'Diferido' : 'Tarjeta',
+      coleccion: 'gastosTarjeta',
+    });
+  }
+  for (const g of db.gastosEfectivo) {
+    if (!g.mantenimiento) continue;
+    anota({
+      id: g.id,
+      tipo: g.mantenimiento,
+      fecha: g.fecha,
+      km: Number(g.km) || 0,
+      monto: Number(g.monto) || 0,
+      detalle: g.detalle || '',
+      nota: g.proposito || '',
+      origen: 'Efectivo',
+      coleccion: 'gastosEfectivo',
+    });
+  }
+  for (const g of db.vehiculoGastos || []) {
+    anota({
+      id: g.id,
+      tipo: clasificarMantenimiento(`${g.detalle || ''} ${g.tipo || ''}`),
+      fecha: g.fecha,
+      km: Number(g.km) || 0,
+      monto: Number(g.monto) || 0,
+      detalle: g.detalle || g.tipo || '',
+      nota: g.proveedor || '',
+      origen: g.forma_pago === 'Efectivo' ? 'Efectivo' : 'Tarjeta',
+      coleccion: 'vehiculoGastos',
+      // Lo traído del Excel: sin etiqueta propia, clasificado por el texto.
+      deducido: true,
+    });
+  }
+
+  return out.sort((a, b) => b.fecha.localeCompare(a.fecha)
+    || (b.km || 0) - (a.km || 0));
+}
+
+/**
+ * Cómo va cada mantenimiento: cuándo se hizo el último y cuándo toca el
+ * siguiente, en kilómetros y en fecha.
+ *
+ * Cuando el intervalo tiene las dos medidas manda la que venza ANTES: un
+ * aceite es cada 5.000 km o cada seis meses, lo que llegue primero, y con
+ * poco uso lo que caduca es el aceite, no el kilometraje.
+ */
+function estadoMantenimientos() {
+  const eventos = eventosVehiculo();
+  const ahora = odometroHoy();
+  const hoy = new Date().toISOString().slice(0, 10);
+
+  return planesMantenimiento().map((plan) => {
+    const suyos = eventos.filter((e) => e.tipo === plan.clave);
+    const ultimo = suyos[0] || null;
+    if (!ultimo) {
+      return {
+        ...plan, ultimo: null, veces: 0, estado: 'sin-datos',
+      };
+    }
+
+    const kmUltimo = ultimo.km > 0 ? ultimo.km : (kmEnFecha(ultimo.fecha) || 0);
+    const kmDesde = kmUltimo > 0 && ahora > kmUltimo ? Math.round(ahora - kmUltimo) : 0;
+    const diasDesde = diasEntre(ultimo.fecha, hoy);
+
+    // Cuánto falta por cada medida; sin esa medida, infinito.
+    const faltanKm = plan.km && kmUltimo > 0 ? plan.km - kmDesde : null;
+    const faltanDias = plan.meses ? Math.round(plan.meses * 30.44) - diasDesde : null;
+
+    // De las dos, la que venza antes, en tanto por uno de su propio intervalo.
+    const usoKm = plan.km && kmUltimo > 0 ? kmDesde / plan.km : 0;
+    const usoDias = plan.meses ? diasDesde / (plan.meses * 30.44) : 0;
+    const uso = Math.max(usoKm, usoDias);
+
+    return {
+      ...plan,
+      ultimo,
+      veces: suyos.length,
+      kmUltimo,
+      kmDesde,
+      diasDesde,
+      faltanKm,
+      faltanDias,
+      proximoKm: plan.km && kmUltimo > 0 ? Math.round(kmUltimo + plan.km) : null,
+      proximaFecha: plan.meses ? sumarDias(ultimo.fecha, Math.round(plan.meses * 30.44)) : null,
+      uso,
+      // Se avisa antes de que venza: en el 85 % del intervalo ya hay que ir
+      // pidiendo cita, no el día que se pasa.
+      estado: uso >= 1 ? 'vencido' : uso >= 0.85 ? 'pronto' : 'al-dia',
+      gastado: redondear(suyos.reduce((s, e) => s + e.monto, 0)),
+    };
+  }).sort((a, b) => {
+    const orden = { vencido: 0, pronto: 1, 'al-dia': 2, 'sin-datos': 3 };
+    return orden[a.estado] - orden[b.estado] || (b.uso || 0) - (a.uso || 0);
+  });
+}
+
 /* --- Lo que ya está comprometido ------------------------------------------
  *
  * Una compra a plazos se siente gratis el día que se hace y solo duele
@@ -5032,7 +5268,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { HORMIGA, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarHistorial, calcularPoliza, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoTarjeta, fechaPagoCompra, fechaPagoMes, gastoHormiga, gastosEnMeses, ingresoDelMes, kmEnFecha, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+return { HORMIGA, MANTENIMIENTOS, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaPagoCompra, fechaPagoMes, gastoHormiga, gastosEnMeses, guardarPlanMantenimiento, ingresoDelMes, kmEnFecha, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -6165,6 +6401,7 @@ function pedirArchivo(accept) {
 
 /** Iconos del menú inferior (trazo, 24×24). */
 const ICONOS = {
+  vehiculo: '<path d="M5 17h14M6.5 17a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm14 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM4 17v-4l2-5h12l2 5v4M6.5 13h11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   resumen: '<path d="M3 13h6V3H3v10Zm0 8h6v-6H3v6Zm8 0h10V11H11v10Zm0-18v6h10V3H11Z"/>',
   mensual: '<path d="M7 2v3M17 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   anual: '<path d="M4 20V10m5 10V4m5 16v-7m5 7V8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
@@ -6879,6 +7116,8 @@ const ESQUEMA = [
     // columna, pasar la base por Excel borraría la marca y el cargo volvería
     // a entrar en el pago del mes.
     ['Aplazado', 'aplazado', 't'],
+    // Qué mantenimiento del carro es, si lo es. Aditiva como la anterior.
+    ['Mantenimiento', 'mantenimiento', 't'],
   ]],
   ['Cuotas', 'cuotas', [
     ['Gasto ID', 'gasto_id', 't'], ['N° cuota', 'n_cuota', 'n'],
@@ -6892,6 +7131,7 @@ const ESQUEMA = [
     ['Categoría', 'categoria', 't'], ['Monto', 'monto', 'n'],
     ['Cuenta origen', 'cuenta', 't'], ['Notas', 'notas', 't'],
     ['Kilometraje', 'km', 'n'],
+    ['Mantenimiento', 'mantenimiento', 't'],
   ]],
   ['Inversiones', 'inversiones', [
     ['ID', 'id', 't'], ['Fecha inicio', 'fecha_inicio', 'f'],
@@ -9518,8 +9758,8 @@ M["forms"] = (function () {
  */
 
 const {db, guardar, nuevoId, upsert, tocar, cuentasBancarias, tarjetas, categoriasGasto, categoriasIngreso, usuarios, capitalizar} = M["store"];
-const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta, rangoMeses, topesDelMes, umbralAviso, TOPES, comprometidoEnMes} = M["calc"];
-const {modal, opciones, brindis, alarma, hoyISO, esc, $, aNumero, campoMonto} = M["ui"];
+const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta, rangoMeses, topesDelMes, umbralAviso, TOPES, comprometidoEnMes, MANTENIMIENTOS, odometroHoy} = M["calc"];
+const {modal, opciones, brindis, alarma, hoyISO, esc, $, aNumero, campoMonto, segmentado} = M["ui"];
 const selUsuarios = (sel) => opciones(usuarios(), sel);
 const val = (form, sel) => aNumero($(sel, form).value);
 
@@ -9642,6 +9882,172 @@ function formTopes(alTerminar) {
   });
 }
 
+// --- Mantenimiento del vehículo ----------------------------------------------
+
+/**
+ * Apuntar algo que se le hizo al carro.
+ *
+ * Crea UN SOLO registro, el gasto de siempre —en efectivo, a la tarjeta o
+ * diferido—, y le cuelga lo que hace falta para el control del vehículo: qué
+ * se hizo y a cuántos kilómetros. Un registro y no dos: si el mantenimiento
+ * viviera en su propia lista, el dinero se contaría dos veces en el
+ * presupuesto o no se contaría ninguna.
+ */
+function formMantenimiento(alTerminar, existente = null) {
+  const g = existente;
+  const cuentas = cuentasBancarias();
+  const tjs = tarjetas();
+  const odometro = odometroHoy();
+
+  const cuerpo = `
+    <div class="filtros">
+      <div class="campo"><label for="mt-tipo">Qué se hizo</label>
+        <select id="mt-tipo" name="mantenimiento" required>
+          ${opciones(MANTENIMIENTOS.map((m) => ({ valor: m.clave, texto: m.nombre })),
+    g?.mantenimiento)}
+          <option value="otro"${g?.mantenimiento === 'otro' ? ' selected' : ''}>Otro</option>
+        </select></div>
+      <div class="campo"><label for="mt-fecha">Fecha</label>
+        <input id="mt-fecha" name="fecha" type="date" value="${esc(g?.fecha || hoyISO())}"
+               required></div>
+    </div>
+    <div class="filtros">
+      <div class="campo"><label for="mt-km">Kilometraje</label>
+        <input id="mt-km" name="km" type="number" inputmode="numeric" min="0" step="1"
+               placeholder="${odometro > 0 ? String(Math.round(odometro)) : '0'}"
+               value="${esc(g?.km || '')}"></div>
+      ${campoMonto('mt-monto', 'monto', {
+    etiqueta: 'Cuánto costó', valor: paraEditar(g?.monto_total ?? g?.monto), requerido: true,
+  })}
+    </div>
+    <div class="campo ancho"><label for="mt-detalle">Taller o repuesto</label>
+      <input id="mt-detalle" name="detalle" required placeholder="Taller Fiorella"
+             value="${esc(g?.detalle || '')}"></div>
+    <div class="campo ancho"><label for="mt-nota">Detalle</label>
+      <input id="mt-nota" name="proposito" placeholder="Aceite sintético y filtro"
+             value="${esc(g?.proposito || '')}"></div>
+
+    <div class="campo ancho"><label>Cómo se pagó</label><div id="mt-pago"></div></div>
+
+    <div class="filtros" data-pago="efectivo">
+      <div class="campo"><label for="mt-cuenta">Sale de</label>
+        <select id="mt-cuenta" name="cuenta">
+          ${opciones(cuentas.map((c) => ({ valor: c.id, texto: c.nombre })), g?.cuenta)}
+        </select></div>
+      <div class="campo"><label for="mt-usuario">Usuario</label>
+        <select id="mt-usuario" name="usuario">${selUsuarios(g?.usuario)}</select></div>
+    </div>
+
+    <div class="filtros" data-pago="tarjeta" hidden>
+      <div class="campo"><label for="mt-tarjeta">Tarjeta</label>
+        <select id="mt-tarjeta" name="tarjeta">
+          ${opciones(tjs.map((t) => ({ valor: t.id, texto: t.nombre })), g?.tarjeta)}
+        </select></div>
+      <div class="campo"><label for="mt-usuario-t">Usuario</label>
+        <select id="mt-usuario-t" name="usuario_t">${selUsuarios(g?.usuario)}</select></div>
+    </div>
+
+    <div class="filtros" data-pago="diferido" hidden>
+      <div class="campo"><label for="mt-cuotas">N.º de cuotas</label>
+        <input id="mt-cuotas" name="cuotas" type="number" min="2" max="48" step="1"
+               inputmode="numeric" value="${g && g.cuotas > 1 ? g.cuotas : 3}"></div>
+      <div class="campo"><label for="mt-mes">Mes de la primera</label>
+        <select id="mt-mes" name="mes_inicio">
+          ${opciones(mesesSeleccionables(), g?.mes_inicio || mesActual())}</select></div>
+    </div>
+
+    <div class="previsualizacion" id="mt-previa"></div>`;
+
+  /*
+   * De partida, como estaba: lo que se corrige conserva su forma de pago y lo
+   * nuevo empieza en efectivo, que es lo más común en un taller.
+   */
+  let pago = 'efectivo';
+  if (g?.tarjeta) pago = Number(g.cuotas) > 1 ? 'diferido' : 'tarjeta';
+
+  modal({
+    titulo: g ? 'Corregir el mantenimiento' : 'Mantenimiento del vehículo',
+    cuerpo,
+    aceptar: g ? 'Guardar cambios' : 'Apuntar',
+    alAbrir(form) {
+      const previa = $('#mt-previa', form);
+      const mostrar = () => {
+        form.querySelectorAll('[data-pago]').forEach((n) => {
+          const suyo = n.dataset.pago === pago
+            || (pago === 'diferido' && n.dataset.pago === 'tarjeta');
+          n.hidden = !suyo;
+          n.querySelectorAll('input, select').forEach((c) => { c.disabled = !suyo; });
+        });
+      };
+      const refrescar = () => {
+        const km = Number($('#mt-km', form).value) || 0;
+        const monto = val(form, '#mt-monto');
+        const tipo = MANTENIMIENTOS.find((m) => m.clave === $('#mt-tipo', form).value);
+        const partes = [];
+        if (tipo?.km) {
+          partes.push(km > 0
+            ? `El siguiente tocaría a los <strong>${Math.round(km + tipo.km)
+              .toLocaleString('es-EC')} km</strong>.`
+            : `Este se hace cada ${tipo.km.toLocaleString('es-EC')} km. Escribe el
+               kilometraje y te digo a cuántos toca el siguiente.`);
+        }
+        if (tipo?.meses) partes.push(`Y cada ${tipo.meses} meses.`);
+        if (monto > 0) partes.push(`Se apunta como gasto de ${money(monto)}.`);
+        previa.innerHTML = partes.map((x) => `<div>${x}</div>`).join('');
+      };
+
+      $('#mt-pago', form).appendChild(segmentado(
+        [{ valor: 'efectivo', texto: 'Efectivo' }, { valor: 'tarjeta', texto: 'Tarjeta' },
+          { valor: 'diferido', texto: 'Diferido' }],
+        pago,
+        (v) => { pago = v; mostrar(); refrescar(); },
+      ));
+      mostrar();
+      ['change', 'input'].forEach((ev) => form.addEventListener(ev, refrescar));
+      refrescar();
+    },
+    alEnviar(d) {
+      const comun = {
+        fecha: d.fecha,
+        detalle: capitalizar(d.detalle),
+        proposito: capitalizar(d.proposito),
+        categoria: 'Mantenimiento',
+        km: Number(d.km) > 0 ? Number(d.km) : '',
+        mantenimiento: d.mantenimiento,
+      };
+      const monto = redondear(aNumero(d.monto));
+
+      if (pago === 'efectivo') {
+        upsert('gastosEfectivo', {
+          id: g?.coleccion === 'gastosEfectivo' ? g.id : nuevoId('gastosEfectivo'),
+          ...comun,
+          usuario: d.usuario,
+          monto,
+          cuenta: d.cuenta,
+          notas: g?.notas || '',
+        });
+      } else {
+        const enCuotas = pago === 'diferido';
+        registrarGastoTarjeta({
+          id: g?.coleccion === 'gastosTarjeta' ? g.id : undefined,
+          ...comun,
+          usuario: d.usuario_t,
+          tarjeta: d.tarjeta,
+          tipo: enCuotas ? 'Diferido' : 'Corriente',
+          cuotas: enCuotas ? d.cuotas : 1,
+          montoTotal: monto,
+          tasaInteres: 0,
+          mesInicio: enCuotas ? d.mes_inicio : claveMes(d.fecha),
+          notas: g?.notas || '',
+        });
+      }
+      guardar();
+      brindis(g ? 'Mantenimiento corregido' : `Apuntado · ${money(monto)}`);
+      alTerminar?.();
+    },
+  });
+}
+
 // --- Categoría al vuelo ------------------------------------------------------
 
 /*
@@ -9754,7 +10160,7 @@ function categoriaElegida(d, tipo = 'Gasto') {
 function registrarGastoTarjeta({
   id: idExistente = null, fecha, tarjeta, usuario, detalle, proposito = '',
   categoria, tipo = 'Corriente', cuotas = 1, montoTotal, tasaInteres = 0,
-  mesInicio, notas = '', km = '',
+  mesInicio, notas = '', km = '', mantenimiento = undefined,
 }) {
   const enCuotas = tipo !== 'Corriente';
   const n = enCuotas ? Math.max(2, Number(cuotas) || 2) : 1;
@@ -9786,6 +10192,12 @@ function registrarGastoTarjeta({
      * marca sin avisar y el cargo volvería a entrar en el pago del mes.
      */
     aplazado: previo?.aplazado || '',
+    /*
+     * Qué se le hizo al carro. Solo lo llevan los gastos apuntados desde la
+     * pantalla del vehículo; se arrastra del anterior si no viene, para que
+     * corregir el importe no lo desetiquete.
+     */
+    mantenimiento: mantenimiento !== undefined ? mantenimiento : (previo?.mantenimiento || ''),
   });
 
   const pagados = new Set(db.cuotas
@@ -10503,7 +10915,7 @@ function liquidarInversion(id, alTerminar) {
   alTerminar?.();
 }
 
-return { campoCategoria, categoriaElegida, conectarCategoria, esCombustible, formDiferir, formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMovimiento, formPagoTarjeta, formTopes, liquidarInversion, registrarGastoTarjeta };
+return { campoCategoria, categoriaElegida, conectarCategoria, esCombustible, formDiferir, formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMantenimiento, formMovimiento, formPagoTarjeta, formTopes, liquidarInversion, registrarGastoTarjeta };
 })();
 
 M["pantalla_llave"] = (function () {
@@ -15227,6 +15639,292 @@ function formInforme(mesPorDefecto, quienPorDefecto) {
 return { render };
 })();
 
+M["views/vehiculo"] = (function () {
+/**
+ * Vista «Vehículo»: qué se le ha hecho al carro, cuándo toca lo siguiente y
+ * cuánto lleva costado.
+ *
+ * El resto de la app mira el dinero. Esta mira el carro, y por eso la unidad
+ * que manda aquí no es el mes sino el KILÓMETRO: un aceite no vence en
+ * septiembre, vence a los 288.234. El gasto sigue siendo el de siempre —sale
+ * de la misma cuenta y cuenta en el mismo presupuesto—; lo que se añade es
+ * cuándo se hizo y a cuántos kilómetros.
+ */
+
+const {db, eliminar, guardar} = M["store"];
+const {money, redondear, textoFecha, odometroHoy, estadoMantenimientos, eventosVehiculo, planesMantenimiento, guardarPlanMantenimiento, MANTENIMIENTOS} = M["calc"];
+const {esc, $, $$, confirmar, modal, brindis} = M["ui"];
+const {formMantenimiento} = M["forms"];
+/** 284546 → «284.546 km». */
+const km = (n) => `${Math.round(Number(n) || 0).toLocaleString('es-EC')} km`;
+
+/** «hace 7 meses», «hace 12 días», «hoy». */
+function haceCuanto(dias) {
+  if (dias <= 0) return 'hoy';
+  if (dias === 1) return 'ayer';
+  if (dias < 45) return `hace ${dias} días`;
+  const meses = Math.round(dias / 30.44);
+  if (meses < 18) return `hace ${meses} meses`;
+  return `hace ${(dias / 365).toFixed(1).replace('.', ',')} años`;
+}
+
+/** El nombre de un mantenimiento a partir de su clave. */
+const nombreDe = (clave) => MANTENIMIENTOS.find((m) => m.clave === clave)?.nombre
+  || (clave ? 'Otro' : 'Sin clasificar');
+
+function render(raiz) {
+  const odometro = odometroHoy();
+  const estados = estadoMantenimientos();
+  const eventos = eventosVehiculo();
+  const gastado = redondear(eventos.reduce((s, e) => s + e.monto, 0));
+  const pendientes = estados.filter((e) => e.estado === 'vencido' || e.estado === 'pronto');
+
+  raiz.innerHTML = `
+    <section class="panel">
+      <span class="etiqueta">El carro va por</span>
+      <span class="cifra">${odometro > 0 ? esc(km(odometro)) : '—'}</span>
+      <span class="nota">${eventos.length
+    ? `${eventos.length} ${eventos.length === 1 ? 'apunte' : 'apuntes'} ·
+       ${money(gastado)} en total`
+    : 'Todavía no hay nada apuntado'}</span>
+      <div class="acciones-panel">
+        <button type="button" data-accion="mantenimiento">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4Z"/>
+          </svg>Apuntar</button>
+        <button type="button" data-accion="odometro">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20a8 8 0 1 1 8-8M12 12l4-3"/>
+          </svg>Odómetro</button>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <header><h2>Qué toca</h2><span class="pista">Por kilómetros</span></header>
+      ${bloqueQueToca(estados, pendientes, odometro)}
+    </section>
+
+    <section class="tarjeta">
+      <header><h2>Lo que se le ha hecho</h2><span class="pista">Todo el historial</span></header>
+      ${listaEventos(eventos)}
+    </section>`;
+
+  $('[data-accion="mantenimiento"]', raiz).addEventListener('click',
+    () => formMantenimiento(() => render(raiz)));
+  $('[data-accion="odometro"]', raiz).addEventListener('click',
+    () => formOdometro(() => render(raiz)));
+
+  $$('[data-plan]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => formPlan(btn.dataset.plan, () => render(raiz)));
+  });
+
+  $$('[data-ver]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const ev = eventos.find((e) => `${e.coleccion}:${e.id}` === btn.dataset.ver);
+      if (!ev) return;
+      if (ev.coleccion === 'vehiculoGastos') {
+        brindis('Ese vino del Excel: córrigelo allí y vuelve a importar');
+        return;
+      }
+      const fila = db[ev.coleccion].find((x) => x.id === ev.id);
+      if (fila) formMantenimiento(() => render(raiz), { ...fila, coleccion: ev.coleccion });
+    });
+  });
+
+  $$('[data-quitar]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const [coleccion, id] = btn.dataset.quitar.split(':');
+      confirmar('¿Eliminar este apunte del vehículo?', () => {
+        eliminar(coleccion, id);
+        render(raiz);
+      });
+    });
+  });
+}
+
+/*
+ * Qué toca. Arriba lo vencido y lo que está por vencer, que es a lo que uno
+ * viene; debajo, lo demás, para poder comprobar que no se olvida nada.
+ */
+function bloqueQueToca(estados, pendientes, odometro) {
+  const conDatos = estados.filter((e) => e.estado !== 'sin-datos');
+  if (!conDatos.length) {
+    return `<p class="vacio">Todavía no hay ningún mantenimiento apuntado. En
+      cuanto apuntes el primero —con su fecha y su kilometraje— esta caja
+      empieza a decirte cuándo toca el siguiente.</p>`;
+  }
+
+  return `
+    ${pendientes.length ? `
+      <div class="aviso ${pendientes.some((p) => p.estado === 'vencido') ? 'alerta' : ''}">
+        <span class="icono">!</span>
+        <span class="crece">${pendientes.map((p) => esc(p.nombre)).join(', ')}:
+        ${pendientes.length === 1 ? 'toca ya' : 'tocan ya'}.</span>
+      </div>` : `
+      <div class="aviso ok"><span class="icono">✓</span>
+        <span class="crece">Nada pendiente${odometro > 0
+    ? ` a los ${esc(km(odometro))}` : ''}.</span></div>`}
+
+    <ul class="mantenimientos">${conDatos.map((e) => `
+      <li data-estado="${esc(e.estado)}">
+        <div class="principal">
+          <div class="titulo">${esc(e.nombre)}
+            ${e.ajustado ? '<span class="chip">a mi medida</span>' : ''}</div>
+          <div class="meta">Último el ${esc(textoFecha(e.ultimo.fecha))},
+            ${esc(haceCuanto(e.diasDesde))}${e.kmUltimo > 0
+    ? ` · a los ${esc(km(e.kmUltimo))}` : ''}</div>
+          <div class="meta">${textoProximo(e)}</div>
+        </div>
+        <div class="mant-lado">
+          <div class="mant-barra"><i style="width:${
+  Math.min(100, Math.max(3, (e.uso || 0) * 100)).toFixed(0)}%"></i></div>
+          <button class="btn pequeno" data-plan="${esc(e.clave)}">Cada cuánto</button>
+        </div>
+      </li>`).join('')}</ul>
+
+    ${estados.some((e) => e.estado === 'sin-datos') ? `
+      <p class="pista">Sin apuntar todavía:
+      ${estados.filter((e) => e.estado === 'sin-datos')
+    .map((e) => esc(e.nombre)).join(', ')}.</p>` : ''}`;
+}
+
+/** «Toca a los 288.234 km, faltan 3.488» / «Se pasó por 1.200 km». */
+function textoProximo(e) {
+  const partes = [];
+  if (e.proximoKm) {
+    partes.push(e.faltanKm >= 0
+      ? `Toca a los <strong>${esc(km(e.proximoKm))}</strong>, faltan ${esc(km(e.faltanKm))}`
+      : `Tocaba a los ${esc(km(e.proximoKm))}: <strong>${esc(km(-e.faltanKm))} de más</strong>`);
+  }
+  if (e.proximaFecha) {
+    partes.push(e.faltanDias >= 0
+      ? `o el ${esc(textoFecha(e.proximaFecha))}`
+      : `o el ${esc(textoFecha(e.proximaFecha))}, <strong>ya pasó</strong>`);
+  }
+  return partes.length ? partes.join(' ') : 'Sin intervalo puesto';
+}
+
+function listaEventos(eventos) {
+  if (!eventos.length) {
+    return '<p class="vacio">Nada apuntado todavía.</p>';
+  }
+  return `<ul class="lista">${eventos.map((e) => `
+    <li class="con-acciones fila-plana">
+      <div class="principal">
+        <div class="titulo">${esc(e.detalle || nombreDe(e.tipo))}
+          <span class="chip">${esc(e.origen)}</span>${e.deducido
+    ? '<span class="chip">del Excel</span>' : ''}</div>
+        <div class="meta">${esc(textoFecha(e.fecha))} · ${esc(nombreDe(e.tipo))}${
+  e.km > 0 ? ` · ${esc(km(e.km))}` : ''}${e.nota ? ` · ${esc(e.nota)}` : ''}</div>
+      </div>
+      <div class="monto">${money(e.monto)}</div>
+      <div class="acciones">
+        <button class="btn pequeno" data-ver="${esc(e.coleccion)}:${esc(e.id)}">Corregir</button>
+        <button class="btn pequeno peligro"
+                data-quitar="${esc(e.coleccion)}:${esc(e.id)}">Eliminar</button>
+      </div>
+    </li>`).join('')}</ul>`;
+}
+
+/**
+ * Poner el odómetro al día.
+ *
+ * Sin esto, «cuándo toca» solo se mueve cuando se apunta un gasto, y entre un
+ * mantenimiento y otro pueden pasar meses. Se guarda como una lectura del
+ * cuaderno de recorridos, que es donde ya viven las demás.
+ */
+function formOdometro(alTerminar) {
+  const ahora = odometroHoy();
+  modal({
+    titulo: 'Poner el odómetro al día',
+    cuerpo: `
+      <p class="pista" style="margin-top:0">La última lectura que consta es de
+      <strong>${esc(km(ahora))}</strong>. Con el odómetro al día, «qué toca»
+      cuenta los kilómetros de verdad y no los del último gasto.</p>
+      <div class="filtros">
+        <div class="campo"><label for="od-km">Kilometraje de hoy</label>
+          <input id="od-km" name="km" type="number" inputmode="numeric" min="0" step="1"
+                 placeholder="${Math.round(ahora)}" required></div>
+        <div class="campo"><label for="od-fecha">Fecha</label>
+          <input id="od-fecha" name="fecha" type="date"
+                 value="${new Date().toISOString().slice(0, 10)}" required></div>
+      </div>
+      <div class="previsualizacion" id="od-previa"></div>`,
+    aceptar: 'Guardar',
+    alAbrir(form) {
+      const previa = $('#od-previa', form);
+      const refrescar = () => {
+        const n = Number($('#od-km', form).value) || 0;
+        previa.innerHTML = n > ahora && ahora > 0
+          ? `<div>Son <strong>${esc(km(n - ahora))}</strong> desde la última lectura.</div>`
+          : n > 0 && n < ahora
+            ? `<div style="color:var(--critico)">Es MENOS que la última lectura
+               (${esc(km(ahora))}). Un odómetro no va para atrás: revísalo.</div>`
+            : '';
+      };
+      form.addEventListener('input', refrescar);
+      refrescar();
+    },
+    alEnviar(d) {
+      const n = Number(d.km) || 0;
+      if (n <= 0) return false;
+      db.vehiculoRecorrido = db.vehiculoRecorrido || [];
+      db.vehiculoRecorrido.push({
+        fecha: d.fecha,
+        km_inicio: n,
+        km_fin: 0,
+        recorrido: 0,
+        tanqueo: 'No',
+        _ts: Date.now(),
+      });
+      guardar();
+      brindis(`Odómetro en ${km(n)}`);
+      alTerminar?.();
+      return undefined;
+    },
+  });
+}
+
+/** Cada cuánto toca uno: los kilómetros y los meses de su intervalo. */
+function formPlan(clave, alTerminar) {
+  const plan = planesMantenimiento().find((p) => p.clave === clave);
+  if (!plan) return;
+  const base = MANTENIMIENTOS.find((m) => m.clave === clave);
+
+  modal({
+    titulo: `Cada cuánto: ${plan.nombre}`,
+    cuerpo: `
+      <p class="pista" style="margin-top:0">Si pones las dos, manda la que
+      venza antes: un aceite es cada tantos kilómetros o cada tantos meses, lo
+      que llegue primero. Deja una en blanco para no usarla.</p>
+      <div class="filtros">
+        <div class="campo"><label for="pl-km">Cada cuántos km</label>
+          <input id="pl-km" name="km" type="number" inputmode="numeric" min="0" step="100"
+                 value="${plan.km || ''}" placeholder="${base?.km || ''}"></div>
+        <div class="campo"><label for="pl-meses">Cada cuántos meses</label>
+          <input id="pl-meses" name="meses" type="number" inputmode="numeric" min="0" max="120"
+                 step="1" value="${plan.meses || ''}" placeholder="${base?.meses || ''}"></div>
+      </div>
+      <p class="pista">De manual: ${base?.km ? `cada ${km(base.km)}` : ''}${
+  base?.km && base?.meses ? ' o ' : ''}${base?.meses ? `cada ${base.meses} meses` : ''}.</p>`,
+    aceptar: 'Guardar',
+    alEnviar(d) {
+      guardarPlanMantenimiento(clave, {
+        km: Number(d.km) || null,
+        meses: Number(d.meses) || null,
+      });
+      guardar();
+      brindis('Intervalo guardado');
+      alTerminar?.();
+    },
+  });
+}
+
+return { render };
+})();
+
 M["app"] = (function () {
 /** Arranque, navegación y botón de registro rápido. */
 
@@ -15248,6 +15946,7 @@ const cuentas = M["views/cuentas"];
 const datos = M["views/datos"];
 const plan = M["views/plan"];
 const analisis = M["views/analisis"];
+const vehiculo = M["views/vehiculo"];
 /*
  * `titulo` es el rótulo de la barra de abajo, donde cada ranura mide unos 48 px
  * en un teléfono: si no cabe, se corta. `rotulo` es el título largo de la
@@ -15262,6 +15961,7 @@ const VISTAS = [
   { id: 'cuentas', titulo: 'Cuentas', modulo: cuentas, icono: ICONOS.cuentas },
   { id: 'plan', titulo: 'Plan', rotulo: 'Presupuesto', modulo: plan, icono: ICONOS.plan },
   { id: 'analisis', titulo: 'Análisis', modulo: analisis, icono: ICONOS.analisis },
+  { id: 'vehiculo', titulo: 'Carro', rotulo: 'Vehículo', modulo: vehiculo, icono: ICONOS.vehiculo },
   { id: 'datos', titulo: 'Datos', modulo: datos, icono: ICONOS.datos },
 ];
 
