@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-3L/mod0RYB/UqSdacbpcWu27bvoUlNW3nGN1yQfryCw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-dXFrS/sCkbOYpo007/4t6SO70+203DecfkVSbIgMJNc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2204,6 +2204,54 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
 .desglose-medios strong {
   font-weight: 640; font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
 }
+
+/*
+ * El buscador de la lista del mes. Sirve para cotejar con el papel del banco:
+ * se escribe el negocio o el importe y la fila aparece sin tener que bajar
+ * cuatrocientas líneas buscándola con el dedo.
+ */
+.buscador {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0 12px;
+  border-radius: var(--radio-pill);
+  background: var(--baldosa, var(--superficie-2));
+  border: 1px solid var(--borde);
+}
+.buscador-lupa { flex: none; color: var(--tinta-3); font-size: 17px; line-height: 1; }
+.buscador input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  color: var(--tinta);
+  font-family: inherit;
+  font-size: 14px;
+}
+.buscador input::placeholder { color: var(--tinta-3); }
+.buscador input:focus { outline: none; }
+.buscador:focus-within { border-color: var(--acento); }
+/* El aspa de limpiar: el nativo de `type=search` no sale en iOS. */
+.buscador input::-webkit-search-cancel-button { display: none; }
+.buscador-borrar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--superficie-2);
+  color: var(--tinta-2);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.buscador-borrar:hover { background: var(--superficie-3); color: var(--tinta); }
 
 /* Gasto hormiga: la cifra que manda es la del año, no la del corte, así que va
    a la derecha y en grande, donde el ojo ya busca el importe. */
@@ -11455,7 +11503,39 @@ const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTar
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, opciones, aNumero, notaFila, marcaNota, notaTexto} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
-const estado = { tarjeta: null, usuario: 'ambos', mes: null, comprobando: false };
+const estado = {
+  tarjeta: null, usuario: 'ambos', mes: null, comprobando: false,
+  /*
+   * Lo que se busca en la lista del mes. Vive en el estado y no en el DOM
+   * porque la lista se repinta con cada tecla: guardado aquí, el repintado
+   * puede devolver el foco y el cursor donde estaban.
+   */
+  busca: '',
+};
+
+/** Sin acentos ni mayúsculas: «Farmacía» y «FARMACIA» son lo mismo al buscar. */
+const plano = (t) => String(t ?? '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().trim();
+
+/**
+ * ¿Esta fila cuadra con lo que se está buscando?
+ *
+ * Busca por lo que uno tiene delante cuando coteja el estado de cuenta: el
+ * nombre del negocio, qué se compró, la categoría… y el importe. El importe
+ * se compara sobre el número con dos decimales, así que «84,85» y «84.85»
+ * valen igual, y «84» encuentra los 84,85 y los 184,00.
+ */
+function cuadraBusqueda(gasto, cuota, termino) {
+  const q = plano(termino);
+  if (!q) return true;
+  const textos = [gasto.detalle, gasto.proposito, gasto.categoria, gasto.notas];
+  if (textos.some((t) => plano(t).includes(q))) return true;
+  const cifra = q.replace(',', '.').replace(/[^\d.]/g, '');
+  if (!cifra) return false;
+  return [cuota.monto, gasto.monto_total]
+    .some((n) => (Number(n) || 0).toFixed(2).includes(cifra));
+}
 
 /**
  * Panel de comprobación contra el estado de cuenta del banco.
@@ -11619,6 +11699,14 @@ function render(raiz) {
           ${estado.comprobando ? 'Terminar' : '✓ Comprobar'}</button></header>
       ${estado.comprobando ? bloqueComprobacion(t, mes, comp) : `
         <p class="pista" style="margin:-4px 0 10px">Lo que compone los ${money(pago)}.</p>`}
+      <div class="buscador">
+        <span class="buscador-lupa" aria-hidden="true">⌕</span>
+        <input id="busca-movs" type="search" inputmode="search" autocomplete="off"
+               placeholder="Busca por negocio o importe" aria-label="Buscar en los movimientos"
+               value="${esc(estado.busca)}">
+        <button type="button" class="buscador-borrar" id="busca-limpiar"
+                aria-label="Borrar la búsqueda"${estado.busca ? '' : ' hidden'}>✕</button>
+      </div>
       <div id="movs"></div>
     </section>`;
 
@@ -11701,68 +11789,93 @@ function render(raiz) {
   $('#comprometido', raiz).innerHTML = seccionComprometido(t, estado.usuario);
 
   $('#diferidos', raiz).innerHTML = listaDiferidos(t.id, estado.usuario);
-  $('#movs', raiz).innerHTML = listaMovimientos(t.id, mes, estado.usuario, estado.comprobando);
-
   /*
-   * Las casillas se enganchan AQUÍ y no arriba con el resto de controles: la
-   * lista de movimientos se pinta unas líneas más abajo, así que allí todavía
-   * no existían y los clics no llegaban a guardarse.
+   * Pintar la lista y engancharla van JUNTOS: con el buscador, la lista se
+   * repinta sola con cada tecla y los botones recién creados se quedarían sin
+   * oyente. Todo lo que cuelga de una fila se engancha aquí dentro.
    */
-  $$('[data-comprobar]', raiz).forEach((caja) => {
-    caja.addEventListener('change', () => {
-      const [gastoId, n] = caja.dataset.comprobar.split(':');
-      const cuota = db.cuotas.find((c) => c.gasto_id === gastoId && String(c.n_cuota) === n);
-      if (!cuota) return;
-      cuota.conciliado = caja.checked ? 'Si' : '';
-      cuota._ts = Date.now();
-      guardar();
-      // Se refresca solo el resumen: repintar la vista entera con cada clic
-      // haría saltar el scroll a lo alto en mitad de la comprobación.
-      refrescarResumen();
-    });
-  });
+  const pintarMovs = () => {
+    const caja = $('#movs', raiz);
+    caja.innerHTML = listaMovimientos(t.id, mes, estado.usuario, estado.comprobando, estado.busca);
 
-  /*
-   * «Por diferir»: el consumo ya está en el estado de cuenta de este mes, pero
-   * se va a pedir al banco que lo pase a cuotas, así que no se paga ahora. El
-   * consumo del mes no se toca —tiene que seguir cuadrando con el banco—; lo
-   * que cambia es el importe del botón de pagar.
-   */
-  $$('[data-aplazar]', raiz).forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const gasto = db.gastosTarjeta.find((g) => g.id === btn.dataset.aplazar);
-      if (!gasto) return;
-      gasto.aplazado = gasto.aplazado === 'Si' ? '' : 'Si';
-      gasto._ts = Date.now();
-      guardar();
-      render(raiz);
+    $$('[data-comprobar]', caja).forEach((casilla) => {
+      casilla.addEventListener('change', () => {
+        const [gastoId, n] = casilla.dataset.comprobar.split(':');
+        const cuota = db.cuotas.find((c) => c.gasto_id === gastoId && String(c.n_cuota) === n);
+        if (!cuota) return;
+        cuota.conciliado = casilla.checked ? 'Si' : '';
+        cuota._ts = Date.now();
+        guardar();
+        // Se refresca solo el resumen: repintar la vista entera con cada clic
+        // haría saltar el scroll a lo alto en mitad de la comprobación.
+        refrescarResumen();
+      });
     });
-  });
 
-  $$('[data-diferir]', raiz).forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const gasto = db.gastosTarjeta.find((g) => g.id === btn.dataset.diferir);
-      if (gasto) formDiferir(gasto, () => render(raiz));
-    });
-  });
-
-  $$('[data-corregir]', raiz).forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const gasto = db.gastosTarjeta.find((g) => g.id === btn.dataset.corregir);
-      if (gasto) {
-        formGastoTarjeta((editado) => { irAlGasto(editado); render(raiz); }, gasto);
-      }
-    });
-  });
-
-  $$('[data-borrar]', raiz).forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const gasto = db.gastosTarjeta.find((g) => g.id === btn.dataset.borrar);
-      confirmar(`¿Eliminar «${gasto?.detalle || btn.dataset.borrar}» y todas sus cuotas?`, () => {
-        eliminar('gastosTarjeta', btn.dataset.borrar);
+    /*
+     * «Por diferir»: el consumo ya está en el estado de cuenta de este mes,
+     * pero se va a pedir al banco que lo pase a cuotas, así que no se paga
+     * ahora. El consumo del mes no se toca —tiene que seguir cuadrando con el
+     * banco—; lo que cambia es el importe del botón de pagar.
+     */
+    $$('[data-aplazar]', caja).forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const gasto = db.gastosTarjeta.find((g) => g.id === btn.dataset.aplazar);
+        if (!gasto) return;
+        gasto.aplazado = gasto.aplazado === 'Si' ? '' : 'Si';
+        gasto._ts = Date.now();
+        guardar();
         render(raiz);
       });
     });
+
+    $$('[data-diferir]', caja).forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const gasto = db.gastosTarjeta.find((g) => g.id === btn.dataset.diferir);
+        if (gasto) formDiferir(gasto, () => render(raiz));
+      });
+    });
+
+    $$('[data-corregir]', caja).forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const gasto = db.gastosTarjeta.find((g) => g.id === btn.dataset.corregir);
+        if (gasto) {
+          formGastoTarjeta((editado) => { irAlGasto(editado); render(raiz); }, gasto);
+        }
+      });
+    });
+
+    $$('[data-borrar]', caja).forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const gasto = db.gastosTarjeta.find((g) => g.id === btn.dataset.borrar);
+        confirmar(`¿Eliminar «${gasto?.detalle || btn.dataset.borrar}» y todas sus cuotas?`, () => {
+          eliminar('gastosTarjeta', btn.dataset.borrar);
+          render(raiz);
+        });
+      });
+    });
+  };
+  pintarMovs();
+
+  /*
+   * El buscador. Repinta SOLO la lista, no la vista: repintarlo todo con cada
+   * tecla perdería el foco del campo y mandaría el scroll arriba, que es
+   * justo lo que se quiere evitar cuando uno está cotejando con el papel del
+   * banco en la mano.
+   */
+  const campo = $('#busca-movs', raiz);
+  const limpiar = $('#busca-limpiar', raiz);
+  campo.addEventListener('input', () => {
+    estado.busca = campo.value;
+    limpiar.hidden = !campo.value;
+    pintarMovs();
+  });
+  limpiar.addEventListener('click', () => {
+    estado.busca = '';
+    campo.value = '';
+    limpiar.hidden = true;
+    pintarMovs();
+    campo.focus();
   });
 }
 
@@ -11845,8 +11958,8 @@ function listaDiferidos(tarjetaId, usuario) {
       en ${filas.length} ${filas.length === 1 ? 'compra diferida' : 'compras diferidas'}.</span></div>`;
 }
 
-function listaMovimientos(tarjetaId, mes, usuario, marcable = false) {
-  const filas = db.cuotas
+function listaMovimientos(tarjetaId, mes, usuario, marcable = false, busca = '') {
+  const todas = db.cuotas
     .filter((c) => c.tarjeta === tarjetaId && c.mes === mes)
     .filter((c) => usuario === 'ambos' || c.usuario === usuario)
     .map((c) => ({ cuota: c, gasto: db.gastosTarjeta.find((g) => g.id === c.gasto_id) }))
@@ -11861,11 +11974,20 @@ function listaMovimientos(tarjetaId, mes, usuario, marcable = false) {
       || (b.gasto._ts || 0) - (a.gasto._ts || 0)
       || String(b.gasto.id).localeCompare(String(a.gasto.id)));
 
-  if (!filas.length) return '<p class="vacio">Sin movimientos en este mes.</p>';
+  const filas = todas.filter((x) => cuadraBusqueda(x.gasto, x.cuota, busca));
+
+  if (!todas.length) return '<p class="vacio">Sin movimientos en este mes.</p>';
+  if (!filas.length) {
+    return `<p class="vacio">Nada que cuadre con «${esc(busca)}» entre los
+      ${todas.length} movimientos del mes. Prueba con parte del nombre del
+      negocio o con el importe.</p>`;
+  }
 
   // El total va al pie para que el detalle cuadre a la vista con la cifra
   // grande del panel: es la comprobación que se hace contra el Excel.
   const total = redondear(filas.reduce((s, x) => s + x.cuota.monto, 0));
+  const totalMes = redondear(todas.reduce((s, x) => s + x.cuota.monto, 0));
+  const filtrando = filas.length !== todas.length;
 
   /*
    * Casi todo el mes vence en la misma fecha, la que anuncia el panel, así que
@@ -11919,9 +12041,12 @@ function listaMovimientos(tarjetaId, mes, usuario, marcable = false) {
         ${notaTexto(gasto.proposito)}
       </li>`;
   }).join('')}</ul>
-    <div class="aviso"><span class="icono">Σ</span>
-      <span>${filas.length} ${filas.length === 1 ? 'movimiento' : 'movimientos'} en el mes ·
-      total <strong>${money(total)}</strong>.</span></div>`;
+    <div class="aviso${filtrando ? ' alerta' : ''}"><span class="icono">Σ</span>
+      <span class="crece">${filtrando
+    ? `${filas.length} de ${todas.length} ${todas.length === 1 ? 'movimiento' : 'movimientos'},
+       <strong>${money(total)}</strong> de los ${money(totalMes)} del mes.`
+    : `${filas.length} ${filas.length === 1 ? 'movimiento' : 'movimientos'} en el mes ·
+       total <strong>${money(total)}</strong>.`}</span></div>`;
 }
 
 return { enfocarGasto, render };
