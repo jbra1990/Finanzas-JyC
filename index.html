@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-IpAdPsB3oGl/wKvZZwvu9Cyj5jH2MYotWcnZ1yM07+A='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-gonzixalXJw1a3kzCYS1ZDl+DgV+T8zpHMhH2KhV8ow='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2379,7 +2379,7 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
   font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
 }
 .veh-datos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.veh-dato {
+.veh-dato, .dato-chip {
   padding: 3px 9px;
   border-radius: var(--radio-pill);
   background: var(--superficie-2);
@@ -2398,6 +2398,113 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
 }
 .veh-btn:hover { background: var(--superficie-2); color: var(--tinta-2); }
 .veh-btn.quita:hover { color: var(--malo); }
+
+/* --- Dónde se puede recortar ---------------------------------------------
+ *
+ * Una barra de tres tramos con el reparto del mes, y debajo una línea por
+ * categoría con el gesto concreto. Los tres niveles llevan color propio, pero
+ * NO el del semáforo: aquí no hay nada mal, hay margen. Rojo para «gasté de
+ * más» y rojo para «esto se puede dejar» dicen cosas distintas.
+ */
+.reparto-niveles {
+  display: flex;
+  gap: 3px;
+  height: 12px;
+  margin: 14px 0 10px;
+}
+.reparto-niveles .tramo { border-radius: var(--radio-pill); min-width: 4px; }
+.n-prescindible { background: var(--acento); }
+.n-ajustable { background: color-mix(in srgb, var(--acento) 45%, var(--superficie-3)); }
+.n-necesario { background: var(--superficie-3); }
+
+.leyenda-niveles { list-style: none; margin: 0 0 6px; padding: 0; }
+.leyenda-niveles li {
+  display: flex; align-items: center; gap: 9px;
+  padding: 5px 0;
+  font-size: 13px;
+}
+.leyenda-niveles i { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.leyenda-niveles b { font-variant-numeric: tabular-nums; font-weight: 620; }
+.leyenda-niveles .pct {
+  width: 42px; text-align: right;
+  color: var(--tinta-3); font-variant-numeric: tabular-nums;
+}
+
+.simulacion {
+  margin: 14px 0 4px;
+  padding: 14px;
+  border-radius: var(--radio-s);
+  background: var(--superficie-2);
+}
+.sim-pregunta { font-size: 13px; color: var(--tinta-2); margin-bottom: 10px; }
+.sim-botones { display: flex; flex-wrap: wrap; gap: 7px; }
+.sim-cifra {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--tinta-3);
+}
+.sim-cifra strong {
+  font-size: 23px;
+  font-weight: 680;
+  letter-spacing: -0.03em;
+  color: var(--tinta);
+  font-variant-numeric: tabular-nums;
+}
+
+.recortes { list-style: none; margin: 0 0 6px; padding: 0; }
+.recortes li { padding: 13px 2px; border-bottom: 1px solid var(--grid); }
+.recortes li:last-child { border-bottom: 0; }
+.rec-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.rec-cat { font-weight: 600; font-size: 13.5px; }
+.rec-mes {
+  flex: none; text-align: right;
+  font-weight: 640; font-size: 14px;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+.rec-mes .pie, .rec-gesto b .pie {
+  display: block;
+  font-size: 10px; font-weight: 550; letter-spacing: 0;
+  color: var(--tinta-3);
+}
+.rec-datos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+/* El gesto: es lo que hay que poder leer de un vistazo, así que se separa. */
+.rec-gesto {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: var(--radio-s);
+  background: color-mix(in srgb, var(--acento) 9%, transparent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.rec-gesto b {
+  flex: none; text-align: right;
+  font-size: 15px; font-weight: 680;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--acento);
+}
+.rec-pie { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.rec-pie select {
+  padding: 5px 9px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--superficie-2);
+  color: var(--tinta-2);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.no-recorta { margin-top: 14px; }
+.no-recorta > summary {
+  cursor: pointer;
+  padding: 10px 0;
+  font-size: 13px;
+  font-weight: 570;
+  color: var(--tinta-2);
+}
+.no-recorta > summary:hover { color: var(--tinta); }
 
 /* Gasto hormiga: la cifra que manda es la del año, no la del corte, así que va
    a la derecha y en grande, donde el ojo ya busca el importe. */
@@ -5284,6 +5391,234 @@ function gastoHormiga(meses, filtros = {}) {
     .sort((a, b) => b.total - a.total);
 }
 
+/* --- Dónde se puede recortar ----------------------------------------------
+ *
+ * El tope dice cuánto no pasarse. El gasto hormiga dice qué se repite sin
+ * darse cuenta. Falta la pregunta que uno se hace de verdad cuando quiere
+ * ahorrar: de todo esto, ¿qué se puede dejar de gastar sin que pase nada?
+ *
+ * Eso no lo puede decidir la app. Que un gimnasio sea imprescindible o un
+ * capricho depende de la vida de cada uno, no de su nombre. Así que la app
+ * propone una clasificación de partida y la deja corregir en un toque; lo
+ * corregido manda y se guarda.
+ *
+ * Lo que sí puede hacer la app, y es lo que aquí vale, es la aritmética:
+ * traducir «recortar» a un gesto concreto y a una cifra al año. «Gastar menos
+ * en restaurantes» no se puede hacer; «salir una vez menos al mes, $179 al
+ * año» sí.
+ */
+
+/** Los tres niveles, del más recortable al menos. El orden es el de la lista. */
+const NIVELES = [
+  {
+    clave: 'prescindible',
+    rotulo: 'Se puede dejar',
+    pista: 'Cada vez es una decisión',
+  },
+  {
+    clave: 'ajustable',
+    rotulo: 'El cuánto lo decides',
+    pista: 'Hace falta, pero no tanto',
+  },
+  {
+    clave: 'necesario',
+    rotulo: 'No se recorta',
+    pista: 'O es un compromiso ya firmado',
+  },
+];
+
+/*
+ * La clasificación de partida, por lo que dice el nombre de la categoría. Se
+ * mira en este orden, así que lo más específico va primero.
+ */
+const PISTAS_NIVEL = [
+  ['prescindible', ['restaurant', 'aperitiv', 'bebida', 'ropa', 'viaje', 'entreten',
+    'regalo', 'juguete', 'digital', 'streaming', 'cafe', 'bar', 'cine', 'ocio',
+    'salida', 'delivery', 'postre', 'snack', 'licor', 'suscripcion']],
+  ['necesario', ['farmacia', 'salud', 'medic', 'veterinar', 'mascota', 'interes',
+    'seguro', 'tramite', 'celular', 'movilizacion', 'ofrenda', 'terreno',
+    'arriendo', 'alquiler', 'agua', 'luz', 'internet', 'educacion', 'colegio',
+    'matricula', 'impuesto', 'pension', 'deuda', 'prestamo']],
+  ['ajustable', ['vivere', 'super', 'mercado', 'combustible', 'gasolina', 'higiene',
+    'casa', 'hogar', 'mantenimiento', 'repuesto', 'auto', 'suplemento', 'gimnasio',
+    'material', 'construccion', 'electrodomestico', 'limpieza']],
+];
+
+const CLAVE_NIVELES = 'necesidad_cats';
+
+function nivelesGuardados() {
+  try {
+    return JSON.parse(db.config[CLAVE_NIVELES] || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+/** La mediana, que aguanta un valor suelto muy alto sin moverse. */
+function medianaDe(xs) {
+  if (!xs.length) return 0;
+  const o = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(o.length / 2);
+  return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2;
+}
+
+/**
+ * Qué tan recortable es una categoría. Lo puesto a mano manda; si no, lo que
+ * sugiere el nombre; y si el nombre no dice nada, «ajustable», que es el
+ * término medio: llamar prescindible a algo por no reconocerlo sería peor.
+ */
+function nivelDe(categoria) {
+  const nombre = String(categoria ?? '').trim();
+  const mio = nivelesGuardados()[nombre];
+  if (mio && NIVELES.some((n) => n.clave === mio)) return mio;
+  const t = plano(nombre);
+  if (!t) return 'ajustable';
+  for (const [nivel, pistas] of PISTAS_NIVEL) {
+    if (pistas.some((pista) => t.includes(pista))) return nivel;
+  }
+  return 'ajustable';
+}
+
+/** Cambia el nivel de una categoría. `null` vuelve a lo que sugiere el nombre. */
+function guardarNivel(categoria, nivel) {
+  const mios = nivelesGuardados();
+  if (!nivel) delete mios[categoria];
+  else mios[categoria] = nivel;
+  db.config[CLAVE_NIVELES] = JSON.stringify(mios);
+}
+
+/** ¿Está puesto a mano, o es lo que dedujo la app? */
+const nivelEsMio = (categoria) => Boolean(nivelesGuardados()[String(categoria ?? '').trim()]);
+
+/** Un hábito se mide en un año: menos no distingue la costumbre de la racha. */
+const MESES_HABITO = 12;
+
+/**
+ * Dónde se puede recortar y cuánto vale hacerlo.
+ *
+ * La ventana son los últimos doce meses CERRADOS. El mes en curso va a medias
+ * y hundiría todas las medias; y con menos de un año, un diciembre o unas
+ * vacaciones desplazan la foto entera.
+ *
+ * Dos cuentas distintas por categoría, y hacen falta las dos:
+ *
+ *   EL DINERO   sale de las cuotas, que es lo que se paga cada mes.
+ *   LAS VECES   salen de las COMPRAS, que es cuántas veces se decidió gastar.
+ *               Un diferido a seis meses es una decisión, no seis.
+ */
+function dondeRecortar({ usuario = 'ambos', meses = MESES_HABITO } = {}) {
+  const hasta = sumarMeses(mesActual(), -1);
+  const ventana = rangoMeses(sumarMeses(hasta, -(meses - 1)), hasta);
+  const enVentana = new Set(ventana);
+  const n = ventana.length;
+
+  const plata = new Map();
+  for (const f of gastosEnMeses(ventana, { usuario })) {
+    const c = f.categoria || 'Sin categoría';
+    plata.set(c, (plata.get(c) || 0) + f.monto);
+  }
+
+  const compras = new Map();
+  const anotar = (categoria, monto, fecha, quien) => {
+    if (!pasaUsuario({ usuario }, quien) || !(monto > 0)) return;
+    const iso = String(fecha ?? '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || !enVentana.has(claveMes(iso))) return;
+    const c = categoria || 'Sin categoría';
+    if (!compras.has(c)) compras.set(c, []);
+    compras.get(c).push(monto);
+  };
+  db.gastosTarjeta.forEach((g) => anotar(g.categoria, Number(g.monto_total) || 0, g.fecha, g.usuario));
+  db.gastosEfectivo.forEach((g) => anotar(g.categoria, Number(g.monto) || 0, g.fecha, g.usuario));
+
+  // Un ingreso no es un gasto que recortar.
+  const ingresos = new Set(db.categorias
+    .filter((c) => c.tipo === 'Ingreso' || c.grupo === 'Ingresos')
+    .map((c) => c.nombre));
+
+  const orden = Object.fromEntries(NIVELES.map((x, i) => [x.clave, i]));
+
+  const filas = [...plata.entries()]
+    .filter(([categoria, total]) => total > 0 && !ingresos.has(categoria))
+    .map(([categoria, bruto]) => {
+      const tickets = compras.get(categoria) || [];
+      const veces = tickets.length;
+      const ticket = redondear(medianaDe(tickets));
+      const total = redondear(bruto);
+      const alMes = redondear(total / n);
+      const vecesMes = veces / n;
+      const nivel = nivelDe(categoria);
+
+      /*
+       * ¿El importe es siempre el mismo? Una suscripción cobra lo mismo todos
+       * los meses y ahí no se puede «gastar menos»: o se cancela o no. Se mide
+       * igual que en el presupuesto: cuánto se desvían los importes de su
+       * propia mediana.
+       */
+      const importeFijo = veces >= 3 && ticket > 0
+        && medianaDe(tickets.map((x) => Math.abs(x - ticket))) / ticket <= 0.08;
+
+      /*
+       * El gesto concreto. «Gastar menos» no se puede hacer; lo que sí se
+       * puede hacer es ir una vez menos, o cancelar, o bajar el ticket.
+       */
+      let gesto = 'ninguno';
+      let ahorroMes = 0;
+      if (nivel !== 'necesario' && total > 0) {
+        if (importeFijo && vecesMes < 1.5) {
+          gesto = 'cancelar';
+          ahorroMes = alMes;
+        } else if (vecesMes >= 1.5) {
+          gesto = 'una-menos';
+          ahorroMes = Math.min(alMes, ticket);
+        } else {
+          gesto = 'la-quinta-parte';
+          ahorroMes = redondear(alMes * 0.2);
+        }
+      }
+
+      return {
+        categoria,
+        nivel,
+        mio: nivelEsMio(categoria),
+        total,
+        alMes,
+        veces,
+        vecesMes: redondear(vecesMes),
+        ticket,
+        importeFijo,
+        gesto,
+        ahorroMes: redondear(ahorroMes),
+        ahorroAnual: redondear(ahorroMes * 12),
+      };
+    })
+    .sort((a, b) => orden[a.nivel] - orden[b.nivel]
+      || b.ahorroAnual - a.ahorroAnual
+      || b.alMes - a.alMes);
+
+  const porNivel = NIVELES.map((x) => {
+    const suyas = filas.filter((f) => f.nivel === x.clave);
+    return {
+      ...x,
+      cuantas: suyas.length,
+      total: redondear(suyas.reduce((s, f) => s + f.total, 0)),
+      alMes: redondear(suyas.reduce((s, f) => s + f.alMes, 0)),
+    };
+  });
+
+  const alMes = redondear(porNivel.reduce((s, x) => s + x.alMes, 0));
+  return {
+    ventana,
+    meses: n,
+    filas,
+    porNivel: porNivel.map((x) => ({ ...x, parte: alMes > 0 ? x.alMes / alMes : 0 })),
+    alMes,
+    total: redondear(porNivel.reduce((s, x) => s + x.total, 0)),
+    // Si se hicieran todos los recortes de la lista.
+    ahorroMes: redondear(filas.reduce((s, f) => s + f.ahorroMes, 0)),
+    ahorroAnual: redondear(filas.reduce((s, f) => s + f.ahorroAnual, 0)),
+  };
+}
+
 /* --- Topes del mes --------------------------------------------------------
  *
  * El presupuesto por categoría dice en qué se puede gastar; el tope dice
@@ -5404,7 +5739,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { HORMIGA, MANTENIMIENTOS, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoHormiga, gastosEnMeses, guardarPlanMantenimiento, ingresoDelMes, kmEnFecha, kmEstimadoEnFecha, kmPorMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+return { HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, ingresoDelMes, kmEnFecha, kmEstimadoEnFecha, kmPorMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -15296,7 +15631,8 @@ M["views/analisis"] = (function () {
  * enseñar.
  */
 
-const {nombreMes, money, moneyHTML, redondear, rangoMeses, mesActual, mesesConDatos, textoFecha, detalleDeGastos, gastoHormiga, HORMIGA, buscarHistorial, odometroHoy} = M["calc"];
+const {nombreMes, money, moneyHTML, redondear, rangoMeses, mesActual, mesesConDatos, textoFecha, detalleDeGastos, gastoHormiga, HORMIGA, buscarHistorial, odometroHoy, dondeRecortar, guardarNivel, NIVELES} = M["calc"];
+const {guardar} = M["store"];
 const {esc, $, $$, segmentado, modal, brindis, opciones, descargar, filaMovimiento} = M["ui"];
 const {informeMensual, compartir} = M["informe"];
 /*
@@ -15313,6 +15649,13 @@ const corte = {
  * atarla a los filtros de arriba la haría inútil justo cuando hace falta.
  */
 let busca = '';
+
+/*
+ * Cuánto se recortaría de lo prescindible en la simulación de «dónde se puede
+ * recortar». No se guarda: es un «¿y si…?» que se mueve mientras se mira, no
+ * una preferencia.
+ */
+let recorte = 25;
 
 function render(raiz) {
   const hoy = mesActual();
@@ -15372,6 +15715,8 @@ function render(raiz) {
       <span class="pista crece">Manda este mes por WhatsApp con todo el detalle.</span>
       <button class="btn primario pequeno" id="btn-pdf">PDF del mes</button>
     </div>
+
+    <section class="tarjeta" id="an-recorte"></section>
 
     <section class="tarjeta" id="an-hormiga"></section>
 
@@ -15444,6 +15789,8 @@ function render(raiz) {
     pintarHallazgos();
     campo.focus();
   });
+
+  pintarRecorte(raiz);
 
   $('#an-hormiga', raiz).innerHTML = seccionHormiga(resumen.meses, {
     usuario: corte.quien, medio: corte.medio,
@@ -15536,6 +15883,155 @@ function seccionHallazgos(termino, quien) {
  *
  * Se cuentan COMPRAS, no cuotas: un diferido a seis meses es una visita.
  */
+/* --- Dónde se puede recortar ---------------------------------------------
+ *
+ * Esta sección no usa el corte de arriba: mira siempre los últimos doce meses
+ * cerrados. Un hábito no se ve en un mes, y el mes en curso va a medias y
+ * hundiría todas las medias. Sí respeta «quién», que sí cambia la respuesta.
+ */
+
+function pintarRecorte(raiz) {
+  const caja = $('#an-recorte', raiz);
+  if (!caja) return;
+  caja.innerHTML = seccionRecorte(corte.quien);
+
+  // Cambiar el nivel de una categoría y repintar solo esta caja: la clave está
+  // en que la lista se reordena, y repintar la vista entera perdería el sitio.
+  $$('#an-recorte select[data-cat]', raiz).forEach((sel) => {
+    sel.addEventListener('change', () => {
+      guardarNivel(sel.dataset.cat, sel.value || null);
+      guardar();
+      pintarRecorte(raiz);
+    });
+  });
+  $$('#an-recorte [data-recorte]', raiz).forEach((b) => {
+    b.addEventListener('click', () => {
+      recorte = Number(b.dataset.recorte);
+      pintarRecorte(raiz);
+    });
+  });
+}
+
+function seccionRecorte(quien) {
+  const r = dondeRecortar({ usuario: quien });
+  if (!r.filas.length) {
+    return `<header><h2>Dónde recortar</h2></header>
+      <p class="vacio">Todavía no hay un año de gastos con el que mirar los
+        hábitos. En cuanto lo haya, aquí sale en qué se puede gastar menos.</p>`;
+  }
+
+  const primero = r.ventana[0];
+  const ultimo = r.ventana[r.ventana.length - 1];
+  const suelto = r.porNivel.find((x) => x.clave === 'prescindible');
+  const ahorra = redondear((suelto?.alMes || 0) * (recorte / 100));
+
+  return `
+    <header><h2>Dónde recortar</h2>
+      <span class="pista">Último año</span></header>
+
+    <p class="pista">De ${esc(nombreMes(primero, true))} a ${esc(nombreMes(ultimo, true))}
+      se fueron <strong>${money(r.alMes)} al mes</strong>. Así se reparten, según
+      cuánto margen hay en cada uno para gastar menos.</p>
+
+    <div class="reparto-niveles">
+      ${r.porNivel.filter((x) => x.alMes > 0).map((x) => `
+        <div class="tramo n-${esc(x.clave)}" style="flex:${x.parte.toFixed(4)}"
+             title="${esc(x.rotulo)}: ${money(x.alMes)} al mes"></div>`).join('')}
+    </div>
+    <ul class="leyenda-niveles">
+      ${r.porNivel.filter((x) => x.alMes > 0).map((x) => `
+        <li><i class="n-${esc(x.clave)}"></i>
+          <span class="crece">${esc(x.rotulo)}</span>
+          <b>${money(x.alMes)}</b>
+          <span class="pct">${Math.round(x.parte * 100)} %</span></li>`).join('')}
+    </ul>
+
+    ${suelto && suelto.alMes > 0 ? `
+      <div class="simulacion">
+        <div class="sim-pregunta">Si gastas menos en lo que se puede dejar…</div>
+        <div class="sim-botones">
+          ${[10, 25, 50].map((p) => `
+            <button type="button" class="btn pequeno${p === recorte ? ' primario' : ''}"
+                    data-recorte="${p}">${p} % menos</button>`).join('')}
+        </div>
+        <div class="sim-cifra">
+          <strong>${money(redondear(ahorra * 12))}</strong> al año
+          <span class="pista">· ${money(ahorra)} al mes</span>
+        </div>
+      </div>` : ''}
+
+    <h3>Uno por uno</h3>
+    <p class="pista">Lo que propone cada línea es un gesto que se puede hacer,
+      no un porcentaje. Si alguna está mal clasificada, cámbiala: manda lo que
+      tú pongas.</p>
+
+    ${listaRecorte(r.filas.filter((f) => f.nivel !== 'necesario'))}
+
+    ${bloqueNoSeRecorta(r.filas.filter((f) => f.nivel === 'necesario'))}`;
+}
+
+/** El gesto concreto de una línea, en palabras y en dinero. */
+function textoGesto(f) {
+  if (f.gesto === 'cancelar') {
+    return `Importe fijo: aquí solo se ahorra <strong>cancelando o bajando de
+      plan</strong>`;
+  }
+  if (f.gesto === 'una-menos') {
+    return `<strong>Una vez menos al mes</strong>, de las de
+      ${money(f.ticket)}`;
+  }
+  return '<strong>Un 20 % menos</strong> en el año';
+}
+
+function listaRecorte(filas) {
+  if (!filas.length) return '<p class="vacio">Nada clasificado como recortable.</p>';
+  return `<ul class="recortes">${filas.map((f) => `
+    <li data-nivel="${esc(f.nivel)}">
+      <div class="rec-cab">
+        <span class="rec-cat">${esc(f.categoria)}</span>
+        <span class="rec-mes">${money(f.alMes)}<span class="pie">al mes</span></span>
+      </div>
+      <div class="rec-datos">
+        <span class="dato-chip">${f.vecesMes >= 1
+    ? `${f.vecesMes.toFixed(1).replace('.', ',')} veces al mes`
+    : `${f.veces} ${f.veces === 1 ? 'vez' : 'veces'} en el año`}</span>
+        ${f.ticket > 0 ? `<span class="dato-chip">${money(f.ticket)} lo habitual</span>` : ''}
+        ${f.importeFijo ? '<span class="dato-chip">importe fijo</span>' : ''}
+      </div>
+      ${f.ahorroAnual > 0 ? `
+        <div class="rec-gesto">
+          <span class="crece">${textoGesto(f)}</span>
+          <b>${money(f.ahorroAnual)}<span class="pie">al año</span></b>
+        </div>` : ''}
+      <div class="rec-pie">
+        ${selectorNivel(f)}
+      </div>
+    </li>`).join('')}</ul>`;
+}
+
+function selectorNivel(f) {
+  return `<select data-cat="${esc(f.categoria)}"
+                  aria-label="Cuánto se puede recortar en ${esc(f.categoria)}">
+    ${NIVELES.map((n) => `<option value="${esc(n.clave)}"${
+  n.clave === f.nivel ? ' selected' : ''}>${esc(n.rotulo)}</option>`).join('')}
+    <option value="">Como lo deduzca la app</option>
+  </select>${f.mio ? '<span class="chip">a mi medida</span>' : ''}`;
+}
+
+function bloqueNoSeRecorta(filas) {
+  if (!filas.length) return '';
+  const alMes = redondear(filas.reduce((s, f) => s + f.alMes, 0));
+  return `
+    <details class="no-recorta">
+      <summary>No se recorta · ${filas.length}
+        ${filas.length === 1 ? 'categoría' : 'categorías'}, ${money(alMes)} al mes</summary>
+      <p class="pista">Aquí están las que la app da por necesarias o por ya
+        comprometidas. Si alguna no lo es, cámbiala y pasa a la lista de
+        arriba.</p>
+      ${listaRecorte(filas)}
+    </details>`;
+}
+
 function seccionHormiga(meses, filtros) {
   const filas = gastoHormiga(meses, filtros);
   const cab = `<header><h2>Gasto hormiga</h2>
