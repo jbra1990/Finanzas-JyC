@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-gonzixalXJw1a3kzCYS1ZDl+DgV+T8zpHMhH2KhV8ow='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-dOW4XKBnT7oy5NddSd5F6PYBptwBNLGwbahze7vC6hA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2398,6 +2398,32 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
 }
 .veh-btn:hover { background: var(--superficie-2); color: var(--tinta-2); }
 .veh-btn.quita:hover { color: var(--malo); }
+
+/* --- Lo que viene: el gasto del carro a doce meses ------------------------ */
+.veh-total { margin-bottom: 4px; }
+.viene { list-style: none; margin: 10px 0 6px; padding: 0; }
+.viene li { padding: 13px 2px; border-bottom: 1px solid var(--grid); }
+.viene li:last-child { border-bottom: 0; }
+/* Lo vencido no es una previsión: es un gasto que ya debería haber salido. */
+.viene li[data-vencido="si"] {
+  border-left: 3px solid var(--critico);
+  padding-left: 10px;
+  margin-left: -2px;
+}
+.viene .rec-mes { color: var(--tinta); }
+.viene .veh-acciones { justify-content: space-between; align-items: center; }
+.veh-btn.apunta { color: var(--acento); }
+.veh-btn.apunta:hover { background: color-mix(in srgb, var(--acento) 12%, transparent); }
+.veh-btn[disabled] { opacity: 0.4; cursor: default; }
+.aviso-flojo {
+  margin: 9px 0 0;
+  padding: 8px 11px;
+  border-radius: var(--radio-chico);
+  background: color-mix(in srgb, var(--alerta) 10%, transparent);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--tinta-2);
+}
 
 /* --- Dónde se puede recortar ---------------------------------------------
  *
@@ -5112,16 +5138,26 @@ function planesMantenimiento() {
       ...m,
       km: suyo.km !== undefined ? (Number(suyo.km) || null) : m.km,
       meses: suyo.meses !== undefined ? (Number(suyo.meses) || null) : m.meses,
+      // Lo que uno espera pagar. No hay valor de manual: los precios son de
+      // cada taller y de cada año, así que o sale del propio historial o lo
+      // escribe quien lo paga.
+      costo: Number(suyo.costo) || null,
       ajustado: suyo.km !== undefined || suyo.meses !== undefined,
     };
   });
 }
 
-/** Guarda el intervalo de uno. `null` en los dos vuelve a lo de manual. */
-function guardarPlanMantenimiento(clave, { km, meses }) {
+/** Guarda el intervalo y el costo de uno. Todo en blanco vuelve a lo de manual. */
+function guardarPlanMantenimiento(clave, { km, meses, costo = undefined }) {
   const mios = planesGuardados();
-  if (km === null && meses === null) delete mios[clave];
-  else mios[clave] = { km: km || null, meses: meses || null };
+  const antes = mios[clave] || {};
+  const nuevo = {
+    km: km || null,
+    meses: meses || null,
+    costo: costo === undefined ? (antes.costo || null) : (costo || null),
+  };
+  if (!nuevo.km && !nuevo.meses && !nuevo.costo) delete mios[clave];
+  else mios[clave] = nuevo;
   db.config.mantenimiento_planes = JSON.stringify(mios);
 }
 
@@ -5199,6 +5235,41 @@ function eventosVehiculo() {
 }
 
 /**
+ * Lo que cuesta un mantenimiento, para poder presupuestarlo.
+ *
+ * No hay precio «de manual»: depende del taller y del año. Así que sale de lo
+ * que uno pagó las veces anteriores —la MEDIANA, para que un trabajo grande
+ * suelto no lo dispare— y se puede escribir a mano, que manda.
+ *
+ * Lo importante es que dice DE DÓNDE sale y si se puede confiar. En este carro,
+ * el aceite tiene cuatro registros parecidos y la mediana vale; los frenos
+ * tienen $25,65 y $352,65 —uno era un trabajo que incluía amortiguadores— y ahí
+ * la mediana no significa nada. Cuando los importes anteriores se separan
+ * demasiado se marca como disperso, para pedir el dato en vez de inventarlo.
+ */
+function costoTipico(clave, eventos = null) {
+  const plan = planesMantenimiento().find((p) => p.clave === clave);
+  if (plan?.costo > 0) {
+    return { monto: redondear(plan.costo), base: 'mio', veces: 0, disperso: false };
+  }
+  const suyos = (eventos || eventosVehiculo())
+    .filter((e) => e.tipo === clave && e.monto > 0)
+    .map((e) => e.monto);
+  if (!suyos.length) return { monto: 0, base: 'ninguno', veces: 0, disperso: false };
+
+  const orden = [...suyos].sort((a, b) => a - b);
+  const mitad = Math.floor(orden.length / 2);
+  const mediana = orden.length % 2 ? orden[mitad] : (orden[mitad - 1] + orden[mitad]) / 2;
+  return {
+    monto: redondear(mediana),
+    base: 'historial',
+    veces: suyos.length,
+    // Con el mayor más de tres veces el menor, no son el mismo trabajo.
+    disperso: orden.length >= 2 && orden[orden.length - 1] > orden[0] * 3,
+  };
+}
+
+/**
  * Cómo va cada mantenimiento: cuándo se hizo el último y cuándo toca el
  * siguiente, en kilómetros y en fecha.
  *
@@ -5212,11 +5283,12 @@ function estadoMantenimientos() {
   const hoy = new Date().toISOString().slice(0, 10);
 
   return planesMantenimiento().map((plan) => {
+    const costo = costoTipico(plan.clave, eventos);
     const suyos = eventos.filter((e) => e.tipo === plan.clave);
     const ultimo = suyos[0] || null;
     if (!ultimo) {
       return {
-        ...plan, ultimo: null, veces: 0, estado: 'sin-datos',
+        ...plan, ultimo: null, veces: 0, estado: 'sin-datos', costo,
       };
     }
 
@@ -5250,6 +5322,20 @@ function estadoMantenimientos() {
       haciaFecha: plan.km && kmUltimo > 0
         ? fechaAlKilometraje(Math.round(kmUltimo + plan.km)) : null,
       proximaFecha: plan.meses ? sumarDias(ultimo.fecha, Math.round(plan.meses * 30.44)) : null,
+      /*
+       * La fecha con la que se presupuesta: de las dos, la que llegue antes.
+       * Si ya venció, es hoy —el gasto está pendiente, no en el futuro—.
+       */
+      fechaProxima: (() => {
+        if (uso >= 1) return hoy;
+        const porKm = plan.km && kmUltimo > 0
+          ? fechaAlKilometraje(Math.round(kmUltimo + plan.km)) : null;
+        const porTiempo = plan.meses
+          ? sumarDias(ultimo.fecha, Math.round(plan.meses * 30.44)) : null;
+        const dos = [porKm, porTiempo].filter(Boolean).sort();
+        return dos[0] || null;
+      })(),
+      costo,
       uso,
       // Se avisa antes de que venza: en el 85 % del intervalo ya hay que ir
       // pidiendo cita, no el día que se pasa.
@@ -5260,6 +5346,97 @@ function estadoMantenimientos() {
     const orden = { vencido: 0, pronto: 1, 'al-dia': 2, 'sin-datos': 3 };
     return orden[a.estado] - orden[b.estado] || (b.uso || 0) - (a.uso || 0);
   });
+}
+
+/**
+ * Lo que toca gastar en el carro de aquí a un año: qué, cuándo y cuánto.
+ *
+ * Es la respuesta a «¿cuánto tengo que apartar?». Cada mantenimiento aporta
+ * una línea con la fecha a la que cae —la que llegue antes de las dos, o hoy
+ * si ya venció—, el kilometraje al que tocará y lo que se espera pagar.
+ *
+ * NO entra solo en el presupuesto, y es a propósito: esto es una previsión de
+ * la app, no una decisión tomada. El presupuesto solo cuenta lo que uno ha
+ * decidido. Desde la lista se puede apuntar el que se quiera hacer, y ahí sí
+ * pasa a contar, como cualquier pago único escrito a mano.
+ *
+ * @returns {object} filas ordenadas por fecha, el reparto por mes y el total
+ */
+function gastoDeMantenimiento(meses = 12) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const limite = sumarDias(hoy, Math.round(meses * 30.44));
+  const ahora = odometroHoy();
+  const ritmo = kmPorMes();
+
+  const filas = estadoMantenimientos()
+    .filter((e) => e.estado !== 'sin-datos' && e.fechaProxima)
+    .filter((e) => e.fechaProxima <= limite)
+    .map((e) => ({
+      clave: e.clave,
+      nombre: e.nombre,
+      fecha: e.fechaProxima,
+      mes: claveMes(e.fechaProxima),
+      vencido: e.estado === 'vencido',
+      // A qué kilometraje caerá: el del intervalo si lo tiene; si no, el que
+      // marcará el carro en esa fecha al ritmo al que anda.
+      km: e.proximoKm || (ritmo && ahora
+        ? Math.round(ahora + (diasEntre(hoy, e.fechaProxima) / 30.44) * ritmo.kmMes)
+        : 0),
+      monto: e.costo.monto,
+      base: e.costo.base,
+      veces: e.costo.veces,
+      disperso: e.costo.disperso,
+      ultimo: e.ultimo,
+      kmUltimo: e.kmUltimo,
+    }))
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  const porMes = new Map();
+  filas.forEach((f) => {
+    const m = porMes.get(f.mes) || { mes: f.mes, monto: 0, cuantos: 0 };
+    m.monto = redondear(m.monto + f.monto);
+    m.cuantos += 1;
+    porMes.set(f.mes, m);
+  });
+
+  /*
+   * EL CONTRASTE CON LA REALIDAD, y es la cifra más importante de aquí.
+   *
+   * Esta previsión solo ve lo que tiene historial Y un intervalo: el aceite,
+   * el filtro, la batería. No ve la bobina que se quemó, ni el embrague, ni la
+   * mano de obra de un taller. En este carro eso es la mayor parte del gasto.
+   *
+   * Sin esta comparación, un total de $29,43 se leería como «el carro me
+   * costará $29 este año», que no solo es falso: es justo lo contrario de lo
+   * que hace falta para presupuestarlo.
+   */
+  const desdeAnio = sumarDias(hoy, -365);
+  const gastadoAnio = redondear(eventosVehiculo()
+    .filter((e) => e.fecha >= desdeAnio && e.fecha <= hoy)
+    .reduce((acc, e) => acc + e.monto, 0));
+
+  // Los que no se pueden prever porque nunca se apuntó ninguno.
+  const sinHistorial = estadoMantenimientos()
+    .filter((e) => e.estado === 'sin-datos')
+    .map((e) => e.nombre);
+
+  return {
+    desde: hoy,
+    hasta: limite,
+    meses,
+    filas,
+    porMes: [...porMes.values()].sort((a, b) => a.mes.localeCompare(b.mes)),
+    total: redondear(filas.reduce((s, f) => s + f.monto, 0)),
+    // Cuántas líneas van sin cifra porque no hay con qué estimarlas.
+    sinCosto: filas.filter((f) => f.base === 'ninguno').length,
+    // Y cuántas la traen pero de un historial que no se parece entre sí.
+    dudosas: filas.filter((f) => f.disperso).length,
+    // Lo que de verdad costó el carro el último año, previsible o no.
+    gastadoAnio,
+    gastadoMes: redondear(gastadoAnio / 12),
+    sinHistorial,
+    ritmo,
+  };
 }
 
 /* --- Lo que ya está comprometido ------------------------------------------
@@ -5739,7 +5916,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, ingresoDelMes, kmEnFecha, kmEstimadoEnFecha, kmPorMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+return { HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, ingresoDelMes, kmEnFecha, kmEstimadoEnFecha, kmPorMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -16284,7 +16461,8 @@ M["views/vehiculo"] = (function () {
  */
 
 const {db, eliminar, guardar} = M["store"];
-const {money, redondear, textoFecha, odometroHoy, kmPorMes, kmEstimadoEnFecha, estadoMantenimientos, eventosVehiculo, planesMantenimiento, guardarPlanMantenimiento, MANTENIMIENTOS} = M["calc"];
+const {money, redondear, textoFecha, odometroHoy, kmPorMes, kmEstimadoEnFecha, estadoMantenimientos, eventosVehiculo, planesMantenimiento, guardarPlanMantenimiento, MANTENIMIENTOS, gastoDeMantenimiento, costoTipico, nombreMes, claveMes} = M["calc"];
+const {fijosManuales, guardarManual} = M["plan"];
 const {esc, $, $$, confirmar, modal, brindis} = M["ui"];
 const {formMantenimiento} = M["forms"];
 /** 284546 → «284.546 km». */
@@ -16348,6 +16526,10 @@ function render(raiz) {
       ${bloqueQueToca(estados, pendientes, odometro, ritmo)}
     </section>
 
+    <section class="tarjeta" id="veh-presupuesto">
+      ${seccionPresupuesto()}
+    </section>
+
     <section class="tarjeta">
       <header><h2>Lo que se le ha hecho</h2><span class="pista">Todo el historial</span></header>
       ${listaEventos(eventos)}
@@ -16358,6 +16540,9 @@ function render(raiz) {
   $('[data-accion="odometro"]', raiz).addEventListener('click',
     () => formOdometro(() => render(raiz)));
 
+  $$('[data-apuntar]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => apuntarEnPresupuesto(btn.dataset.apuntar, () => render(raiz)));
+  });
   $$('[data-plan]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => formPlan(btn.dataset.plan, () => render(raiz)));
   });
@@ -16538,6 +16723,155 @@ function listaEventos(eventos) {
     </li>`).join('')}</ul>`;
 }
 
+/* --- Lo que viene y cuánto cuesta ----------------------------------------
+ *
+ * La pregunta que no contestaba «Qué toca»: ¿cuánto hay que apartar? Saber
+ * que el filtro toca a los 290.602 km no sirve para presupuestar; saber que
+ * cae en enero de 2028 y que cuesta unos $23,55, sí.
+ *
+ * Nada de esto entra solo en el presupuesto. Es una previsión de la app, no
+ * una decisión tomada: el botón de cada línea es el que la convierte en un
+ * gasto apuntado, y hasta entonces es solo información.
+ */
+function seccionPresupuesto() {
+  const p = gastoDeMantenimiento(12);
+  if (!p.filas.length) {
+    return `<header><h2>Lo que viene</h2></header>
+      <p class="vacio">Nada previsto en los próximos doce meses. En cuanto haya
+        más historial —o pongas el odómetro al día— aquí sale qué toca, cuándo y
+        cuánto conviene apartar.</p>`;
+  }
+
+  const apuntados = new Set(fijosManuales()
+    .filter((f) => f.mantenimiento).map((f) => f.mantenimiento));
+  const alMes = redondear(p.total / 12);
+
+  return `
+    <header><h2>Lo que viene</h2><span class="pista">Doce meses</span></header>
+
+    <p class="pista">De aquí a ${esc(nombreMes(claveMes(p.hasta)))} toca
+      ${p.filas.length} ${p.filas.length === 1 ? 'mantenimiento' : 'mantenimientos'}.
+      Las fechas salen del ritmo al que andas${p.ritmo
+    ? `, ${esc(km(p.ritmo.kmMes))} al mes` : ''}; los importes, de lo que
+      pagaste las veces anteriores.</p>
+
+    <div class="panel-datos veh-total">
+      <div><div class="etq">Previsto</div><div class="val">${money(p.total)}</div></div>
+      <div><div class="etq">Apartando al mes</div><div class="val">${money(alMes)}</div></div>
+      <div><div class="etq">Lo más pronto</div>
+        <div class="val">${esc(nombreMes(claveMes(p.filas[0].fecha), true))}</div></div>
+    </div>
+
+    ${p.gastadoAnio > p.total * 1.3 ? `
+      <div class="aviso">
+        <span class="icono">!</span>
+        <span class="crece">Esto <strong>no</strong> es lo que va a costar el
+          carro. El último año se te fueron <strong>${money(p.gastadoAnio)}</strong>
+          en él —${money(p.gastadoMes)} al mes—, y aquí solo cabe lo que se puede
+          prever: lo que tiene historial y un intervalo. Una bobina quemada o un
+          embrague no salen en ninguna lista hasta que pasan.</span>
+      </div>` : ''}
+
+    <ul class="viene">${p.filas.map((f) => `
+      <li${f.vencido ? ' data-vencido="si"' : ''}>
+        <div class="rec-cab">
+          <span class="veh-que">${esc(f.nombre)}</span>
+          <span class="rec-mes">${f.monto > 0 ? money(f.monto) : '—'}</span>
+        </div>
+        <div class="veh-datos">
+          <span class="dato-chip fuerte">${f.vencido
+    ? 'Toca ya' : esc(textoFecha(f.fecha))}</span>
+          ${f.km > 0 ? `<span class="dato-chip">a los ${esc(km(f.km))}</span>` : ''}
+          <span class="dato-chip">${esc(deDonde(f))}</span>
+        </div>
+        ${f.disperso ? `
+          <p class="aviso-flojo">Las veces anteriores pagaste importes muy
+            distintos, así que esta cifra no dice mucho. Escribe en «Cada cuánto»
+            lo que esperas pagar.</p>` : ''}
+        ${f.base === 'ninguno' ? `
+          <p class="aviso-flojo">Todavía no hay con qué estimar el costo.
+            Escríbelo en «Cada cuánto» y aparecerá aquí.</p>` : ''}
+        <div class="veh-acciones">
+          <button class="veh-btn" data-plan="${esc(f.clave)}">Cada cuánto</button>
+          ${apuntados.has(f.clave)
+    ? '<span class="chip">ya en el presupuesto</span>'
+    : `<button class="veh-btn apunta" data-apuntar="${esc(f.clave)}"${
+      f.monto > 0 ? '' : ' disabled'}>Apuntarlo en el presupuesto</button>`}
+        </div>
+      </li>`).join('')}</ul>
+
+    ${p.sinCosto || p.dudosas ? `
+      <p class="pista">${[
+    p.sinCosto ? `${p.sinCosto} sin costo estimado` : '',
+    p.dudosas ? `${p.dudosas} con un historial que no se parece entre sí` : '',
+  ].filter(Boolean).join(' y ')}: el total de arriba se queda corto.</p>` : ''}
+
+    ${p.sinHistorial.length ? `
+      <p class="pista">Y estos no salen porque nunca se apuntó ninguno:
+        <strong>${p.sinHistorial.map((x) => esc(x)).join(', ')}</strong>.
+        En cuanto apuntes uno —con su fecha y su kilometraje— empiezan a contar
+        aquí.</p>` : ''}`;
+}
+
+/** De dónde sale el importe, dicho con todas las letras. */
+function deDonde(f) {
+  if (f.base === 'mio') return 'lo que tú pusiste';
+  if (f.base === 'historial') {
+    return f.veces === 1 ? 'lo que pagaste la única vez' : `mediana de ${f.veces} veces`;
+  }
+  return 'sin costo estimado';
+}
+
+/**
+ * Pasarlo al presupuesto.
+ *
+ * Se crea un pago ÚNICO en el mes que toca, que es exactamente lo que es: un
+ * gasto que se sabe cuándo y por cuánto, y que todavía no ha ocurrido. Así
+ * entra en «Solo lo real» como algo decidido y el presupuesto de ese mes ya lo
+ * cuenta, sin tocar nada del cuadre con Resumen.
+ */
+function apuntarEnPresupuesto(clave, alTerminar) {
+  const f = gastoDeMantenimiento(12).filas.find((x) => x.clave === clave);
+  if (!f) return;
+
+  modal({
+    titulo: `Apuntar: ${f.nombre}`,
+    cuerpo: `
+      <p class="pista" style="margin-top:0">Queda como un pago único en su mes.
+        Puedes cambiarlo o borrarlo desde Presupuesto, en «Los que escribo yo».</p>
+      <div class="filtros">
+        <div class="campo"><label for="ap-mes">Mes</label>
+          <input id="ap-mes" name="mes" type="month" value="${esc(f.mes)}"></div>
+        <div class="campo"><label for="ap-monto">Cuánto</label>
+          <input id="ap-monto" name="monto" type="number" inputmode="decimal"
+                 min="0" step="0.01" value="${f.monto.toFixed(2)}"></div>
+      </div>
+      <p class="pista">Toca ${f.vencido ? 'ya' : `el ${esc(textoFecha(f.fecha))}`}${
+  f.km > 0 ? `, a los ${esc(km(f.km))}` : ''}.</p>`,
+    aceptar: 'Apuntar',
+    alEnviar(d) {
+      const monto = Number(String(d.monto).replace(',', '.')) || 0;
+      if (monto <= 0) return;
+      guardarManual({
+        id: `mant-${clave}`,
+        clase: 'unico',
+        detalle: f.nombre,
+        categoria: 'Mantenimiento',
+        mes: d.mes || f.mes,
+        monto,
+        medio: 'Efectivo',
+        activo: true,
+        pagos: [],
+        // Para reconocerlo después y no ofrecer apuntarlo dos veces.
+        mantenimiento: clave,
+      });
+      guardar();
+      brindis('Apuntado en el presupuesto');
+      alTerminar?.();
+    },
+  });
+}
+
 /**
  * Poner el odómetro al día.
  *
@@ -16602,6 +16936,7 @@ function formPlan(clave, alTerminar) {
   const plan = planesMantenimiento().find((p) => p.clave === clave);
   if (!plan) return;
   const base = MANTENIMIENTOS.find((m) => m.clave === clave);
+  const deducido = costoTipico(clave).base === 'historial' ? costoTipico(clave).monto : 0;
 
   modal({
     titulo: `Cada cuánto: ${plan.nombre}`,
@@ -16617,6 +16952,13 @@ function formPlan(clave, alTerminar) {
           <input id="pl-meses" name="meses" type="number" inputmode="numeric" min="0" max="120"
                  step="1" value="${plan.meses || ''}" placeholder="${base?.meses || ''}"></div>
       </div>
+      <div class="campo"><label for="pl-costo">Cuánto esperas pagar</label>
+        <input id="pl-costo" name="costo" type="number" inputmode="decimal" min="0"
+               step="0.01" value="${plan.costo || ''}"
+               placeholder="${deducido > 0 ? deducido.toFixed(2) : ''}">
+        <span class="pista">${deducido > 0
+    ? `De tu historial salen ${money(deducido)}. Lo que escribas aquí manda.`
+    : 'No hay historial con qué estimarlo. Si lo escribes, entra en «Lo que viene».'}</span></div>
       <p class="pista">De manual: ${base?.km ? `cada ${km(base.km)}` : ''}${
   base?.km && base?.meses ? ' o ' : ''}${base?.meses ? `cada ${base.meses} meses` : ''}.</p>`,
     aceptar: 'Guardar',
@@ -16624,6 +16966,7 @@ function formPlan(clave, alTerminar) {
       guardarPlanMantenimiento(clave, {
         km: Number(d.km) || null,
         meses: Number(d.meses) || null,
+        costo: Number(String(d.costo).replace(',', '.')) || null,
       });
       guardar();
       brindis('Intervalo guardado');
