@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-dOW4XKBnT7oy5NddSd5F6PYBptwBNLGwbahze7vC6hA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-tTdOnlBi/xdrQ9P0Ip1PCMBNo03VLRvUOjrmBs7Ypd0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2096,38 +2096,98 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
 }
 
 /*
- * Los topes del mes. Tres bloques, uno por vigilancia, con una franja de color
- * al canto: en una pantalla de teléfono el color del borde se ve antes que
- * cualquier cifra, y la pregunta que se hace uno antes de comprar —«¿voy
- * bien?»— se responde de un vistazo.
+ * Los topes del mes. Arriba la cifra del mes entero —cuánto queda o cuánto de
+ * más—, y debajo efectivo y tarjetas en filas, cada una con una barra que
+ * lleva el tope MARCADO: la parte de dentro del tope en un color, la de más en
+ * rojo. Antes la barra se llenaba al 100 % en cuanto se pasaba y un +21 % no
+ * se distinguía de un +140 %.
  */
-.topes { display: grid; gap: 10px; margin-bottom: 12px; }
-.tope {
-  padding: 11px 13px 10px;
-  border-radius: var(--radio-l);
-  border: 1px solid var(--borde);
-  border-left: 3px solid var(--ok);
-  background: var(--superficie-2);
+.tope-titular { margin: 2px 0 14px; }
+.tope-etq {
+  display: block;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--tinta-3);
 }
-.tope[data-estado="alerta"] { border-left-color: var(--alerta); }
-.tope[data-estado="critico"] { border-left-color: var(--critico); }
+.tope-grande {
+  display: block;
+  margin: 3px 0 2px;
+  font-size: 36px; font-weight: 700; letter-spacing: -0.035em; line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+}
+.tope-sub { font-size: 12.5px; color: var(--tinta-2); font-variant-numeric: tabular-nums; }
+.tope-titular[data-estado="critico"] .tope-etq,
+.tope-titular[data-estado="critico"] .tope-grande { color: var(--critico); }
+.tope-titular[data-estado="alerta"] .tope-etq,
+.tope-titular[data-estado="alerta"] .tope-grande { color: var(--alerta); }
+.tope-titular[data-estado="bien"] .tope-grande { color: var(--ok); }
+
+.tope-imposible { margin: 0 0 12px; }
+
+.topes { display: grid; gap: 0; margin-bottom: 10px; }
+.tope { padding: 12px 0 11px; border-bottom: 1px solid var(--grid); }
+.tope:last-child { border-bottom: 0; }
 .tope-cab {
   display: flex; align-items: baseline; justify-content: space-between;
-  gap: 10px; margin-bottom: 8px;
+  gap: 10px;
 }
-.tope-rotulo { font-size: 12.5px; font-weight: 570; }
+.tope-rotulo { font-size: 13.5px; font-weight: 600; }
 .tope-cifra {
-  font-size: 12.5px; font-weight: 640; white-space: nowrap;
-  font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+  font-size: 14.5px; font-weight: 680; white-space: nowrap;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.015em;
 }
-.tope .medidor { margin: 0; }
+
+/* La barra: dentro del tope, lo de más, y la marca del tope con su cifra. */
+.tope-pista {
+  position: relative;
+  height: 9px;
+  margin: 22px 0 7px;
+  border-radius: var(--radio-pill);
+  background: var(--superficie-3);
+}
+.tope-dentro, .tope-fuera {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  border-radius: var(--radio-pill);
+}
+.tope-dentro { background: var(--ok); }
+.tope[data-estado="alerta"] .tope-dentro { background: var(--alerta); }
+.tope[data-estado="critico"] .tope-dentro {
+  background: color-mix(in srgb, var(--critico) 45%, var(--superficie-3));
+}
+.tope-fuera { background: var(--critico); border-radius: 0 var(--radio-pill) var(--radio-pill) 0; }
+.tope-marca {
+  position: absolute; top: -4px; bottom: -4px;
+  width: 2px; margin-left: -1px;
+  border-radius: 1px;
+  background: var(--tinta);
+}
+.tope-marca::after {
+  content: attr(data-t);
+  position: absolute; bottom: calc(100% + 3px); left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px; font-weight: 650; white-space: nowrap;
+  color: var(--tinta-2);
+  font-variant-numeric: tabular-nums;
+}
+/* En los extremos la etiqueta se alinea hacia dentro para no salirse. */
+.tope-marca[data-lado="fin"]::after { left: auto; right: -1px; transform: none; }
+.tope-marca[data-lado="inicio"]::after { left: -1px; transform: none; }
 .tope-pie {
-  margin-top: 7px;
-  font-size: 11.5px; color: var(--tinta-3);
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 12px; color: var(--tinta-3);
   font-variant-numeric: tabular-nums;
 }
 .tope-pie strong { color: var(--tinta-2); font-weight: 620; }
-.tope-pie strong.mal { color: var(--critico); }
+.tope-pie .mal { color: var(--critico); font-weight: 640; }
+.tope-realismo {
+  margin: 0 0 10px;
+  padding: 11px 13px;
+  border-radius: var(--radio-s);
+  background: var(--superficie-2);
+  font-size: 12.5px; line-height: 1.5;
+  color: var(--tinta-2);
+}
+.tope-realismo strong { color: var(--tinta); font-weight: 620; }
 /*
  * La sombra de lo ya firmado, mes a mes. Barras y no tabla: lo que hay que ver
  * de un golpe es hasta dónde llega y si va bajando o no.
@@ -2574,7 +2634,7 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
 }
 /* A la derecha: el botón flotante de «+» vive en la esquina de abajo a la
    izquierda y tapaba este. */
-.topes-pie { display: flex; justify-content: flex-end; }
+.topes-pie { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 
 /* El mismo medidor dentro del panel oscuro. */
 .panel .medidor-pista { background: rgba(255, 255, 255, 0.15); }
@@ -5890,6 +5950,43 @@ function topesDelMes(mes = mesActual(), usuario = 'ambos') {
   }).filter((f) => f.estado !== 'sin-tope');
 }
 
+/**
+ * ¿Es alcanzable el tope? Se contrasta con los últimos doce meses cerrados.
+ *
+ * Un tope por debajo de lo que se gasta SIEMPRE no avisa de nada: salta todos
+ * los meses y acaba ignorándose. Con un tope de $870 y un historial en el que
+ * ningún mes bajó de $917, el semáforo en rojo no dice «este mes te pasaste»,
+ * dice «el tope está mal puesto», y la tarjeta tiene que poder decirlo.
+ *
+ * @returns {Object<string, {cabrian:number, meses:number, minimo:number, media:number}>}
+ */
+function realismoDeTopes(usuario = 'ambos') {
+  const hasta = sumarMeses(mesActual(), -1);
+  const ventana = rangoMeses(sumarMeses(hasta, -11), hasta);
+  const porMes = ventana.map((m) => {
+    const x = { efectivo: 0, tarjeta: 0, total: 0 };
+    for (const g of gastosEnMeses([m], { usuario })) {
+      x[g.tipo === 'Tarjeta' ? 'tarjeta' : 'efectivo'] += g.monto;
+      x.total += g.monto;
+    }
+    return x;
+  });
+  const out = {};
+  for (const { clave, config } of TOPES) {
+    const tope = aNumeroSuelto(db.config[config]);
+    if (!(tope > 0)) continue;
+    const valores = porMes.map((x) => redondear(x[clave]));
+    out[clave] = {
+      tope,
+      meses: valores.length,
+      cabrian: valores.filter((v) => v <= tope).length,
+      minimo: Math.min(...valores),
+      media: redondear(valores.reduce((a, b) => a + b, 0) / valores.length),
+    };
+  }
+  return out;
+}
+
 /** Número a partir de lo guardado en config, que siempre viaja como texto. */
 function aNumeroSuelto(v) {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
@@ -5916,7 +6013,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, ingresoDelMes, kmEnFecha, kmEstimadoEnFecha, kmPorMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+return { HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, ingresoDelMes, kmEnFecha, kmEstimadoEnFecha, kmPorMes, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -11711,7 +11808,7 @@ M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
 const {db, tarjetas, usuarios} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, pagoDeTarjeta, topesDelMes, umbralAviso, comprometidoEnMes} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, pagoDeTarjeta, topesDelMes, umbralAviso, comprometidoEnMes, realismoDeTopes} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
 const {crear, esc, $, segmentado, opciones} = M["ui"];
 const {formGastoTarjeta, formIngreso, formTopes} = M["forms"];
@@ -11934,15 +12031,29 @@ function render(raiz, { irA }) {
 /*
  * El semáforo del mes: cuánto se lleva gastado contra los tres topes.
  *
- * Es la parte que de verdad cambia una decisión, así que va arriba del todo y
- * no escondida en una tabla. Lo importante no es el porcentaje sino las dos
- * frases de abajo: cuánto queda y cuánto se puede gastar al día sin pasarse.
- * Con el tope ya rebasado, cuánto de más.
+ * Arriba va UNA cifra, la del mes entero: cuánto queda o cuánto de más. Es la
+ * que contesta la pregunta con la que se abre la tarjeta. Debajo, efectivo y
+ * tarjetas por separado, cada uno con su barra.
+ *
+ * Las barras llevan el tope MARCADO y una escala común. Con la barra llena al
+ * 100 % en cuanto se pasa, un +21 % y un +140 % se veían idénticos: tres
+ * rectángulos rojos iguales que no decían nada. Ahora la parte de dentro del
+ * tope y la de más se ven, y se comparan entre sí.
+ *
+ * Y dos avisos que antes no estaban, o estaban enterrados:
+ *   · cuando lo ya comprometido en cuotas supera el tope de tarjetas, ese tope
+ *     no se podía cumplir desde el día uno —no es que se gastara de más—;
+ *   · cuando el tope está por debajo de lo que se gasta casi todos los meses,
+ *     el rojo no dice «te pasaste», dice «el tope está mal puesto».
  */
 function seccionTopes(mes, usuario) {
   const filas = topesDelMes(mes, usuario);
+  const enCurso = mes === mesActual();
+  const dias = filas.length ? Math.max(0, Math.round((1 - filas[0].corrido) * 30.4)) : 0;
+  const esquina = !enCurso ? 'Mes cerrado'
+    : dias === 1 ? 'Queda 1 día' : `Quedan ${dias} días`;
   const cab = `<header><h2>Topes de ${esc(nombreMes(mes))}</h2>
-    <span class="pista">Cuánto queda</span></header>`;
+    <span class="pista">${filas.length ? esc(esquina) : 'Cuánto queda'}</span></header>`;
 
   if (!filas.length) {
     return `${cab}
@@ -11952,45 +12063,101 @@ function seccionTopes(mes, usuario) {
       <div class="topes-pie"><button class="btn pequeno" id="btn-topes">Poner topes</button></div>`;
   }
 
-  const dias = Math.max(0, Math.round((1 - filas[0].corrido) * 30.4));
-  return `${cab}
-    <div class="topes">${filas.map((f) => {
-    const color = f.estado === 'pasado' ? 'critico'
-      : f.estado === 'cerca' || f.estado === 'ritmo' ? 'alerta' : 'bien';
-    /*
-     * Del tope de tarjetas, la parte que ya estaba decidida antes de empezar
-     * el mes. Un tope de $1.100 con $500 en cuotas no deja $1.100 para gastar,
-     * deja $600, y esa es la cifra con la que se decide si se compra o no.
-     */
-    const comprometido = f.clave === 'tarjeta' ? comprometidoEnMes(mes, null, usuario) : 0;
-    const pie = f.estado === 'pasado'
-      ? `<strong class="mal">${money(f.exceso)} de más</strong>`
-      : f.estado === 'ritmo'
-        ? `<strong class="mal">a este ritmo acabas en ${money(f.proyeccion)}</strong>`
-        : `Quedan <strong>${money(f.resto)}</strong>${f.porDia > 0
-          ? ` · ${money(f.porDia)} al día` : ''}`;
+  const color = (f) => (f.estado === 'pasado' ? 'critico'
+    : f.estado === 'cerca' || f.estado === 'ritmo' ? 'alerta' : 'bien');
+
+  // El titular: el tope del mes entero si lo hay. Si no, el primero que haya.
+  const total = filas.find((f) => f.clave === 'total');
+  const titular = total || null;
+  const lineas = filas.filter((f) => f !== titular);
+
+  const bloqueTitular = titular ? (() => {
+    const [etq, cifra] = titular.estado === 'pasado'
+      ? ['Te pasaste por', money(titular.exceso)]
+      : titular.estado === 'ritmo'
+        ? ['A este ritmo acabas en', money(titular.proyeccion)]
+        : [enCurso ? 'Te quedan' : 'Te sobraron', money(titular.resto)];
     return `
-      <div class="tope" data-estado="${color}">
+      <div class="tope-titular" data-estado="${color(titular)}">
+        <span class="tope-etq">${etq}</span>
+        <span class="tope-grande">${cifra}</span>
+        <span class="tope-sub">${money(titular.real)} gastado · ${money(titular.tope)} de tope${
+  titular.estado !== 'pasado' && titular.porDia > 0 && enCurso
+    ? ` · ${money(titular.porDia)} al día` : ''}</span>
+      </div>`;
+  })() : '';
+
+  // Lo ya comprometido en cuotas, contra el tope de tarjetas.
+  const tj = filas.find((f) => f.clave === 'tarjeta');
+  const comprometido = tj ? comprometidoEnMes(mes, null, usuario) : 0;
+  const imposible = tj && comprometido >= tj.tope;
+  const avisoImposible = imposible ? `
+    <div class="aviso alerta tope-imposible"><span class="icono">!</span>
+      <span class="crece">El tope de tarjetas no se podía cumplir:
+        <strong>${money(comprometido)} ya estaban comprometidos</strong> en cuotas
+        antes de empezar el mes, de un tope de ${money(tj.tope)}.</span></div>` : '';
+
+  // Una escala para todas las barras: así se comparan entre sí.
+  const escala = Math.max(...lineas.map((f) => Math.max(f.real, f.tope)), 1);
+
+  const bloqueLineas = lineas.map((f) => {
+    const dentro = Math.min(f.real, f.tope) / escala * 100;
+    const fuera = Math.max(0, f.real - f.tope) / escala * 100;
+    const marca = f.tope / escala * 100;
+    const pie = f.estado === 'pasado'
+      ? `<span class="mal">${money(f.exceso)} de más</span><span>${Math.round(f.uso)} % del tope</span>`
+      : f.estado === 'ritmo'
+        ? `<span class="mal">a este ritmo, ${money(f.proyeccion)}</span><span>${Math.round(f.uso)} %</span>`
+        : `<span>Quedan <strong>${money(f.resto)}</strong>${f.porDia > 0 && enCurso
+          ? ` · ${money(f.porDia)} al día` : ''}</span><span>${Math.round(f.uso)} %</span>`;
+    const suave = f.clave === 'tarjeta' && comprometido > 0 && !imposible ? `
+      <span class="tope-comprometido">De ese tope, <strong>${money(comprometido)}</strong>
+        ya están comprometidos en cuotas: libres
+        <strong>${money(Math.max(0, redondear(f.tope - comprometido)))}</strong>.</span>` : '';
+    return `
+      <div class="tope" data-estado="${color(f)}">
         <div class="tope-cab">
           <span class="tope-rotulo">${esc(f.rotulo)}</span>
-          <span class="tope-cifra">${money(f.real)} de ${money(f.tope)}</span>
+          <span class="tope-cifra">${money(f.real)}</span>
         </div>
-        <div class="medidor" data-estado="${color === 'bien' ? '' : color === 'critico' ? 'critico' : 'alerta'}">
-          <div class="medidor-pista">
-            <div class="medidor-relleno" style="width:${Math.min(100, f.uso).toFixed(1)}%"></div>
-          </div>
+        <div class="tope-pista" role="img"
+             aria-label="${esc(f.rotulo)}: ${money(f.real)} de un tope de ${money(f.tope)}">
+          <i class="tope-dentro" style="width:${dentro.toFixed(1)}%"></i>
+          ${fuera > 0 ? `<i class="tope-fuera" style="left:${dentro.toFixed(1)}%;width:${fuera.toFixed(1)}%"></i>` : ''}
+          <b class="tope-marca" style="left:${marca.toFixed(1)}%" data-t="${esc(money(f.tope))}"${
+  marca > 82 ? ' data-lado="fin"' : marca < 18 ? ' data-lado="inicio"' : ''}></b>
         </div>
-        <div class="tope-pie">${pie}${f.clave === 'tarjeta' && comprometido > 0 ? `
-          <span class="tope-comprometido">De ese tope, <strong>${money(comprometido)}</strong>
-          ya están comprometidos en cuotas: libres
-          <strong>${money(Math.max(0, redondear(f.tope - comprometido)))}</strong>.</span>` : ''}</div>
+        <div class="tope-pie">${pie}</div>${suave}
       </div>`;
-  }).join('')}</div>
-    <div class="aviso"><span class="icono">Σ</span>
-      <span class="crece">${mes === mesActual() && dias > 0
-    ? `Quedan unos ${dias} días de mes. El aviso salta al llegar al ${umbralAviso()} %.`
-    : 'Mes cerrado: esto es cómo acabó.'}</span></div>
-    <div class="topes-pie"><button class="btn pequeno" id="btn-topes">Ajustar topes</button></div>`;
+  }).join('');
+
+  /*
+   * ¿El tope es alcanzable? Se dice solo del peor: si el del mes entero no
+   * habría cabido casi ningún mes, ese es el mensaje; repetirlo tres veces no
+   * añade nada.
+   */
+  const realismo = realismoDeTopes(usuario);
+  const peor = ['total', 'tarjeta', 'efectivo']
+    .map((k) => realismo[k] && { clave: k, ...realismo[k] })
+    .filter((x) => x && x.cabrian <= 2)[0];
+  const nombres = { total: 'en total', tarjeta: 'en tarjetas', efectivo: 'en efectivo' };
+  const avisoRealismo = peor ? `
+    <p class="tope-realismo">En los últimos ${peor.meses} meses ${peor.cabrian === 0
+    ? `<strong>nunca bajaste de ${money(peor.minimo)}</strong> ${nombres[peor.clave]}`
+    : `solo ${peor.cabrian === 1 ? 'un mes cupo' : `${peor.cabrian} meses cupieron`} en
+        ${money(peor.tope)} ${nombres[peor.clave]}`}, y la media fue
+      <strong>${money(peor.media)}</strong>. Con ${money(peor.tope)} de tope, pasarse no
+      es la excepción: va a pasar casi todos los meses.</p>` : '';
+
+  return `${cab}
+    ${bloqueTitular}
+    ${avisoImposible}
+    <div class="topes">${bloqueLineas}</div>
+    ${avisoRealismo}
+    <div class="topes-pie">
+      <span class="pista crece">Aviso al ${umbralAviso()} %</span>
+      <button class="btn pequeno" id="btn-topes">Ajustar topes</button>
+    </div>`;
 }
 
 /**
