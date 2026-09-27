@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-SSpXJ3o+Kzndux80/osDzEH9QwKDEFBUjg8AG2+Ga+M='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-+Vf1sBD+kB45ybCksXu8fXovsGjRurxL/1RunX/ipwQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -1154,6 +1154,51 @@ a { color: var(--acento); }
   flex: 0 1 auto;
   min-width: 0;
   margin-right: 16px;
+}
+
+/*
+ * Tarjetas plegables (plegable.js). Plegada, la tarjeta es solo su cabecera:
+ * un índice de títulos que se abre al tocarlo.
+ *
+ * El cuerpo NO se quita con `display: none`: los gráficos se dibujan al ancho
+ * de su caja, y con la caja fuera medían cero. Se queda con su ancho y altura
+ * cero, invisible —y fuera del tabulador y del lector de pantalla, que es lo
+ * que hace `visibility: hidden`—.
+ */
+.tarjeta[data-plegable] > header { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tarjeta[data-plegable] > header:focus-visible {
+  outline: 2px solid var(--acento); outline-offset: -2px; border-radius: var(--radio-xl);
+}
+.tarjeta[data-plegable] > header h2 {
+  display: flex; align-items: center; gap: 9px;
+}
+/* La flecha: abajo plegada, arriba abierta. Delante del título, a la vista del pulgar. */
+.tarjeta[data-plegable] > header h2::before {
+  content: '';
+  flex: none;
+  width: 7px; height: 7px;
+  margin: -3px 1px 0 2px;
+  border-right: 2px solid var(--tinta-3);
+  border-bottom: 2px solid var(--tinta-3);
+  transform: rotate(45deg);
+  transition: transform 0.18s ease, margin 0.18s ease;
+}
+.tarjeta[data-plegada="no"] > header h2::before { transform: rotate(-135deg); margin-top: 4px; }
+.tarjeta[data-plegada="si"] { padding-bottom: 0; align-self: start; }
+.tarjeta[data-plegada="si"] > header { margin-bottom: 0; }
+/* El filete que baja de la pestaña hacia el cuerpo: sin cuerpo, cuelga en el aire. */
+.tarjeta[data-plegada="si"] > header > .pista::after { display: none; }
+.tarjeta[data-plegada="si"] > :not(header) {
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tarjeta[data-plegable] > header h2::before { transition: none; }
 }
 
 .rejilla { display: grid; gap: 12px; }
@@ -12148,6 +12193,163 @@ function vigilar(raiz) {
 return { ESPERA_MIN, bloquearYa, pedirClave, vigilar };
 })();
 
+M["plegable"] = (function () {
+/**
+ * Tarjetas plegables.
+ *
+ * Las listas largas —el historial del carro, los movimientos del mes, las
+ * categorías— obligaban a bajar mucho para llegar a lo que uno venía a ver.
+ * Plegadas, cada sección es un índice de títulos: se toca el que interesa y
+ * se abre; se vuelve a tocar y se cierra.
+ *
+ * Funciona SOBRE las vistas, sin tocarlas: vigila `#vista` y, cada vez que
+ * aparece una tarjeta con cabecera, la hace plegable y le devuelve el estado
+ * en que la dejó quien la está mirando. Por eso sobrevive a cualquier
+ * repintado.
+ *
+ * El estado es de cada teléfono —en `localStorage`, aparte de los datos— y no
+ * se sincroniza: que uno pliegue algo no tiene por qué plegárselo al otro.
+ * Y se puede apagar entero desde Datos → Ajustes, que deja la app como
+ * estaba.
+ */
+
+const CLAVE_ESTADO = 'finanzas.jc.plegado';
+const CLAVE_ACTIVO = 'finanzas.jc.plegar';
+
+/*
+ * Las que no se pliegan: son la respuesta a lo que uno acaba de escribir en
+ * un buscador, y plegarlas sería esconder justo lo que se pidió.
+ */
+const NUNCA = new Set(['veh-hallazgos', 'hallazgos']);
+
+/* Lo que se pulsa dentro de la cabecera y NO es plegar: tiene su propio uso. */
+const CONTROLES = 'button, a, input, select, textarea, label, summary, [data-no-plegar]';
+
+function leer(clave) {
+  try { return localStorage.getItem(clave); } catch { return null; }
+}
+function escribir(clave, valor) {
+  try { localStorage.setItem(clave, valor); } catch { /* sin almacenamiento: solo dura la sesión */ }
+}
+
+/** ¿Está encendido? Por defecto sí; «no» lo apaga. */
+function plegadoActivo() {
+  return leer(CLAVE_ACTIVO) !== 'no';
+}
+
+let estado = null;
+function estados() {
+  if (!estado) {
+    try { estado = JSON.parse(leer(CLAVE_ESTADO) || '{}') || {}; } catch { estado = {}; }
+  }
+  return estado;
+}
+
+const MESES = /\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/g;
+
+/*
+ * El nombre con que se recuerda una tarjeta: la sección y su título, sin el
+ * mes ni los números. «Topes de Septiembre 2026» y «Topes de Octubre 2026»
+ * son la misma tarjeta, y quien la plegó en septiembre la quiere plegada en
+ * octubre.
+ */
+function claveDe(tarjeta) {
+  const vista = (location.hash || '#resumen').slice(1);
+  if (tarjeta.id) return `${vista}:#${tarjeta.id}`;
+  const titulo = tarjeta.querySelector(':scope > header h2')?.textContent || '';
+  const limpio = titulo.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(MESES, '').replace(/\d+/g, '').replace(/\s+/g, ' ').trim();
+  return `${vista}:${limpio}`;
+}
+
+/** ¿Se puede plegar? Hace falta una cabecera con título. */
+function esPlegable(tarjeta) {
+  return tarjeta.matches('.tarjeta')
+    && !NUNCA.has(tarjeta.id)
+    && Boolean(tarjeta.querySelector(':scope > header h2'));
+}
+
+/** Deja la tarjeta como la dejó quien la mira: plegada salvo que la abriera. */
+function preparar(tarjeta) {
+  const cab = tarjeta.querySelector(':scope > header');
+  if (!plegadoActivo() || !esPlegable(tarjeta)) {
+    delete tarjeta.dataset.plegable;
+    delete tarjeta.dataset.plegada;
+    if (cab) {
+      cab.removeAttribute('role');
+      cab.removeAttribute('tabindex');
+      cab.removeAttribute('aria-expanded');
+    }
+    return;
+  }
+  const abierta = estados()[claveDe(tarjeta)] === 'abierta';
+  tarjeta.dataset.plegable = 'si';
+  tarjeta.dataset.plegada = abierta ? 'no' : 'si';
+  cab.setAttribute('role', 'button');
+  cab.setAttribute('tabindex', '0');
+  cab.setAttribute('aria-expanded', abierta ? 'true' : 'false');
+}
+
+function alternar(tarjeta) {
+  const abrir = tarjeta.dataset.plegada === 'si';
+  const clave = claveDe(tarjeta);
+  if (abrir) estados()[clave] = 'abierta';
+  else delete estados()[clave];
+  escribir(CLAVE_ESTADO, JSON.stringify(estados()));
+  preparar(tarjeta);
+}
+
+/** Prepara todas las tarjetas que haya dentro de un nodo recién puesto. */
+function prepararDentro(nodo) {
+  if (!(nodo instanceof Element)) return;
+  if (nodo.matches('.tarjeta')) preparar(nodo);
+  // Una cabecera repintada por dentro de una tarjeta que ya estaba.
+  if (nodo.matches('header') && nodo.parentElement?.matches('.tarjeta')) {
+    preparar(nodo.parentElement);
+  }
+  nodo.querySelectorAll('.tarjeta').forEach(preparar);
+}
+
+/** Engancha el plegado a la zona donde se pintan las vistas. Una sola vez. */
+function activarPlegado(raiz) {
+  new MutationObserver((cambios) => {
+    cambios.forEach((c) => c.addedNodes.forEach(prepararDentro));
+  }).observe(raiz, { childList: true, subtree: true });
+  prepararDentro(raiz);
+
+  const tarjetaDe = (e) => {
+    if (!plegadoActivo()) return null;
+    const cab = e.target.closest('.tarjeta[data-plegable] > header');
+    if (!cab || !raiz.contains(cab)) return null;
+    // Un botón o un selector de la cabecera hace lo suyo, no pliega.
+    const control = e.target.closest(CONTROLES);
+    if (control && cab.contains(control)) return null;
+    return cab.parentElement;
+  };
+
+  raiz.addEventListener('click', (e) => {
+    const t = tarjetaDe(e);
+    if (t) alternar(t);
+  });
+  raiz.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (!e.target.matches('.tarjeta[data-plegable] > header')) return;
+    const t = tarjetaDe(e);
+    if (!t) return;
+    e.preventDefault();
+    alternar(t);
+  });
+}
+
+/** Encender o apagar, y repintar las tarjetas que ya estén en pantalla. */
+function fijarPlegado(activo, raiz) {
+  escribir(CLAVE_ACTIVO, activo ? 'si' : 'no');
+  raiz.querySelectorAll('.tarjeta').forEach(preparar);
+}
+
+return { activarPlegado, fijarPlegado, plegadoActivo };
+})();
+
 M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
@@ -14338,6 +14540,7 @@ M["views/datos"] = (function () {
 const {db, guardar, reemplazar, limpiarTodo, instantanea, instantaneaSinSecretos, tocar, CLAVES, estaCifrada, ponerCerradura, quitarCerradura} = M["store"];
 const {hayCripto, MIN_CLAVE} = M["cerradura"];
 const {ESPERA_MIN} = M["pantalla_llave"];
+const {plegadoActivo, fijarPlegado} = M["plegable"];
 const {money, redondear, nombreMes} = M["calc"];
 const {aNumero, esc, $, $$, brindis, modal, confirmar, descargar, pedirArchivo, opciones, avisoInfo} = M["ui"];
 const {formTopes} = M["forms"];
@@ -14760,6 +14963,13 @@ function render(raiz) {
                  value="${Number(db.config.retencion_fuente_polizas) || 0.02}"></div>
       </div>
       <div class="filtros">
+        <label class="campo" style="flex-direction:row;align-items:center;gap:8px">
+          <input type="checkbox" id="s-plegar" ${plegadoActivo() ? 'checked' : ''}
+                 style="width:auto;min-height:auto">
+          <span>Tarjetas plegables: se abren y se cierran al tocar su título.
+            Solo en este teléfono.</span></label>
+      </div>
+      <div class="filtros">
         <button class="btn primario" id="btn-ajustes">Guardar ajustes</button>
         <button class="btn peligro" id="btn-borrar">Borrar todos los datos</button>
       </div>
@@ -14940,6 +15150,12 @@ function render(raiz) {
   $('#btn-cambiar-clave', raiz)?.addEventListener('click', cambiarla);
 
   $('#btn-topes-datos', raiz)?.addEventListener('click', () => formTopes(() => render(raiz)));
+
+  // Se aplica al momento: es cómo se ve, no un dato que haya que guardar.
+  $('#s-plegar', raiz).addEventListener('change', (e) => {
+    fijarPlegado(e.target.checked, document.querySelector('#vista') || raiz);
+    brindis(e.target.checked ? 'Tarjetas plegables' : 'Tarjetas siempre abiertas');
+  });
 
   $('#btn-ajustes', raiz).addEventListener('click', () => {
     db.config.tema = $('#s-tema', raiz).value;
@@ -17777,6 +17993,7 @@ const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta} = M["calc"];
 const archivoExcel = M["archivo"];
 const {crearCajon} = M["cajon"];
 const {pedirClave, vigilar} = M["pantalla_llave"];
+const {activarPlegado} = M["plegable"];
 const {alRedimensionar, ocultarTooltip} = M["charts"];
 const {$, crear, esc, ICONOS, modal, brindis, descargar} = M["ui"];
 const {formGastoTarjeta, formGastoEfectivo, formIngreso, formInversion, formMovimiento} = M["forms"];
@@ -18120,6 +18337,8 @@ function arrancarApp(origen) {
   pintarNav();
   // Autobloqueo y velo: solo hacen algo si hay cerradura puesta.
   vigilar($('#vista'));
+  // Tarjetas que se abren y se cierran al tocar su título.
+  activarPlegado($('#vista'));
   cajon = crearCajon({ etiqueta: 'Menú de Finanzas J y C' });
   $('#btn-menu').addEventListener('click', menuPrincipal);
 
