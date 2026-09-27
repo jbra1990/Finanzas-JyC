@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-MPLi/mv/6ICJnSDlbRQgO1t31/cnilp7WUq0JQbKsWQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-SSpXJ3o+Kzndux80/osDzEH9QwKDEFBUjg8AG2+Ga+M='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2477,6 +2477,115 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
 .veh-btn.apunta { color: var(--acento); }
 .veh-btn.apunta:hover { background: color-mix(in srgb, var(--acento) 12%, transparent); }
 .veh-btn[disabled] { opacity: 0.4; cursor: default; }
+/*
+ * Una línea de tiempo: a la izquierda el mes en grande, que es por lo que se
+ * ordena y lo que se busca con la vista; a la derecha qué, cuánto y cuánto
+ * falta. Los datos van como texto corrido, no como pastillas: son una frase.
+ */
+.viene-fila { display: flex; gap: 12px; align-items: flex-start; }
+.viene-cuando {
+  flex: none; width: 46px;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 6px 0 5px;
+  border-radius: var(--radio-chico);
+  background: var(--superficie-2);
+  font-variant-numeric: tabular-nums;
+}
+.viene-cuando b {
+  font-size: 15px; font-weight: 680; letter-spacing: -0.01em;
+  text-transform: uppercase; line-height: 1.1;
+}
+.viene-cuando span { font-size: 10.5px; color: var(--tinta-3); margin-top: 1px; }
+.viene li[data-vencido="si"] .viene-cuando b { color: var(--critico); }
+.viene-cuerpo { flex: 1; min-width: 0; }
+.viene-datos, .viene-falta, .viene-base {
+  margin-top: 4px; font-size: 11.5px; line-height: 1.45; color: var(--tinta-3);
+  font-variant-numeric: tabular-nums;
+}
+.viene .dato-chip { padding: 0; background: none; border-radius: 0; font-size: inherit; }
+.viene .viene-datos .dato-chip.fuerte { color: var(--tinta-2); font-weight: 570; }
+.viene .viene-datos .dato-chip + .dato-chip::before { content: ' · '; }
+.viene-falta { color: var(--tinta-2); font-weight: 560; }
+
+/* Los doce meses: una columna por mes, alta según lo que toca pagar en él. */
+.viene-cal {
+  display: grid;
+  gap: 3px;
+  margin: 14px 0 10px;
+}
+.viene-mes { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.viene-monto {
+  height: 14px;
+  font-size: 9.5px; font-weight: 640; color: var(--tinta-2);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.viene-pista {
+  position: relative; width: 100%; max-width: 20px; height: 44px; margin-top: 2px;
+  border-radius: 4px 4px 0 0;
+  border-bottom: 2px solid var(--grid);
+}
+.viene-pista > i {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  border-radius: 4px 4px 0 0;
+  background: var(--acento);
+}
+.viene-letra { margin-top: 4px; font-size: 9.5px; color: var(--tinta-3); }
+.viene-mes.con .viene-letra { color: var(--tinta); font-weight: 640; }
+.viene-anio { height: 12px; font-size: 9px; color: var(--tinta-3); }
+
+/* Lo que cae después del año: plegado, porque no entra en la cuenta. */
+.viene-luego { margin: 4px 0 10px; border-top: 1px solid var(--grid); }
+.viene-luego summary {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 2px 10px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  list-style: none;
+}
+.viene-luego summary::-webkit-details-marker { display: none; }
+.viene-luego summary::after { content: '▾'; margin-left: auto; color: var(--tinta-3); transition: transform 0.2s; }
+.viene-luego[open] summary::after { transform: rotate(180deg); }
+.viene-luego summary .pista {
+  padding: 1px 7px; border-radius: var(--radio-pill); background: var(--superficie-2); font-size: 11px;
+}
+.viene-luego ul { list-style: none; margin: 0; padding: 0 0 4px; }
+.viene-luego li {
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 8px 2px; border-top: 1px solid var(--grid);
+  font-size: 12.5px; font-variant-numeric: tabular-nums;
+}
+.viene-luego-mes { flex: none; width: 46px; color: var(--tinta-3); font-size: 11.5px; }
+.viene-luego .crece { flex: 1; min-width: 0; }
+.viene-luego small { display: block; font-size: 11px; color: var(--tinta-3); }
+.viene-luego b { flex: none; font-weight: 620; }
+
+/* El buscador del carro: lo del mismo día y el siguiente, dentro de la última vez. */
+.hallazgo-ultimo .veh-datos { margin-top: 8px; }
+#veh-hallazgos .hallazgo-ultimo .cuando .hace { white-space: nowrap; }
+.hallazgo-nota { margin: 6px 0 0; font-size: 11px; }
+.hallazgo-dia {
+  margin-top: 10px; padding-top: 9px;
+  border-top: 1px solid var(--grid);
+  font-size: 12px; color: var(--tinta-2);
+}
+.hallazgo-dia .etq { display: block; margin-bottom: 4px; }
+.hallazgo-dia div {
+  display: flex; justify-content: space-between; gap: 12px; padding: 3px 0;
+  font-variant-numeric: tabular-nums;
+}
+.hallazgo-dia small { color: var(--tinta-3); font-size: 11px; }
+.hallazgo-dia b { flex: none; font-weight: 600; }
+.hallazgo-proximo {
+  margin: 10px 0 0; padding-top: 9px;
+  border-top: 1px solid var(--grid);
+  font-size: 12px; line-height: 1.5; color: var(--tinta-2);
+}
+.hallazgo-proximo strong { color: var(--tinta); font-weight: 620; }
+.veh-sub {
+  margin: 4px 0 2px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--tinta-3);
+}
+
 .aviso-flojo {
   margin: 9px 0 0;
   padding: 8px 11px;
@@ -5457,6 +5566,75 @@ function eventosVehiculo() {
     || (b.km || 0) - (a.km || 0));
 }
 
+/* --- Buscar en lo que se le ha hecho al carro -----------------------------
+ *
+ * «¿Cuándo le cambié el disco de embrague?». Se busca como habla uno, no como
+ * está apuntado: quien escribe «cambio de disco de embrague» busca el apunte
+ * «Disco de embrague, barras link, axiales», que no dice «cambio» y tiene el
+ * «de» en otro sitio. Por eso las palabras de relleno no cuentan, cada una de
+ * las que quedan tiene que aparecer —en cualquier orden— y el plural vale por
+ * el singular. Se mira también el nombre del mantenimiento, para que «filtro
+ * de combustible» encuentre el «Filtro de gasolina».
+ */
+const RELLENO = new Set([
+  'de', 'del', 'la', 'las', 'el', 'los', 'lo', 'y', 'e', 'a', 'al', 'en', 'por',
+  'para', 'con', 'un', 'una', 'unos', 'unas', 'que', 'mi', 'me', 'le', 'se', 'fue',
+  'cuando', 'cambio', 'cambios', 'cambiar', 'cambie', 'cambiaron', 'cambiado',
+  'compra', 'compre', 'compro', 'arreglo', 'arreglar', 'arregle', 'puse',
+  'pusieron', 'nuevo', 'nueva', 'nuevos', 'nuevas',
+]);
+
+/** Las palabras que cuentan de lo que se escribió, sin plural. */
+function palabrasDeBusqueda(termino) {
+  const todas = plano(termino).split(/[^a-z0-9]+/).filter(Boolean);
+  const utiles = todas.filter((p) => !RELLENO.has(p));
+  // «cambio» a secas también es una búsqueda: si todo era relleno, vale todo.
+  return (utiles.length ? utiles : todas)
+    .map((p) => (p.length > 4 && p.endsWith('s') ? p.slice(0, -1) : p));
+}
+
+/**
+ * @returns {Array<object>} los apuntes del carro que cuadran, del más reciente
+ *   al más antiguo, con su kilometraje, cuánto hace y lo que se apuntó ese
+ *   mismo día —un trabajo de taller suele venir en varias líneas—.
+ */
+function buscarEnElCarro(termino) {
+  const q = String(termino ?? '').trim();
+  if (plano(q).length < 2) return [];
+  const eventos = eventosVehiculo();
+  const nombre = (clave) => MANTENIMIENTOS.find((m) => m.clave === clave)?.nombre || '';
+
+  // Un importe o un kilometraje: «292,47», «$23», «280184».
+  const esCifra = /^[\s$]*[\d.,]+\s*$/.test(q);
+  const cifra = q.replace(/[\s$]/g, '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.');
+  const palabras = palabrasDeBusqueda(q);
+
+  const cuadra = (e) => {
+    if (esCifra) {
+      return e.monto.toFixed(2).includes(cifra) || (e.km > 0 && String(e.km).includes(cifra));
+    }
+    const texto = plano(`${e.detalle} ${e.nota} ${nombre(e.tipo)} ${e.origen}`);
+    return palabras.every((p) => texto.includes(p));
+  };
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  const ahora = odometroHoy();
+  return eventos.filter(cuadra).slice(0, 60).map((e) => {
+    const propio = e.km > 0;
+    const km = propio ? e.km : (kmEstimadoEnFecha(e.fecha) || 0);
+    return {
+      ...e,
+      nombreTipo: nombre(e.tipo),
+      km,
+      kmPropio: propio,
+      dias: diasEntre(e.fecha, hoy),
+      kmDesde: km && ahora > km ? Math.round(ahora - km) : 0,
+      mismoDia: eventos.filter((o) => o.fecha === e.fecha
+        && !(o.id === e.id && o.coleccion === e.coleccion)),
+    };
+  });
+}
+
 /**
  * Lo que cuesta un mantenimiento, para poder presupuestarlo.
  *
@@ -5611,6 +5789,9 @@ function gastoDeMantenimiento(meses = 12) {
       disperso: e.costo.disperso,
       ultimo: e.ultimo,
       kmUltimo: e.kmUltimo,
+      // Solo los que van por kilómetros tienen «faltan tantos km»; en uno por
+      // tiempo, como la batería, el km de arriba es una proyección.
+      faltanKm: e.proximoKm && e.faltanKm != null ? e.faltanKm : null,
     }))
     .sort((a, b) => a.fecha.localeCompare(b.fecha));
 
@@ -6176,7 +6357,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, ingresoDelMes, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasRevisadas, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+return { DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, ingresoDelMes, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasRevisadas, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -16792,7 +16973,7 @@ M["views/vehiculo"] = (function () {
  */
 
 const {db, eliminar, guardar, recolocar} = M["store"];
-const {money, redondear, textoFecha, odometroHoy, kmPorMes, kmEstimadoEnFecha, estadoMantenimientos, eventosVehiculo, planesMantenimiento, guardarPlanMantenimiento, MANTENIMIENTOS, gastoDeMantenimiento, costoTipico, nombreMes, claveMes, recorridosQueNoEncajan, DESVIO_GRAVE} = M["calc"];
+const {money, redondear, textoFecha, odometroHoy, kmPorMes, kmEstimadoEnFecha, estadoMantenimientos, eventosVehiculo, planesMantenimiento, guardarPlanMantenimiento, MANTENIMIENTOS, gastoDeMantenimiento, costoTipico, nombreMes, claveMes, recorridosQueNoEncajan, DESVIO_GRAVE, buscarEnElCarro, rangoMeses} = M["calc"];
 const {fijosManuales, guardarManual} = M["plan"];
 const {esc, $, $$, confirmar, modal, brindis} = M["ui"];
 const {formMantenimiento} = M["forms"];
@@ -16808,6 +16989,12 @@ function haceCuanto(dias) {
   if (meses < 18) return `hace ${meses} meses`;
   return `hace ${(dias / 365).toFixed(1).replace('.', ',')} años`;
 }
+
+/*
+ * Lo escrito en el buscador. Vive fuera de render para que sobreviva a un
+ * repintado —corregir un apunte, apuntar algo— sin tener que volver a escribir.
+ */
+let busca = '';
 
 /** El nombre de un mantenimiento a partir de su clave. */
 const nombreDe = (clave) => MANTENIMIENTOS.find((m) => m.clave === clave)?.nombre
@@ -16852,6 +17039,17 @@ function render(raiz) {
       </div>
     </section>
 
+    <div class="buscador">
+      <span class="buscador-lupa" aria-hidden="true">⌕</span>
+      <input id="busca-carro" type="search" inputmode="search" autocomplete="off"
+             placeholder="¿Cuándo le cambié…? Ej.: disco de embrague"
+             aria-label="Buscar en lo que se le ha hecho al carro" value="${esc(busca)}">
+      <button type="button" class="buscador-borrar" id="busca-carro-limpiar"
+              aria-label="Borrar la búsqueda"${busca ? '' : ' hidden'}>✕</button>
+    </div>
+
+    <section class="tarjeta" id="veh-hallazgos"${busca ? '' : ' hidden'}></section>
+
     ${bloqueLecturas()}
 
     <section class="tarjeta">
@@ -16867,6 +17065,28 @@ function render(raiz) {
       <header><h2>Lo que se le ha hecho</h2><span class="pista">Todo el historial</span></header>
       ${listaEventos(eventos)}
     </section>`;
+
+  const caja = $('#veh-hallazgos', raiz);
+  const pintarHallazgos = () => {
+    caja.hidden = !busca.trim();
+    if (!caja.hidden) caja.innerHTML = seccionHallazgos(busca);
+  };
+  pintarHallazgos();
+  const campo = $('#busca-carro', raiz);
+  const limpiar = $('#busca-carro-limpiar', raiz);
+  campo.addEventListener('input', () => {
+    busca = campo.value;
+    limpiar.hidden = !campo.value;
+    // Solo los resultados: repintar la vista con cada tecla perdería el foco.
+    pintarHallazgos();
+  });
+  limpiar.addEventListener('click', () => {
+    busca = '';
+    campo.value = '';
+    limpiar.hidden = true;
+    pintarHallazgos();
+    campo.focus();
+  });
 
   $('[data-accion="mantenimiento"]', raiz).addEventListener('click',
     () => formMantenimiento(() => render(raiz)));
@@ -17141,6 +17361,88 @@ function corregirFecha(clave, alTerminar) {
   });
 }
 
+/* --- El buscador ----------------------------------------------------------
+ *
+ * Lo primero y en grande es LA ÚLTIMA VEZ: cuándo, hace cuánto, a cuántos
+ * kilómetros y cuántos lleva el carro desde entonces, que es lo que se viene
+ * a saber delante del mostrador del taller. Con ella, lo que se apuntó ese
+ * mismo día —la mano de obra suele ir en otra línea— y, si es un mantenimiento
+ * con intervalo, cuándo toca el siguiente. Debajo, las demás veces.
+ */
+function seccionHallazgos(termino) {
+  const filas = buscarEnElCarro(termino);
+  const cab = (n) => `<header><h2>Resultados</h2>
+    ${n ? `<span class="pista">${n} ${n === 1 ? 'vez' : 'veces'}</span>` : ''}</header>`;
+
+  if (!filas.length) {
+    return `${cab(0)}<p class="vacio">Nada que cuadre con «${esc(termino.trim())}».
+      Se busca en lo que se le ha hecho al carro: lo que se compró, dónde y el
+      tipo de mantenimiento. Prueba con una sola palabra —«embrague»,
+      «llanta»—. Si se pagó como un gasto normal, sin marcarlo del carro, está
+      en el buscador de Análisis.</p>`;
+  }
+
+  const u = filas[0];
+  const estado = u.tipo
+    ? estadoMantenimientos().find((e) => e.clave === u.tipo && e.estado !== 'sin-datos')
+    : null;
+  const total = redondear(filas.reduce((s, f) => s + f.monto, 0));
+
+  return `${cab(filas.length)}
+    <div class="hallazgo-ultimo">
+      <div class="etq">${filas.length === 1 ? 'La única vez' : 'La última vez'}</div>
+      <div class="cuando">${esc(textoFecha(u.fecha))}
+        <span class="hace">${esc(haceCuanto(u.dias))}</span></div>
+      <div class="que">${esc(u.detalle || u.nombreTipo || 'Sin detalle')} ·
+        <strong>${money(u.monto)}</strong></div>
+      <div class="veh-datos">
+        ${u.nota ? `<span class="veh-dato">${esc(u.nota)}</span>` : ''}
+        <span class="veh-dato">${esc(u.origen)}</span>
+        ${u.nombreTipo ? `<span class="veh-dato">${esc(u.nombreTipo)}</span>` : ''}
+      </div>
+      ${u.km > 0 ? `
+        <div class="odometro">
+          <span>${u.kmPropio ? 'El carro marcaba' : 'El carro andaba por'}
+            <strong>${u.kmPropio ? '' : '≈ '}${esc(km(u.km))}</strong></span>
+          ${u.kmDesde > 0
+    ? `<span>desde entonces <strong>${esc(km(u.kmDesde))}</strong></span>` : ''}
+        </div>
+        ${u.kmPropio ? '' : `<p class="pista hallazgo-nota">No se apuntó el
+          kilometraje: es el que marcaba el carro por esa fecha, sacado de las
+          lecturas de antes y después.</p>`}` : ''}
+      ${u.mismoDia.length ? `
+        <div class="hallazgo-dia">
+          <span class="etq">Ese mismo día</span>
+          ${u.mismoDia.map((o) => `<div><span>${esc(o.detalle || nombreDe(o.tipo))}${
+    o.nota ? ` <small>· ${esc(o.nota)}</small>` : ''}</span>
+            <b>${money(o.monto)}</b></div>`).join('')}
+        </div>` : ''}
+      ${estado ? `<p class="hallazgo-proximo">El siguiente: ${textoProximo(estado)}${
+  estado.costo.monto > 0 ? ` · unos <strong>${money(estado.costo.monto)}</strong>` : ''}.</p>` : ''}
+    </div>
+
+    ${filas.length > 1 ? `
+      <div class="veh-sub">Las otras veces</div>
+      <ul class="veh-lista">${filas.slice(1).map((f) => `
+        <li>
+          <div class="veh-cab">
+            <span class="veh-que">${esc(f.detalle || f.nombreTipo || 'Sin detalle')}</span>
+            <span class="veh-monto">${money(f.monto)}</span>
+          </div>
+          <div class="veh-datos">
+            <span class="veh-dato fuerte">${esc(textoFecha(f.fecha))}</span>
+            ${f.km > 0 ? `<span class="veh-dato${f.kmPropio ? ' fuerte' : ''}">${
+  f.kmPropio ? '' : '≈ '}${esc(km(f.km))}</span>` : ''}
+            <span class="veh-dato">${esc(haceCuanto(f.dias))}</span>
+            ${f.nota ? `<span class="veh-dato">${esc(f.nota)}</span>` : ''}
+            <span class="veh-dato">${esc(f.origen)}</span>
+          </div>
+        </li>`).join('')}</ul>
+      <div class="aviso"><span class="icono">Σ</span>
+        <span class="crece">${filas.length} veces · <strong>${money(total)}</strong>
+        en total.</span></div>` : ''}`;
+}
+
 /* --- Lo que viene y cuánto cuesta ----------------------------------------
  *
  * La pregunta que no contestaba «Qué toca»: ¿cuánto hay que apartar? Saber
@@ -17153,7 +17455,12 @@ function corregirFecha(clave, alTerminar) {
  */
 function seccionPresupuesto() {
   const p = gastoDeMantenimiento(12);
-  if (!p.filas.length) {
+  // Lo que cae después del año: no entra en la cuenta, pero se viene igual.
+  const luego = estadoMantenimientos()
+    .filter((e) => e.estado !== 'sin-datos' && e.fechaProxima && e.fechaProxima > p.hasta)
+    .sort((a, b) => a.fechaProxima.localeCompare(b.fechaProxima));
+
+  if (!p.filas.length && !luego.length) {
     return `<header><h2>Lo que viene</h2></header>
       <p class="vacio">Nada previsto en los próximos doce meses. En cuanto haya
         más historial —o pongas el odómetro al día— aquí sale qué toca, cuándo y
@@ -17167,40 +17474,38 @@ function seccionPresupuesto() {
   return `
     <header><h2>Lo que viene</h2><span class="pista">Doce meses</span></header>
 
-    <p class="pista">De aquí a ${esc(nombreMes(claveMes(p.hasta)))} toca
-      ${p.filas.length} ${p.filas.length === 1 ? 'mantenimiento' : 'mantenimientos'}.
-      Las fechas salen del ritmo al que andas${p.ritmo
+    ${p.filas.length ? `
+      <div class="panel-datos veh-total">
+        <div><div class="etq">Previsto</div><div class="val">${money(p.total)}</div></div>
+        <div><div class="etq">Apartando al mes</div><div class="val">${money(alMes)}</div></div>
+      </div>
+
+      ${calendario(p)}
+
+      <p class="pista">Las fechas salen del ritmo al que andas${p.ritmo
     ? `, ${esc(km(p.ritmo.kmMes))} al mes` : ''}; los importes, de lo que
-      pagaste las veces anteriores.</p>
-
-    <div class="panel-datos veh-total">
-      <div><div class="etq">Previsto</div><div class="val">${money(p.total)}</div></div>
-      <div><div class="etq">Apartando al mes</div><div class="val">${money(alMes)}</div></div>
-      <div><div class="etq">Lo más pronto</div>
-        <div class="val">${esc(nombreMes(claveMes(p.filas[0].fecha), true))}</div></div>
-    </div>
-
-    ${p.gastadoAnio > p.total * 1.3 ? `
-      <div class="aviso">
-        <span class="icono">!</span>
-        <span class="crece">Esto <strong>no</strong> es lo que va a costar el
-          carro. El último año se te fueron <strong>${money(p.gastadoAnio)}</strong>
-          en él —${money(p.gastadoMes)} al mes—, y aquí solo cabe lo que se puede
-          prever: lo que tiene historial y un intervalo. Una bobina quemada o un
-          embrague no salen en ninguna lista hasta que pasan.</span>
-      </div>` : ''}
+        pagaste las veces anteriores.</p>` : `
+      <p class="vacio">Nada en los próximos doce meses.</p>`}
 
     <ul class="viene">${p.filas.map((f) => `
       <li${f.vencido ? ' data-vencido="si"' : ''}>
-        <div class="rec-cab">
-          <span class="veh-que">${esc(f.nombre)}</span>
-          <span class="rec-mes">${f.monto > 0 ? money(f.monto) : '—'}</span>
-        </div>
-        <div class="veh-datos">
-          <span class="dato-chip fuerte">${f.vencido
+        <div class="viene-fila">
+          <div class="viene-cuando">${f.vencido
+    ? '<b>Ya</b><span>vencido</span>'
+    : `<b>${esc(MES_CORTO[Number(f.mes.slice(5)) - 1])}</b><span>${esc(f.mes.slice(0, 4))}</span>`}</div>
+          <div class="viene-cuerpo">
+            <div class="rec-cab">
+              <span class="veh-que">${esc(f.nombre)}</span>
+              <span class="rec-mes">${f.monto > 0 ? money(f.monto) : '—'}</span>
+            </div>
+            <div class="viene-datos">
+              <span class="dato-chip fuerte">${f.vencido
     ? 'Toca ya' : esc(textoFecha(f.fecha))}</span>
-          ${f.km > 0 ? `<span class="dato-chip">a los ${esc(km(f.km))}</span>` : ''}
-          <span class="dato-chip">${esc(deDonde(f))}</span>
+              ${f.km > 0 ? `<span class="dato-chip">a los ${esc(km(f.km))}</span>` : ''}
+            </div>
+            <div class="viene-falta">${esc(cuantoFalta(f))}</div>
+            <div class="viene-base">Importe: <span class="dato-chip">${esc(deDonde(f))}</span></div>
+          </div>
         </div>
         ${f.disperso ? `
           <p class="aviso-flojo">Las veces anteriores pagaste importes muy
@@ -17218,6 +17523,29 @@ function seccionPresupuesto() {
         </div>
       </li>`).join('')}</ul>
 
+    ${luego.length ? `
+      <details class="viene-luego">
+        <summary>Más adelante <span class="pista">${luego.length}</span></summary>
+        <ul>${luego.map((e) => `
+          <li>
+            <span class="viene-luego-mes">${esc(MES_CORTO[Number(e.fechaProxima.slice(5, 7)) - 1])}
+              ’${esc(e.fechaProxima.slice(2, 4))}</span>
+            <span class="crece">${esc(e.nombre)}${e.proximoKm
+    ? `<small>a los ${esc(km(e.proximoKm))}</small>` : '<small>por tiempo</small>'}</span>
+            <b>${e.costo.monto > 0 ? money(e.costo.monto) : '—'}</b>
+          </li>`).join('')}</ul>
+      </details>` : ''}
+
+    ${p.gastadoAnio > p.total * 1.3 ? `
+      <div class="aviso">
+        <span class="icono">!</span>
+        <span class="crece">Esto <strong>no</strong> es lo que va a costar el
+          carro. El último año se te fueron <strong>${money(p.gastadoAnio)}</strong>
+          en él —${money(p.gastadoMes)} al mes—, y aquí solo cabe lo que se puede
+          prever: lo que tiene historial y un intervalo. Una bobina quemada o un
+          embrague no salen en ninguna lista hasta que pasan.</span>
+      </div>` : ''}
+
     ${p.sinCosto || p.dudosas ? `
       <p class="pista">${[
     p.sinCosto ? `${p.sinCosto} sin costo estimado` : '',
@@ -17229,6 +17557,50 @@ function seccionPresupuesto() {
         <strong>${p.sinHistorial.map((x) => esc(x)).join(', ')}</strong>.
         En cuanto apuntes uno —con su fecha y su kilometraje— empiezan a contar
         aquí.</p>` : ''}`;
+}
+
+const MES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+/** Días de hoy a una fecha ISO. */
+const diasHasta = (iso) => Math.round((Date.parse(iso) - Date.parse(new Date().toISOString().slice(0, 10))) / 864e5);
+
+/** «En 3 meses · faltan 3.488 km», «Se pasó por 1.200 km». */
+function cuantoFalta(f) {
+  if (f.vencido) {
+    return f.faltanKm != null && f.faltanKm < 0
+      ? `Se pasó por ${km(-f.faltanKm)}` : 'Ya venció el plazo';
+  }
+  const d = diasHasta(f.fecha);
+  const cuando = d < 45 ? `En ${d} ${d === 1 ? 'día' : 'días'}`
+    : `En ${Math.round(d / 30.44)} ${Math.round(d / 30.44) === 1 ? 'mes' : 'meses'}`;
+  return f.faltanKm != null && f.faltanKm >= 0 ? `${cuando} · faltan ${km(f.faltanKm)}` : cuando;
+}
+
+/*
+ * Los doce meses de un vistazo: una columna por mes, alta según lo que toca
+ * gastar en él. Es la pregunta de presupuesto —¿en qué mes me cae?— contestada
+ * sin leer la lista.
+ */
+function calendario(p) {
+  const porMes = new Map(p.porMes.map((m) => [m.mes, m]));
+  const max = Math.max(1, ...p.porMes.map((m) => m.monto));
+  const meses = rangoMeses(claveMes(p.desde), claveMes(p.hasta));
+  const leer = p.porMes.map((m) => `${nombreMes(m.mes)}: ${money(m.monto)}`).join('; ');
+  return `
+    <div class="viene-cal" role="img" aria-label="${esc(`Mantenimientos por mes. ${leer}`)}"
+         style="grid-template-columns:repeat(${meses.length},minmax(0,1fr))">
+      ${meses.map((m, i) => {
+    const x = porMes.get(m);
+    const [y, mm] = m.split('-').map(Number);
+    const alto = x ? Math.max(14, Math.round((x.monto / max) * 100)) : 0;
+    return `<div class="viene-mes${x ? ' con' : ''}">
+          <span class="viene-monto">${x ? (x.monto > 0 ? `$${Math.round(x.monto)}` : '?') : ''}</span>
+          <span class="viene-pista"><i style="height:${alto}%"></i></span>
+          <span class="viene-letra">${MES_CORTO[mm - 1]}</span>
+          <span class="viene-anio">${i === 0 || mm === 1 || i === meses.length - 1 ? `’${String(y).slice(2)}` : ''}</span>
+        </div>`;
+  }).join('')}
+    </div>`;
 }
 
 /** De dónde sale el importe, dicho con todas las letras. */
