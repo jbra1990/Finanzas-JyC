@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-tsqR3V0ub71NQlB94zrp28IXj1d5xsKgT0f5dmZi8ic='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-IMcOiZGXxOSFr6KcUXOYSR/1FDVd4OS2nmSdlFX7R2Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4574,11 +4574,28 @@ function calcularPoliza({
   };
 }
 
+/*
+ * Una fecha ISO según el reloj de AQUÍ.
+ *
+ * `toISOString()` da la fecha de Greenwich, y Ecuador va cinco horas por
+ * detrás: de siete de la noche a medianoche, «hoy» salía ya mañana —el
+ * odómetro se apuntaba con fecha de mañana y el 30 por la noche el
+ * presupuesto ya era del mes siguiente—. Aquí se leen el año, el mes y el día
+ * del reloj local.
+ */
+function isoLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${
+    String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Hoy, en el reloj de aquí. */
+const hoyLocal = () => isoLocal(new Date());
+
 /** Suma `dias` a una fecha ISO y devuelve otra fecha ISO. */
 function sumarDias(fechaISO, dias) {
   const d = new Date(`${fechaISO}T00:00:00`);
   d.setDate(d.getDate() + (Number(dias) || 0));
-  return d.toISOString().slice(0, 10);
+  return isoLocal(d);
 }
 
 function diasEntre(desdeISO, hastaISO) {
@@ -5418,7 +5435,7 @@ function buscarHistorial(termino, { usuario = 'ambos', limite = 80 } = {}) {
     });
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyLocal();
   const ahora = odometroHoy();
   return out
     .filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.fecha))
@@ -5470,7 +5487,7 @@ function kmPorMes() {
   const todas = lecturasRevisadas().buenas;
   if (todas.length < 2) return null;
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyLocal();
   const desdeLimite = sumarDias(hoy, -730);
   // Si en dos años no hay material suficiente, se usa todo lo que haya.
   const recientes = todas.filter((l) => l.fecha >= desdeLimite);
@@ -5504,7 +5521,7 @@ function fechaAlKilometraje(kmObjetivo) {
   const ahora = odometroHoy();
   if (!ritmo || !ahora || !kmObjetivo || kmObjetivo <= ahora) return null;
   const dias = Math.round(((kmObjetivo - ahora) / ritmo.kmMes) * 30.44);
-  return sumarDias(new Date().toISOString().slice(0, 10), dias);
+  return sumarDias(hoyLocal(), dias);
 }
 
 /**
@@ -5704,7 +5721,7 @@ function buscarEnElCarro(termino) {
     return palabras.every((p) => texto.includes(p));
   };
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyLocal();
   const ahora = odometroHoy();
   return eventos.filter(cuadra).slice(0, 60).map((e) => {
     const propio = e.km > 0;
@@ -5768,7 +5785,7 @@ function costoTipico(clave, eventos = null) {
 function estadoMantenimientos() {
   const eventos = eventosVehiculo();
   const ahora = odometroHoy();
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyLocal();
 
   return planesMantenimiento().map((plan) => {
     const costo = costoTipico(plan.clave, eventos);
@@ -5851,7 +5868,7 @@ function estadoMantenimientos() {
  * @returns {object} filas ordenadas por fecha, el reparto por mes y el total
  */
 function gastoDeMantenimiento(meses = 12) {
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyLocal();
   const limite = sumarDias(hoy, Math.round(meses * 30.44));
   const ahora = odometroHoy();
   const ritmo = kmPorMes();
@@ -6644,7 +6661,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, ingresoDelMes, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasRevisadas, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+return { DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasRevisadas, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -7527,15 +7544,23 @@ function alarma(texto) {
  * Convierte a número lo que se escriba en un campo de dinero, aceptando la
  * coma decimal además del punto: «12,50», «12.50» y «1.234,56» valen igual.
  * El último separador que aparece es el decimal; el otro son los miles.
+ *
+ * En dinero, un punto seguido de EXACTAMENTE tres cifras son miles: «1.500»
+ * son mil quinientos, no $1,50. El teclado del iPhone en español pone coma
+ * para los decimales, y los centavos nunca son tres. Para una tasa sí puede
+ * haber tres decimales —7,125 %—, así que ahí se pasa `{ dinero: false }`.
  */
-function aNumero(valor) {
+function aNumero(valor, { dinero = true } = {}) {
   if (typeof valor === 'number') return Number.isFinite(valor) ? valor : 0;
   let s = String(valor ?? '').trim().replace(/\s| /g, '');
+  s = s.replace(/\$/g, '');   // «$1.500» es lo mismo que «1.500»
   if (!s) return 0;
 
   const coma = s.lastIndexOf(',');
   const punto = s.lastIndexOf('.');
-  if (coma >= 0 && punto >= 0) {
+  if (dinero && coma < 0 && /^-?[1-9]\d{0,2}(\.\d{3})+$/.test(s)) {
+    s = s.replace(/\./g, '');                       // 1.500 · 12.345.678
+  } else if (coma >= 0 && punto >= 0) {
     s = coma > punto
       ? s.replace(/\./g, '').replace(',', '.')   // 1.234,56
       : s.replace(/,/g, '');                      // 1,234.56
@@ -9651,7 +9676,7 @@ M["plan"] = (function () {
  */
 
 const {db} = M["store"];
-const {claveMes, mesActual, redondear, sumarDias, diasEntre, sumarMeses, rangoMeses, nombreMes} = M["calc"];
+const {claveMes, mesActual, redondear, sumarDias, diasEntre, sumarMeses, rangoMeses, nombreMes, hoyLocal} = M["calc"];
 /** Con menos de tres apariciones no hay periodicidad, hay casualidad. */
 const MIN_OCURRENCIAS = 3;
 
@@ -9895,7 +9920,7 @@ function recurrencias(quien = null) {
     anota(g.detalle, g.fecha, Number(g.monto) || 0, g.categoria, g.cuenta);
   });
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyLocal();
 
   return [...grupos.values()]
     .filter((g) => g.fechas.length >= MIN_OCURRENCIAS)
@@ -10242,7 +10267,7 @@ function ritmoDeCompra(quien = null) {
     anota(conceptoDe(g), g.fecha, Number(g.monto) || 0, g.categoria, g.cuenta);
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyLocal();
 
   return [...grupos.values()]
     .map((g) => {
@@ -10907,8 +10932,8 @@ M["informe"] = (function () {
  * resumen.
  */
 
-const {documento, ancho, recortar} = M["pdf"];
-const {nombreMes, money, redondear, textoFecha, detalleDeGastos} = M["calc"];
+const {documento, recortar} = M["pdf"];
+const {nombreMes, money, redondear, textoFecha, detalleDeGastos, hoyLocal} = M["calc"];
 /*
  * Fecha corta: «17 sep 25».
  *
@@ -10987,7 +11012,7 @@ function informeMensual(mes, usuario = 'ambos') {
   });
 
   doc.texto(titulo, { tam: 17, negrita: true, avance: 20 });
-  doc.texto(`Generado el ${textoFecha(new Date().toISOString().slice(0, 10))}`,
+  doc.texto(`Generado el ${textoFecha(hoyLocal())}`,
     { tam: 9, gris: 0.45, avance: 18 });
 
   // El total, en grande: es lo primero que se busca al abrirlo.
@@ -11138,6 +11163,17 @@ const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, 
 const {modal, opciones, brindis, alarma, hoyISO, esc, $, aNumero, campoMonto, segmentado} = M["ui"];
 const selUsuarios = (sel) => opciones(usuarios(), sel);
 const val = (form, sel) => aNumero($(sel, form).value);
+
+/*
+ * Un importe en cero no es un gasto: es un monto mal escrito —«abc» se lee
+ * como 0— que se guardaría sin avisar. La ventana se queda abierta. Los
+ * negativos sí pasan: pueden ser una devolución.
+ */
+function montoValido(valor) {
+  if (redondear(aNumero(valor)) !== 0) return true;
+  brindis('Escribe el monto: con $0 no se puede registrar');
+  return false;
+}
 
 /** Lista de meses seleccionables: 12 atrás y 24 adelante desde hoy. */
 function mesesSeleccionables() {
@@ -11383,6 +11419,7 @@ function formMantenimiento(alTerminar, existente = null) {
       refrescar();
     },
     alEnviar(d) {
+      if (!montoValido(d.monto)) return false;
       const comun = {
         fecha: d.fecha,
         detalle: capitalizar(d.detalle),
@@ -11738,6 +11775,7 @@ function formGastoTarjeta(alTerminar, existente = null) {
       refrescar();
     },
     alEnviar(d) {
+      if (!montoValido(d.monto_total)) return false;
       // Cómo iba el mes ANTES de guardar, para saber si este gasto es el que
       // cruza el tope y no repetir el aviso en todos los siguientes.
       const topesAntes = topesDelMes();
@@ -11752,7 +11790,7 @@ function formGastoTarjeta(alTerminar, existente = null) {
         tipo: d.tipo,
         cuotas: d.cuotas,
         montoTotal: aNumero(d.monto_total),
-        tasaInteres: aNumero(d.tasa_interes),
+        tasaInteres: aNumero(d.tasa_interes, { dinero: false }),
         mesInicio: d.mes_inicio,
         notas: g?.notas || '',
         km: d.km,
@@ -11810,6 +11848,7 @@ function formGastoEfectivo(alTerminar, existente = null) {
       conectarKm(form, 'e-categoria', 'e-km');
     },
     alEnviar(d) {
+      if (!montoValido(d.monto)) return false;
       const topesAntes = topesDelMes();
       upsert('gastosEfectivo', {
         id: g?.id || nuevoId('gastosEfectivo'),
@@ -12012,7 +12051,7 @@ function formInversion(alTerminar, existente = null) {
         institucion: capitalizar(d.institucion),
         tipo: d.tipo,
         capital,
-        tasa_anual: aNumero(d.tasa_anual),
+        tasa_anual: aNumero(d.tasa_anual, { dinero: false }),
         plazo_dias: plazo,
         base: Number(d.base),
         fecha_vencimiento: sumarDias(d.fecha_inicio, plazo),
@@ -12072,6 +12111,7 @@ function formMovimiento(alTerminar, existente = null) {
     cuerpo,
     aceptar: g?.id ? 'Guardar cambios' : 'Registrar',
     alEnviar(d) {
+      if (!montoValido(d.monto)) return false;
       upsert('movimientos', {
         id: g?.id || nuevoId('movimientos'),
         fecha: d.fecha,
@@ -12243,6 +12283,7 @@ function formPagoTarjeta(tarjetaId, mes, monto, alTerminar) {
       refrescar();
     },
     alEnviar(d) {
+      if (!montoValido(d.monto)) return false;
       db.cuotas.forEach((c) => {
         if (c.tarjeta !== tarjetaId || c.mes !== mes) return;
         /*
@@ -12314,7 +12355,7 @@ M["pantalla_llave"] = (function () {
  */
 
 const {abrirCerradura, echarLlave, cerraduraAbierta, escrituraPendiente} = M["store"];
-const {$, crear, esc} = M["ui"];
+const {$, crear} = M["ui"];
 /** Minutos sin tocar la app antes de echar la llave. */
 const ESPERA_MIN = 5;
 
@@ -12529,7 +12570,7 @@ M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
 const {db, tarjetas, usuarios} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, pagoDeTarjeta, topesDelMes, umbralAviso, comprometidoEnMes, realismoDeTopes} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, pagoDeTarjeta, topesDelMes, umbralAviso, comprometidoEnMes, realismoDeTopes, hoyLocal} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
 const {crear, esc, $, segmentado, opciones} = M["ui"];
 const {formGastoTarjeta, formIngreso, formTopes} = M["forms"];
@@ -13005,7 +13046,7 @@ function seccionProximos(mes) {
     }
   });
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyLocal();
   db.inversiones
     .filter((p) => p.estado === 'Activa')
     .sort((a, b) => String(a.fecha_vencimiento).localeCompare(String(b.fecha_vencimiento)))
@@ -13455,9 +13496,18 @@ function exportarCSV(matriz) {
     ...matriz.filas.map((f) => [f.categoria, ...f.valores, f.total]),
     ['TOTAL', ...matriz.totales, matriz.granTotal],
   ];
-  const csv = filas.map((f) => f.map((c) => (
-    typeof c === 'string' && /[",;\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c
-  )).join(',')).join('\n');
+  /*
+   * Un texto que empieza por = + - @ lo abre Excel como FÓRMULA. Los nombres
+   * de categoría llegan también del otro teléfono, así que se tratan como
+   * ajenos: se les antepone un apóstrofo, que Excel lee como «esto es texto».
+   * Las cifras no pasan por aquí: son números, no textos.
+   */
+  const celda = (c) => {
+    if (typeof c !== 'string') return c;
+    const t = /^[=+\-@\t\r]/.test(c) ? `'${c}` : c;
+    return /[",;\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  const csv = filas.map((f) => f.map(celda).join(',')).join('\n');
 
   const url = URL.createObjectURL(new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a');
@@ -14293,7 +14343,7 @@ function render(raiz) {
   const calcular = () => {
     const r = calcularPoliza({
       capital: aNumero($('#c-capital', raiz).value) || 0,
-      tasaAnual: aNumero($('#c-tasa', raiz).value) || 0,
+      tasaAnual: aNumero($('#c-tasa', raiz).value, { dinero: false }) || 0,
       plazoDias: Number($('#c-plazo', raiz).value) || 0,
       base: Number($('#c-base', raiz).value) || 360,
       compuesto: $('#c-comp', raiz).checked,
@@ -14712,10 +14762,10 @@ M["views/datos"] = (function () {
  * y ajustes generales.
  */
 
-const {db, guardar, reemplazar, limpiarTodo, instantanea, instantaneaSinSecretos, tocar, CLAVES, estaCifrada, ponerCerradura, quitarCerradura} = M["store"];
+const {db, guardar, reemplazar, limpiarTodo, instantaneaSinSecretos, tocar, CLAVES, estaCifrada, ponerCerradura, quitarCerradura} = M["store"];
 const {hayCripto, MIN_CLAVE} = M["cerradura"];
 const {ESPERA_MIN} = M["pantalla_llave"];
-const {money, redondear, nombreMes} = M["calc"];
+const {money, redondear, nombreMes, hoyLocal} = M["calc"];
 const {aNumero, esc, $, $$, brindis, modal, confirmar, descargar, pedirArchivo, opciones, avisoInfo} = M["ui"];
 const {formTopes} = M["forms"];
 const {escribirLibro, leerLibro} = M["xlsx"];
@@ -14727,7 +14777,7 @@ const {estadoSync, configurado, sincronizar, probarConexion, iniciarSync, SQL_TA
 
 function exportarExcel() {
   const blob = escribirLibro(construirLibro());
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyLocal();
   descargar(blob, `Finanzas_DB_${hoy}.xlsx`);
   brindis('Excel generado');
 }
@@ -14892,7 +14942,7 @@ function aplicarImportacion(conv, modo) {
 
 function exportarJSON() {
   const blob = new Blob([JSON.stringify(instantaneaSinSecretos(), null, 1)], { type: 'application/json' });
-  descargar(blob, `respaldo_finanzas_${new Date().toISOString().slice(0, 10)}.json`);
+  descargar(blob, `respaldo_finanzas_${hoyLocal()}.json`);
   brindis('Respaldo descargado');
 }
 
@@ -15322,7 +15372,7 @@ function render(raiz) {
     db.config.tema = $('#s-tema', raiz).value;
     db.config.usuarios = $('#s-usuarios', raiz).value.trim() || 'J,C';
     db.config.base_anual_polizas = $('#s-base', raiz).value;
-    db.config.retencion_fuente_polizas = String(aNumero($('#s-ret', raiz).value) || 0);
+    db.config.retencion_fuente_polizas = String(aNumero($('#s-ret', raiz).value, { dinero: false }) || 0);
     guardar();
     document.documentElement.dataset.tema = db.config.tema === 'auto' ? '' : db.config.tema;
     brindis('Ajustes guardados');
@@ -15397,7 +15447,7 @@ M["views/plan"] = (function () {
  */
 
 const {db, guardar, categoriasGasto, cuentasBancarias, tarjetas, upsert, nuevoId, capitalizar} = M["store"];
-const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes} = M["calc"];
+const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes, hoyLocal} = M["calc"];
 const {columnasApiladas, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo} = M["ui"];
 const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago} = M["plan"];
@@ -16119,7 +16169,7 @@ function formFijo(r, alTerminar) {
   const clasePrevia = CLASES.includes(r?.clase) ? r.clase : 'periodico';
   const cats = categoriasGasto();
   const editaDeducido = r && !r.manual;
-  const mesHoy = new Date().toISOString().slice(0, 7);
+  const mesHoy = hoyLocal().slice(0, 7);
   // Para un gasto deducido se propone el medio con más peso en su historial;
   // para uno a plazos, préstamo, que es el caso típico.
   const medioPorDefecto = r?.medio
@@ -16405,7 +16455,7 @@ function formFijo(r, alTerminar) {
         guardarManual({
           ...fila,
           id: `${{ plazos: 'plazo', unico: 'unico' }[clase] || 'fijo'}-${Date.now().toString(36)}`,
-          desde: new Date().toISOString().slice(0, 10),
+          desde: hoyLocal(),
           activo: true,
         });
       } else if (r.manual) {
@@ -16530,7 +16580,7 @@ function formPagar(r, alTerminar, irA) {
   const cuotaAhora = r.clase === 'plazos' && (r.pagadas || 0) + 1 >= r.cuotas
     ? (r.ultimaCuota ?? r.monto) : r.monto;
   const misTarjetas = tarjetas();
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyLocal();
 
   modal({
     titulo: `Pagar ${r.detalle}`,
@@ -17444,7 +17494,7 @@ M["views/vehiculo"] = (function () {
  */
 
 const {db, eliminar, guardar, recolocar} = M["store"];
-const {money, redondear, textoFecha, odometroHoy, kmPorMes, kmEstimadoEnFecha, estadoMantenimientos, eventosVehiculo, planesMantenimiento, guardarPlanMantenimiento, MANTENIMIENTOS, gastoDeMantenimiento, costoTipico, nombreMes, claveMes, recorridosQueNoEncajan, DESVIO_GRAVE, buscarEnElCarro, rangoMeses} = M["calc"];
+const {money, redondear, textoFecha, odometroHoy, kmPorMes, kmEstimadoEnFecha, estadoMantenimientos, eventosVehiculo, planesMantenimiento, guardarPlanMantenimiento, MANTENIMIENTOS, gastoDeMantenimiento, costoTipico, nombreMes, claveMes, recorridosQueNoEncajan, DESVIO_GRAVE, buscarEnElCarro, rangoMeses, hoyLocal} = M["calc"];
 const {fijosManuales, guardarManual} = M["plan"];
 const {esc, $, $$, confirmar, modal, brindis} = M["ui"];
 const {formMantenimiento} = M["forms"];
@@ -18038,7 +18088,7 @@ function seccionPresupuesto() {
 const MES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 /** Días de hoy a una fecha ISO. */
-const diasHasta = (iso) => Math.round((Date.parse(iso) - Date.parse(new Date().toISOString().slice(0, 10))) / 864e5);
+const diasHasta = (iso) => Math.round((Date.parse(iso) - Date.parse(hoyLocal())) / 864e5);
 
 /** «En 3 meses · faltan 3.488 km», «Se pasó por 1.200 km». */
 function cuantoFalta(f) {
@@ -18159,7 +18209,7 @@ function formOdometro(alTerminar) {
                  placeholder="${Math.round(ahora)}" required></div>
         <div class="campo"><label for="od-fecha">Fecha</label>
           <input id="od-fecha" name="fecha" type="date"
-                 value="${new Date().toISOString().slice(0, 10)}" required></div>
+                 value="${hoyLocal()}" required></div>
       </div>
       <div class="previsualizacion" id="od-previa"></div>`,
     aceptar: 'Guardar',
@@ -18247,9 +18297,9 @@ return { render };
 M["app"] = (function () {
 /** Arranque, navegación y botón de registro rápido. */
 
-const {db, cargar, alCambiar, almacenamiento, instantanea, instantaneaSinSecretos, guardar, tarjetas} = M["store"];
+const {db, cargar, alCambiar, almacenamiento, instantaneaSinSecretos, guardar, tarjetas} = M["store"];
 const {iniciarSync, empujarDiferido, alCambiarSync, estadoSync, configurado} = M["sync"];
-const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta} = M["calc"];
+const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta, hoyLocal} = M["calc"];
 const archivoExcel = M["archivo"];
 const {crearCajon} = M["cajon"];
 const {pedirClave, vigilar} = M["pantalla_llave"];
@@ -18484,7 +18534,7 @@ function avisoAlmacenamiento() {
     </div>`);
   nodo.querySelector('#btn-respaldo-urgente').addEventListener('click', () => {
     descargar(new Blob([JSON.stringify(instantaneaSinSecretos(), null, 1)], { type: 'application/json' }),
-      `respaldo_finanzas_${new Date().toISOString().slice(0, 10)}.json`);
+      `respaldo_finanzas_${hoyLocal()}.json`);
   });
   return nodo;
 }
