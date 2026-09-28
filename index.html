@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-sZtMUxwi6QtXbI1B/EmEtMJ2EafhU7p8v8audBK6pUs='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-zdYf+oEzIW+/WqD/Yq7DjUBq1UuM2C6FEuT5KqKUBWc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2747,21 +2747,22 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
 /* Gasto hormiga: la cifra que manda es la del año, no la del corte, así que va
    a la derecha y en grande, donde el ojo ya busca el importe. */
 .hormigas { list-style: none; margin: 0 0 12px; padding: 0; }
+/* Nada se corta: la categoría cortada en «Viver…» era justo el dato que faltaba. */
 .hormigas li {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 2px;
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 11px 2px;
   border-bottom: 1px solid var(--grid);
 }
 .hormigas li:last-child { border-bottom: 0; }
 .hormigas .principal { flex: 1; min-width: 0; }
-.hormigas .titulo {
-  font-weight: 570; font-size: 13px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+.hormigas .titulo { font-weight: 570; font-size: 13px; line-height: 1.4; }
+.hormigas .titulo > .chip { vertical-align: middle; margin-left: 6px; }
 .hormigas .meta {
-  margin-top: 2px; font-size: 11px; color: var(--tinta-3);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  margin-top: 3px; font-size: 11.5px; line-height: 1.45; color: var(--tinta-3);
+  font-variant-numeric: tabular-nums;
 }
+.hormigas .meta.ritmo { color: var(--tinta-2); }
+.hormigas .meta.ritmo strong { color: var(--alerta); font-weight: 620; }
 .hormigas .monto {
   flex: none; text-align: right;
   font-weight: 640; font-size: 14px;
@@ -5940,41 +5941,77 @@ function comprometidoProximos(cuantos = 6, tarjetaId = null, usuario = 'ambos') 
  * año no lo es. Hace falta contarlas, no medirlas.
  */
 
-/** Techo del ticket medio para considerarlo hormiga, y mínimo de visitas. */
+/**
+ * Techo del ticket medio para considerarlo hormiga, y mínimo de compras AL
+ * MES. Al mes y no en total: con un año elegido, seis compras en total las
+ * tiene casi cualquier sitio.
+ */
 const HORMIGA = { ticket: 25, visitas: 6 };
 
 /** «Juan Valdez», «juan valdez» y «JUAN VALDEZ  » son el mismo sitio. */
 function claveComercio(nombre) {
   return String(nombre || '')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+/*
+ * Nombres que no son un sitio sino un cajón: «Casa», «Varios», «Compras».
+ * Juntan compras de tiendas distintas, y ahí el agrupado no dice dónde se va
+ * el dinero. Se avisa para que al apuntar se escriba la tienda.
+ */
+const NOMBRES_CAJON = new Set([
+  'casa', 'hogar', 'varios', 'varias', 'otros', 'otro', 'compras', 'compra',
+  'gasto', 'gastos', 'tienda', 'mercado', 'super', 'supermercado', 'comida',
+  'viveres', 'efectivo',
+]);
+
 /**
- * Los comercios de gasto hormiga en un rango de meses.
+ * Los sitios de gasto hormiga en un rango de meses.
  *
  * Cuenta COMPRAS, no cuotas: un diferido a seis meses es una visita, no seis.
  * Por eso mira los gastos y no las cuotas, al revés que el resto de la app.
  *
- * @returns {Array<object>} por total gastado, de más a menos
+ * Dos cifras del año, y no una, porque dicen cosas distintas:
+ *  - `ultimoAnio`: lo que de verdad se gastó ahí en los doce meses que acaban
+ *    en el último del corte. Es un hecho.
+ *  - `ritmoAnio`: lo del corte llevado a doce meses. Con un solo mes —y a
+ *    medias— es una proyección gruesa, pero avisa cuando un sitio se está
+ *    acelerando o es nuevo.
+ *
+ * @returns {Array<object>} por lo gastado en el corte, de más a menos
  */
 function gastoHormiga(meses, filtros = {}) {
-  const set = new Set(meses);
+  const nMeses = Math.max(1, meses.length);
+  const enCorte = new Set(meses);
   const ticketMax = filtros.ticket ?? HORMIGA.ticket;
-  const minVisitas = filtros.visitas ?? HORMIGA.visitas;
+  const minVisitas = filtros.visitas ?? Math.ceil(HORMIGA.visitas * nMeses);
+  const ultimo = [...meses].sort().pop() || mesActual();
+  const enAnio = new Set(rangoMeses(sumarMeses(ultimo, -11), ultimo));
   const grupos = new Map();
 
   const anotar = (nombre, monto, categoria, mes) => {
-    if (!set.has(mes) || !(monto > 0)) return;
+    if (!(monto > 0) || (!enCorte.has(mes) && !enAnio.has(mes))) return;
     const clave = claveComercio(nombre);
     if (!clave) return;
     const g = grupos.get(clave) || {
-      nombre: String(nombre).trim(), visitas: 0, total: 0, categorias: new Set(), meses: new Set(),
+      clave,
+      nombre: String(nombre).trim(),
+      visitas: 0,
+      total: 0,
+      visitasAnio: 0,
+      totalAnio: 0,
+      categorias: new Map(),
     };
-    g.visitas += 1;
-    g.total += monto;
-    if (categoria) g.categorias.add(categoria);
-    g.meses.add(mes);
+    if (enCorte.has(mes)) {
+      g.visitas += 1;
+      g.total += monto;
+      if (categoria) g.categorias.set(categoria, (g.categorias.get(categoria) || 0) + 1);
+    }
+    if (enAnio.has(mes)) {
+      g.visitasAnio += 1;
+      g.totalAnio += monto;
+    }
     grupos.set(clave, g);
   };
 
@@ -5994,19 +6031,22 @@ function gastoHormiga(meses, filtros = {}) {
     }
   }
 
-  const nMeses = Math.max(1, meses.length);
   return [...grupos.values()]
+    .filter((g) => g.visitas > 0)
     .map((g) => {
       const total = redondear(g.total);
+      // La categoría en que más veces se apuntó, no la primera que salga.
+      const categoria = [...g.categorias.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
       return {
         nombre: g.nombre,
         visitas: g.visitas,
         total,
         ticket: redondear(total / g.visitas),
-        // Al ritmo del corte, cuánto sale al año. Es la cifra que sorprende.
-        alAnio: redondear((total / nMeses) * 12),
-        mesesConVisita: g.meses.size,
-        categoria: [...g.categorias][0] || '',
+        ultimoAnio: redondear(g.totalAnio),
+        visitasAnio: g.visitasAnio,
+        ritmoAnio: redondear((total / nMeses) * 12),
+        categoria,
+        generico: NOMBRES_CAJON.has(g.clave) || g.clave === claveComercio(categoria),
       };
     })
     .filter((g) => g.visitas >= minVisitas && g.ticket <= ticketMax)
@@ -16863,32 +16903,50 @@ function seccionHormiga(meses, filtros) {
   const filas = gastoHormiga(meses, filtros);
   const cab = `<header><h2>Gasto hormiga</h2>
     <span class="pista">Lo que se repite</span></header>`;
+  // Los meses del corte dichos con todas las letras: «en septiembre 2026».
+  const periodo = meses.length === 1
+    ? `en ${nombreMes(meses[0]).toLowerCase()}`
+    : `entre ${nombreMes(meses[0], true).toLowerCase()} y ${
+      nombreMes(meses[meses.length - 1], true).toLowerCase()}`;
+  const regla = `${HORMIGA.visitas} veces al mes o más`;
 
   if (!filas.length) {
-    return `${cab}<p class="vacio">En este corte no hay ningún sitio con
-      ${HORMIGA.visitas} visitas o más y un ticket medio por debajo de
-      ${money(HORMIGA.ticket)}. Prueba con más meses.</p>`;
+    return `${cab}<p class="vacio">${periodo.charAt(0).toUpperCase()}${periodo.slice(1)}
+      no hay ningún sitio con compras de menos de ${money(HORMIGA.ticket)} que
+      se repitan ${regla}.</p>`;
   }
 
-  const alAnio = redondear(filas.reduce((s, f) => s + f.alAnio, 0));
-  const visitas = filas.reduce((s, f) => s + f.visitas, 0);
+  const anio = redondear(filas.reduce((s, f) => s + f.ultimoAnio, 0));
+  const ritmo = redondear(filas.reduce((s, f) => s + f.ritmoAnio, 0));
+  const compras = filas.reduce((s, f) => s + f.visitas, 0);
+  // El ritmo solo se cuenta cuando dice algo nuevo: que va más rápido que el año.
+  const acelera = (real, proyectado) => proyectado > real * 1.1;
+
   return `${cab}
-    <p class="pista" style="margin:-4px 0 12px">Sitios con ${HORMIGA.visitas}
-    visitas o más y un ticket medio por debajo de ${money(HORMIGA.ticket)}.
-    Cada compra es pequeña; la de la derecha es la suma de un año a este ritmo.</p>
+    <p class="pista" style="margin:-4px 0 12px">Compras de menos de
+    ${money(HORMIGA.ticket)} que se repiten ${regla}, ${periodo}. Se agrupan por
+    el nombre con que las apuntas. A la derecha, lo que sumaron ahí en el
+    último año.</p>
     <ul class="hormigas">${filas.map((f) => `
       <li>
         <div class="principal">
-          <div class="titulo">${esc(f.nombre)}</div>
-          <div class="meta">${f.visitas} ${f.visitas === 1 ? 'visita' : 'visitas'} ·
-            ${money(f.ticket)} de media · ${money(f.total)} en el corte${
-  f.categoria ? ` · ${esc(f.categoria)}` : ''}</div>
+          <div class="titulo">${esc(f.nombre)}${
+  f.categoria ? ` <span class="chip">${esc(f.categoria)}</span>` : ''}</div>
+          <div class="meta">${f.visitas} compras ${periodo} · ${money(f.ticket)}
+            cada una · ${money(f.total)}</div>
+          ${acelera(f.ultimoAnio, f.ritmoAnio) ? `<div class="meta ritmo">A este
+            ritmo serían <strong>${money(f.ritmoAnio)}</strong> al año</div>` : ''}
+          ${f.generico ? `<p class="aviso-flojo">«${esc(f.nombre)}» no es un
+            sitio: junta compras de tiendas distintas. Si al apuntarlas escribes
+            la tienda, aquí se ve dónde se va.</p>` : ''}
         </div>
-        <div class="monto">${money(f.alAnio)}<span class="pie">al año</span></div>
+        <div class="monto">${money(f.ultimoAnio)}<span class="pie">último año</span></div>
       </li>`).join('')}</ul>
-    <div class="aviso alerta"><span class="icono">Σ</span>
-      <span class="crece">${visitas} compras pequeñas que, al ritmo de este
-      corte, son <strong>${money(alAnio)}</strong> en un año.</span></div>`;
+    ${filas.length > 1 ? `
+      <div class="aviso alerta"><span class="icono">Σ</span>
+        <span class="crece">${compras} compras pequeñas ${periodo}. En el último
+        año estos ${filas.length} sitios sumaron <strong>${money(anio)}</strong>${
+  acelera(anio, ritmo) ? `; a este ritmo serían ${money(ritmo)}` : ''}.</span></div>` : ''}`;
 }
 
 /** Cómo se llama el corte que se está mirando, para la cabecera. */
