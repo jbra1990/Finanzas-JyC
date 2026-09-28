@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-SSpXJ3o+Kzndux80/osDzEH9QwKDEFBUjg8AG2+Ga+M='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-sZtMUxwi6QtXbI1B/EmEtMJ2EafhU7p8v8audBK6pUs='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -1154,6 +1154,47 @@ a { color: var(--acento); }
   flex: 0 1 auto;
   min-width: 0;
   margin-right: 16px;
+}
+
+/*
+ * Tarjetas plegables al tocar su título (pliegue.js): solo las largas que se
+ * eligieron —«Dónde recortar», «Qué toca», «Lo que viene» y «Cada cuánto
+ * compras»—. Plegada, es solo su cabecera. El cuerpo NO se quita con
+ * `display: none`: se queda con su ancho y altura cero, invisible —y fuera
+ * del tabulador y del lector de pantalla, que es lo que hace `visibility`—.
+ */
+.tarjeta[data-plegable] > header { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tarjeta[data-plegable] > header:focus-visible {
+  outline: 2px solid var(--acento); outline-offset: -2px; border-radius: var(--radio-xl);
+}
+.tarjeta[data-plegable] > header h2 { display: flex; align-items: center; gap: 9px; }
+/* La flecha: abajo plegada, arriba abierta. */
+.tarjeta[data-plegable] > header h2::before {
+  content: '';
+  flex: none;
+  width: 7px; height: 7px;
+  margin: -3px 1px 0 2px;
+  border-right: 2px solid var(--tinta-3);
+  border-bottom: 2px solid var(--tinta-3);
+  transform: rotate(45deg);
+  transition: transform 0.18s ease, margin 0.18s ease;
+}
+.tarjeta[data-plegada="no"] > header h2::before { transform: rotate(-135deg); margin-top: 4px; }
+.tarjeta[data-plegada="si"] { padding-bottom: 0; }
+.tarjeta[data-plegada="si"] > header { margin-bottom: 0; }
+/* El filete que baja de la pestaña hacia el cuerpo: sin cuerpo, cuelga en el aire. */
+.tarjeta[data-plegada="si"] > header > .pista::after { display: none; }
+.tarjeta[data-plegada="si"] > :not(header) {
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tarjeta[data-plegable] > header h2::before { transition: none; }
 }
 
 .rejilla { display: grid; gap: 12px; }
@@ -12148,6 +12189,96 @@ function vigilar(raiz) {
 return { ESPERA_MIN, bloquearYa, pedirClave, vigilar };
 })();
 
+M["pliegue"] = (function () {
+/**
+ * Tarjetas que se pliegan al tocar su título.
+ *
+ * Solo las que se eligen una a una, que son las largas: «Dónde recortar» en
+ * Análisis, «Qué toca» y «Lo que viene» en Vehículo y «Cada cuánto compras»
+ * en Presupuesto. Se probó plegarlas todas y no convenció: aquí cada vista
+ * decide cuál, llamando a `plegable` después de pintarla.
+ *
+ * Arrancan plegadas y se acuerdan de cómo las dejó quien las mira, en ESTE
+ * teléfono: es cómo se ve, no un dato, así que va aparte de la base y no se
+ * sincroniza.
+ */
+
+const CLAVE = 'finanzas.jc.plegado';
+
+/* Lo que se pulsa dentro de la cabecera y NO es plegar: tiene su propio uso. */
+const CONTROLES = 'button, a, input, select, textarea, label, summary';
+
+let estado = null;
+const enganchadas = new WeakSet();
+
+function estados() {
+  if (!estado) {
+    try { estado = JSON.parse(localStorage.getItem(CLAVE) || '{}') || {}; } catch { estado = {}; }
+  }
+  return estado;
+}
+
+function recordar() {
+  try { localStorage.setItem(CLAVE, JSON.stringify(estados())); } catch { /* solo esta sesión */ }
+}
+
+/** Pone la tarjeta plegada o abierta según se dejó. */
+function poner(caja) {
+  const abierta = estados()[caja.dataset.pliegue] === 'abierta';
+  caja.dataset.plegable = 'si';
+  caja.dataset.plegada = abierta ? 'no' : 'si';
+  const cab = caja.querySelector(':scope > header');
+  if (!cab) return;
+  cab.setAttribute('role', 'button');
+  cab.setAttribute('tabindex', '0');
+  cab.setAttribute('aria-expanded', abierta ? 'true' : 'false');
+}
+
+function alternar(caja) {
+  const k = caja.dataset.pliegue;
+  if (estados()[k] === 'abierta') delete estados()[k];
+  else estados()[k] = 'abierta';
+  recordar();
+  poner(caja);
+}
+
+/**
+ * Hace plegable una tarjeta. Se llama DESPUÉS de cada pintado de su
+ * contenido: si la vista repinta la tarjeta por dentro, la cabecera es nueva
+ * y hay que volver a marcarla. Los oyentes se ponen una sola vez por caja.
+ *
+ * @param {Element|null} caja la `.tarjeta`
+ * @param {string} clave con qué nombre se recuerda, p. ej. 'vehiculo:toca'
+ */
+function plegable(caja, clave) {
+  if (!caja) return;
+  caja.dataset.pliegue = clave;
+  poner(caja);
+  if (enganchadas.has(caja)) return;
+  enganchadas.add(caja);
+
+  const cabeceraDe = (e) => {
+    const cab = e.target.closest('header');
+    if (!cab || cab.parentElement !== caja) return null;
+    // Un botón o un selector de la cabecera hace lo suyo, no pliega.
+    const control = e.target.closest(CONTROLES);
+    return control && cab.contains(control) ? null : cab;
+  };
+  caja.addEventListener('click', (e) => {
+    if (cabeceraDe(e)) alternar(caja);
+  });
+  caja.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const cab = cabeceraDe(e);
+    if (!cab || e.target !== cab) return;
+    e.preventDefault();
+    alternar(caja);
+  });
+}
+
+return { plegable };
+})();
+
 M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
@@ -15026,6 +15157,7 @@ const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, fi
 const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago} = M["plan"];
 const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
 const vistaTarjetas = M["views/tarjetas"];
+const {plegable} = M["pliegue"];
 /*
  * `quien` arranca en J: el presupuesto es una herramienta de decisión personal
  * y mezclar dos bolsillos daba una cifra que no es de nadie. Se puede cambiar
@@ -15256,6 +15388,9 @@ function render(raiz, { irA } = {}) {
           <span class="pista">Fuera de la previsión</span></header>
         ${listaRecurrencias(irregulares, null)}
       </section>` : ''}`;
+
+  // Larga —un concepto por fila—: se pliega al tocar su título.
+  plegable($('#ritmo', raiz), 'plan:ritmo');
 
   $('#seg-quien', raiz).appendChild(segmentado(
     [{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' },
@@ -16323,6 +16458,7 @@ M["views/analisis"] = (function () {
 const {nombreMes, money, moneyHTML, redondear, rangoMeses, mesActual, mesesConDatos, textoFecha, detalleDeGastos, gastoHormiga, HORMIGA, buscarHistorial, odometroHoy, dondeRecortar, guardarNivel, NIVELES} = M["calc"];
 const {guardar} = M["store"];
 const {esc, $, $$, segmentado, modal, brindis, opciones, descargar, filaMovimiento} = M["ui"];
+const {plegable} = M["pliegue"];
 const {informeMensual, compartir} = M["informe"];
 /*
  * El corte se recuerda mientras dure la sesión: se sale a mirar otra cosa y al
@@ -16583,6 +16719,8 @@ function pintarRecorte(raiz) {
   const caja = $('#an-recorte', raiz);
   if (!caja) return;
   caja.innerHTML = seccionRecorte(corte.quien);
+  // Larga —una línea por categoría—: se pliega al tocar su título.
+  plegable(caja, 'analisis:recorte');
 
   // Cambiar el nivel de una categoría y repintar solo esta caja: la clave está
   // en que la lista se reordena, y repintar la vista entera perdería el sitio.
@@ -16977,6 +17115,7 @@ const {money, redondear, textoFecha, odometroHoy, kmPorMes, kmEstimadoEnFecha, e
 const {fijosManuales, guardarManual} = M["plan"];
 const {esc, $, $$, confirmar, modal, brindis} = M["ui"];
 const {formMantenimiento} = M["forms"];
+const {plegable} = M["pliegue"];
 /** 284546 → «284.546 km». */
 const km = (n) => `${Math.round(Number(n) || 0).toLocaleString('es-EC')} km`;
 
@@ -17052,7 +17191,7 @@ function render(raiz) {
 
     ${bloqueLecturas()}
 
-    <section class="tarjeta">
+    <section class="tarjeta" id="veh-toca">
       <header><h2>Qué toca</h2><span class="pista">Por kilómetros</span></header>
       ${bloqueQueToca(estados, pendientes, odometro, ritmo)}
     </section>
@@ -17065,6 +17204,10 @@ function render(raiz) {
       <header><h2>Lo que se le ha hecho</h2><span class="pista">Todo el historial</span></header>
       ${listaEventos(eventos)}
     </section>`;
+
+  // Las dos largas se pliegan al tocar su título.
+  plegable($('#veh-toca', raiz), 'vehiculo:toca');
+  plegable($('#veh-presupuesto', raiz), 'vehiculo:viene');
 
   const caja = $('#veh-hallazgos', raiz);
   const pintarHallazgos = () => {
