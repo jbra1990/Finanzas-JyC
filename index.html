@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-JVUeAe+I4tw8uhOp6xUCDnlFkL+ASn4aWNmc4likdWs='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-iopA0ee64i1B34/OakVOFbimLFjJeF4z2UkvBqFOyTs='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -5052,10 +5052,24 @@ function recorridoCombustible(filtros = {}) {
   // Los km de cada mes, del odómetro.
   const { buenas } = lecturasRevisadas();
   let fuente = 'odometro';
+  /*
+   * El mes en curso —o el último con lecturas— no tiene todavía lectura del
+   * día 1 del mes siguiente, y quedaba en cero aunque el carro llevara
+   * cientos de km. Se mide hasta la ÚLTIMA lectura y se marca como parcial:
+   * se enseña, pero no entra en las medias, que un mes a medias hundiría.
+   */
+  const ultima = buenas[buenas.length - 1];
+  if (ultima) casilla(claveMes(ultima.fecha));
   for (const c of porMes.values()) {
     const a = interpolarKm(buenas, `${c.mes}-01`, { estricto: true });
     const b = interpolarKm(buenas, `${sumarMeses(c.mes, 1)}-01`, { estricto: true });
     c.km = a !== null && b !== null && b > a ? Math.round(b - a) : 0;
+    c.parcial = false;
+    if (!c.km && a !== null && b === null && ultima && claveMes(ultima.fecha) === c.mes && ultima.km > a) {
+      c.km = Math.round(ultima.km - a);
+      c.parcial = true;
+      c.hasta = ultima.fecha;
+    }
   }
 
   // Sin odómetro, lo de siempre: la diferencia entre repostajes con km.
@@ -5072,9 +5086,11 @@ function recorridoCombustible(filtros = {}) {
   const meses = [...porMes.values()]
     .filter((m) => m.repostajes > 0 || m.km > 0)
     .sort((a, b) => a.mes.localeCompare(b.mes));
-  meses.forEach((m) => { m.porKm = m.km > 0 ? redondear(m.gastoCarro / m.km) : 0; });
+  // Un mes a medias no tiene coste por km: lo repostado va por delante de lo
+  // recorrido, y la cifra saldría de cualquier cosa.
+  meses.forEach((m) => { m.porKm = m.km > 0 && !m.parcial ? redondear(m.gastoCarro / m.km) : 0; });
 
-  const conKm = meses.filter((m) => m.km > 0);
+  const conKm = meses.filter((m) => m.km > 0 && !m.parcial);
   const km = conKm.reduce((s, m) => s + m.km, 0);
   const gastoMedido = redondear(conKm.reduce((s, m) => s + m.gastoCarro, 0));
   return {
@@ -5087,6 +5103,8 @@ function recorridoCombustible(filtros = {}) {
     kmPorMes: conKm.length ? Math.round(km / conKm.length) : 0,
     mesesMedidos: conKm.length,
     fuente,
+    // El mes que va a medias, si lo hay: se enseña aparte de las medias.
+    enCurso: meses.find((m) => m.parcial) || null,
     ultima: odometroHoy(),
     repostajes: repostajes.length,
     conMedida: repostajes.filter((r) => r.km > 0).length,
@@ -13151,7 +13169,8 @@ function seccionCombustible(filtros) {
     <ul class="lista compacta">${meses.map((m, i) => {
     const previo = meses[i + 1];
     // Sin km en alguno de los dos meses no hay comparación: un mes a medias no «baja un 100 %».
-    const dif = previo && previo.km > 0 && m.km > 0 ? ((m.km - previo.km) / previo.km) * 100 : null;
+    const dif = previo && previo.km > 0 && m.km > 0 && !m.parcial && !previo.parcial
+      ? ((m.km - previo.km) / previo.km) * 100 : null;
     return `
       <li>
         <div class="principal">
@@ -13160,7 +13179,9 @@ function seccionCombustible(filtros) {
             <span style="flex:${m.km};background:var(--serie-2)"></span>
             <span style="flex:${Math.max(0, maxKm - m.km)};background:transparent"></span>
           </div>
-          <div class="meta">${money(m.gasto)}${m.km > 0 ? ` · ${money(m.porKm)}/km` : ''}${
+          <div class="meta">${money(m.gasto)}${m.parcial
+    ? ` · en curso, hasta el ${esc(textoFecha(m.hasta).replace(/ de \d{4}$/, ''))}`
+    : m.km > 0 ? ` · ${money(m.porKm)}/km` : ''}${
   dif === null ? '' : ` · ${dif >= 0 ? '↗' : '↘'} ${Math.abs(dif).toFixed(0)} % vs. mes previo`}</div>
         </div>
         <div class="monto">${m.km > 0 ? miles(m.km) : '—'}<span class="pie">km</span></div>
