@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-iopA0ee64i1B34/OakVOFbimLFjJeF4z2UkvBqFOyTs='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-CClOUG+6Pa8rWSCBWzIZAA84IfkPsCs5Vl9vkpVKaho='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -5182,9 +5182,17 @@ function serieMensual(meses, filtros = {}) {
   });
 }
 
-/** Acumulados históricos de toda la base. */
+/**
+ * Acumulados históricos de toda la base, HASTA el mes en curso.
+ *
+ * Las cuotas de un diferido ya están en la base para los meses que vienen, y
+ * sumarlas aquí contaba como gastado lo que todavía no ha llegado: en
+ * septiembre de 2026 eran $1.422,65 de octubre a mayo, y el déficit salía
+ * inflado en esa cantidad. Lo que viene tiene su sitio en «Ya comprometido».
+ */
 function acumuladoHistorico(filtros = {}) {
-  const meses = mesesConDatos();
+  const hoy = mesActual();
+  const meses = mesesConDatos().filter((m) => m <= hoy);
   const serie = serieMensual(meses, filtros);
   const ingresos = redondear(serie.reduce((s, x) => s + x.ingreso, 0));
   const gastos = redondear(serie.reduce((s, x) => s + x.gasto, 0));
@@ -13545,7 +13553,7 @@ M["views/anual"] = (function () {
 /** Vista «Año»: el cuadro visual del año completo, mes a mes. */
 
 const {tarjetas} = M["store"];
-const {nombreMes, money, moneyHTML, matrizCategoriaMes, totalPorCategoria, serieMensual, añosDisponibles, redondear, totalPorUsuario} = M["calc"];
+const {nombreMes, money, moneyHTML, matrizCategoriaMes, totalPorCategoria, serieMensual, añosDisponibles, redondear, totalPorUsuario, mesActual} = M["calc"];
 const {columnas, columnasApiladas, linea, dona, barrasHorizontales, plegarOtros, alRedimensionar} = M["charts"];
 const {esc, $, opciones, segmentado} = M["ui"];
 const estado = { año: null, usuario: 'ambos', tarjeta: 'todas' };
@@ -13553,10 +13561,28 @@ const estado = { año: null, usuario: 'ambos', tarjeta: 'todas' };
 function render(raiz) {
   const años = añosDisponibles();
   if (!estado.año || !años.includes(estado.año)) {
-    estado.año = años[años.length - 1];
+    /*
+     * El año en curso, no el último que tenga algo: las cuotas de un diferido
+     * ya llegan al año que viene, y abrir ahí enseñaba «Gasto total 2027» con
+     * solo lo que falta por pagar.
+     */
+    const actual = mesActual().slice(0, 4);
+    estado.año = años.includes(actual) ? actual
+      : ([...años].reverse().find((a) => a <= actual) || años[años.length - 1]);
   }
 
-  const meses = Array.from({ length: 12 }, (_, i) => `${estado.año}-${String(i + 1).padStart(2, '0')}`);
+  /*
+   * Hasta el mes en curso. Las cuotas de un diferido ya están en la base para
+   * los meses que vienen: contarlas metía en «Gasto total 2026» lo que aún no
+   * ha llegado, y los tres meses con solo cuotas bajaban la media. Un año
+   * que todavía no empieza se enseña entero: es lo ya comprometido.
+   */
+  const hoy = mesActual();
+  const doce = Array.from({ length: 12 }, (_, i) => `${estado.año}-${String(i + 1).padStart(2, '0')}`);
+  const futuro = doce.every((m) => m > hoy);
+  const meses = futuro ? doce : doce.filter((m) => m <= hoy);
+  const alcance = futuro ? ' · ya comprometido'
+    : meses.length < 12 ? ` · hasta ${nombreMes(hoy).split(' ')[0].toLowerCase()}` : '';
   const filtros = { usuario: estado.usuario, tarjeta: estado.tarjeta };
 
   const serie = serieMensual(meses, filtros);
@@ -13581,7 +13607,7 @@ function render(raiz) {
     <section class="tarjeta">
       <header>
         <div class="heroe-cab">
-          <span class="pista">Gasto total ${esc(estado.año)}</span>
+          <span class="pista">Gasto total ${esc(estado.año)}${esc(alcance)}</span>
           <div class="heroe">${moneyHTML(gastos)}</div>
           <span class="pista">Media ${money(mesesConGasto ? gastos / mesesConGasto : 0)} al mes</span>
         </div>
