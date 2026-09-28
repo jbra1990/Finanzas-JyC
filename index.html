@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-zdYf+oEzIW+/WqD/Yq7DjUBq1UuM2C6FEuT5KqKUBWc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-tsqR3V0ub71NQlB94zrp28IXj1d5xsKgT0f5dmZi8ic='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2774,6 +2774,51 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
   font-size: 10px; font-weight: 550; letter-spacing: 0;
   color: var(--tinta-3);
 }
+
+/* Gasto hormiga por categoría: el año arriba, y cada categoría con sus
+   sitios y dos formas de ahorrar dichas como gestos, con su cifra. */
+.hormiga-total {
+  display: flex; flex-direction: column; gap: 2px;
+  margin: 0 0 12px; padding: 12px 14px;
+  border-radius: var(--radio-l);
+  background: var(--baldosa, var(--superficie-2));
+  border: 1px solid var(--borde);
+}
+.hormiga-total .etq {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--tinta-3);
+}
+.hormiga-total .cifra-h {
+  font-size: 22px; font-weight: 680; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; color: var(--alerta);
+}
+.hormiga-total .nota { font-size: 12px; color: var(--tinta-2); }
+.hormiga-total .nota strong { color: var(--tinta); font-weight: 620; }
+.hormiga-cats { list-style: none; margin: 6px 0 4px; padding: 0; }
+.hormiga-cats li { padding: 12px 2px; border-bottom: 1px solid var(--grid); }
+.hormiga-cats li:last-child { border-bottom: 0; }
+.hc-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.hc-nombre { font-weight: 600; font-size: 13.5px; }
+.hc-monto {
+  flex: none; text-align: right;
+  font-weight: 660; font-size: 14.5px; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; color: var(--alerta);
+}
+.hc-monto .pie { display: block; font-size: 10px; font-weight: 550; letter-spacing: 0; color: var(--tinta-3); }
+.hc-meta {
+  margin-top: 3px; font-size: 11.5px; line-height: 1.45; color: var(--tinta-3);
+  font-variant-numeric: tabular-nums;
+}
+.hc-formas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.hc-forma {
+  padding: 5px 10px;
+  border-radius: var(--radio-pill);
+  background: color-mix(in srgb, var(--acento) 12%, transparent);
+  font-size: 11.5px; color: var(--tinta-2);
+}
+.hc-forma b { color: var(--acento); font-weight: 640; margin-left: 3px; }
+.hc-nota { margin: 6px 0 14px; font-size: 11.5px; }
+.hc-sub { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--grid); }
 
 /* Lo ya firmado dentro del tope de tarjetas: segunda línea, más apagada, para
    que no compita con «cuánto queda». */
@@ -6050,7 +6095,162 @@ function gastoHormiga(meses, filtros = {}) {
       };
     })
     .filter((g) => g.visitas >= minVisitas && g.ticket <= ticketMax)
+    // Lo que se necesita cada mes —víveres, combustible, farmacia, el
+    // carro— no es hormiga aunque sea pequeño y frecuente.
+    .filter((g) => !g.categoria || nivelDe(g.categoria) !== 'necesario')
     .sort((a, b) => b.total - a.total);
+}
+
+/**
+ * El gasto hormiga POR CATEGORÍA: lo que de verdad se escapa.
+ *
+ * Por sitio no se ve: en un año hubo compras pequeñas de restaurante en 49
+ * sitios distintos y ninguno llegó a seis al mes, pero juntas fueron 89
+ * compras y más de mil dólares. El hábito está en la categoría, no en la
+ * tienda.
+ *
+ * Solo cuenta lo que se PUEDE DEJAR —el nivel «prescindible» de «Dónde
+ * recortar», que se corrige a mano y aquí manda—. Los víveres, el
+ * combustible, la farmacia o el carro también son compras pequeñas y
+ * frecuentes, pero se necesitan cada mes: no son hormiga.
+ *
+ * Mira los doce meses CERRADOS, como «Dónde recortar»: un hábito no se ve en
+ * un mes. Y cuenta COMPRAS de menos de $25, no cuotas: una cena de $60 no es
+ * hormiga; un café de $4 tres veces por semana, sí.
+ *
+ * @returns {{meses: string[], filas: object[], compras: number, total: number,
+ *   alMes: number, pico: object|null}}
+ */
+function hormigaPorCategoria(filtros = {}) {
+  const hoy = mesActual();
+  const meses = rangoMeses(sumarMeses(hoy, -12), sumarMeses(hoy, -1));
+  const dentro = new Set(meses);
+  const grupos = new Map();
+
+  const anotar = (g, monto) => {
+    const mes = claveMes(g.fecha);
+    const cat = String(g.categoria || '').trim();
+    if (!dentro.has(mes) || !(monto > 0) || monto >= HORMIGA.ticket || !cat) return;
+    if (nivelDe(cat) !== 'prescindible') return;
+    const x = grupos.get(cat) || { categoria: cat, compras: 0, total: 0, sitios: new Map(), primero: mes, porMes: new Map() };
+    x.compras += 1;
+    x.total += monto;
+    if (mes < x.primero) x.primero = mes;
+    const pm = x.porMes.get(mes) || { compras: 0, total: 0 };
+    pm.compras += 1;
+    pm.total += monto;
+    x.porMes.set(mes, pm);
+    const k = claveComercio(g.detalle);
+    if (k) {
+      const sitio = x.sitios.get(k) || { nombre: String(g.detalle).trim(), compras: 0, total: 0 };
+      sitio.compras += 1;
+      sitio.total += monto;
+      x.sitios.set(k, sitio);
+    }
+    grupos.set(cat, x);
+  };
+
+  const medio = filtros.medio || 'ambos';
+  if (medio !== 'efectivo') {
+    for (const g of db.gastosTarjeta) {
+      if (pasaUsuario(filtros, g.usuario)) anotar(g, Number(g.monto_total) || 0);
+    }
+  }
+  if (medio !== 'tarjeta') {
+    for (const g of db.gastosEfectivo) {
+      if (pasaUsuario(filtros, g.usuario)) anotar(g, Number(g.monto) || 0);
+    }
+  }
+
+  const filas = [...grupos.values()].map((x) => {
+    // Una categoría nueva se mide desde que existe, no sobre doce meses en
+    // los que no se podía usar.
+    const activos = Math.max(1, difMeses(x.primero, meses[meses.length - 1]) + 1);
+    const total = redondear(x.total);
+    const ticket = redondear(total / x.compras);
+    const alMesCompras = x.compras / activos;
+    const sitios = [...x.sitios.values()]
+      .map((t) => ({ ...t, total: redondear(t.total) }))
+      .sort((a, b) => b.compras - a.compras || b.total - a.total);
+    /*
+     * Al año: lo del año si hay año; si lleva tres meses o más, lo suyo
+     * llevado a doce. Con menos no se proyecta: un solo mes llevado a doce
+     * convertía los $72 de agosto en «$863 al año».
+     */
+    const nueva = activos < 3;
+    const alAnio = activos >= 12 || nueva ? total : redondear((total / activos) * 12);
+
+    /*
+     * Formas de ahorrar, en gestos que se pueden hacer, con su cifra al año.
+     * «Gastar menos en restaurantes» no se puede hacer; «una vez menos a la
+     * semana» sí.
+     */
+    const formas = [];
+    if (nueva) {
+      // Sin meses suficientes no hay hábito del que sacar una cifra al año.
+    } else if (alMesCompras >= 8) {
+      formas.push({ gesto: 'Una vez menos a la semana', alAnio: redondear(Math.min(alAnio, ticket * 52)) });
+    } else if (alMesCompras >= 4) {
+      // A 4–8 al mes, «una menos a la semana» es quitar más de la mitad.
+      formas.push({ gesto: 'Una vez menos cada dos semanas', alAnio: redondear(Math.min(alAnio, ticket * 26)) });
+    } else {
+      formas.push({ gesto: 'Una vez menos al mes', alAnio: redondear(Math.min(alAnio, ticket * 12)) });
+    }
+    const top = sitios[0];
+    if (!nueva && top && top.compras >= 6 && top.compras / x.compras >= 0.15) {
+      const suyo = activos >= 12 ? top.total : redondear((top.total / activos) * 12);
+      formas.push({ gesto: `Sin ${top.nombre}`, alAnio: redondear(suyo) });
+    }
+    if (!nueva) formas.push({ gesto: 'La mitad de las veces', alAnio: redondear(alAnio / 2) });
+
+    return {
+      categoria: x.categoria,
+      compras: x.compras,
+      total,
+      ticket,
+      alMes: redondear(alAnio / 12),
+      comprasAlMes: redondear(alMesCompras),
+      alAnio,
+      desde: activos < 12 ? x.primero : null,
+      nueva,
+      sitios: sitios.slice(0, 3),
+      nSitios: sitios.length,
+      formas: formas.slice(0, 2),
+    };
+  })
+    // Hormiga es lo que se repite: dos compras al mes o más.
+    .filter((f) => f.comprasAlMes >= 2)
+    .sort((a, b) => b.alAnio - a.alAnio);
+
+  // El total y el pico, solo de las categorías que se enseñan.
+  const nombres = new Set(filas.map((f) => f.categoria));
+  const serie = meses.map((m) => ({ mes: m, compras: 0, total: 0 }));
+  for (const x of grupos.values()) {
+    if (!nombres.has(x.categoria)) continue;
+    serie.forEach((e) => {
+      const pm = x.porMes.get(e.mes);
+      if (pm) { e.compras += pm.compras; e.total += pm.total; }
+    });
+  }
+  serie.forEach((e) => { e.total = redondear(e.total); });
+  const compras = filas.reduce((s, f) => s + f.compras, 0);
+  // Lo de arriba es lo que PASÓ en el año, sin proyectar nada.
+  const total = redondear(filas.reduce((s, f) => s + f.total, 0));
+
+  /*
+   * El pico: un mes reciente —de los tres últimos— con el doble de compras
+   * de lo normal. Lo normal es la mediana, que un mes loco no mueve.
+   */
+  const conCompras = serie.filter((m) => m.compras > 0).map((m) => m.compras);
+  const normal = medianaDe(conCompras);
+  const pico = serie.slice(-3).filter((m) => normal > 0 && m.compras >= normal * 2 && m.compras >= 6)
+    .sort((a, b) => b.compras - a.compras)[0] || null;
+  return {
+    meses, filas, compras, total, alMes: redondear(total / 12),
+    normal: redondear(normal),
+    pico,
+    serie,
+  };
 }
 
 /* --- Dónde se puede recortar ----------------------------------------------
@@ -6085,13 +6285,18 @@ const NIVELES = [
   {
     clave: 'necesario',
     rotulo: 'No se recorta',
-    pista: 'O es un compromiso ya firmado',
+    pista: 'Se necesita cada mes, o ya está firmado',
   },
 ];
 
 /*
  * La clasificación de partida, por lo que dice el nombre de la categoría. Se
  * mira en este orden, así que lo más específico va primero.
+ *
+ * Los alimentos, el combustible y el carro son PERMANENTES: se necesitan
+ * cada mes —comer, moverse, que el carro ande— y no son de donde se ahorra.
+ * Estaban como «el cuánto lo decides» y así entraban en la cuenta del recorte
+ * junto a los aperitivos, que es mezclar lo vital con lo que se puede dejar.
  */
 const PISTAS_NIVEL = [
   ['prescindible', ['restaurant', 'aperitiv', 'bebida', 'ropa', 'viaje', 'entreten',
@@ -6100,9 +6305,10 @@ const PISTAS_NIVEL = [
   ['necesario', ['farmacia', 'salud', 'medic', 'veterinar', 'mascota', 'interes',
     'seguro', 'tramite', 'celular', 'movilizacion', 'ofrenda', 'terreno',
     'arriendo', 'alquiler', 'agua', 'luz', 'internet', 'educacion', 'colegio',
-    'matricula', 'impuesto', 'pension', 'deuda', 'prestamo']],
-  ['ajustable', ['vivere', 'super', 'mercado', 'combustible', 'gasolina', 'higiene',
-    'casa', 'hogar', 'mantenimiento', 'repuesto', 'auto', 'suplemento', 'gimnasio',
+    'matricula', 'impuesto', 'pension', 'deuda', 'prestamo',
+    'vivere', 'super', 'mercado', 'alimento', 'combustible', 'gasolina',
+    'mantenimiento', 'repuesto', 'auto', 'vehiculo', 'carro']],
+  ['ajustable', ['higiene', 'casa', 'hogar', 'suplemento', 'gimnasio',
     'material', 'construccion', 'electrodomestico', 'limpieza']],
 ];
 
@@ -6438,7 +6644,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, ingresoDelMes, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasRevisadas, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+return { DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, ingresoDelMes, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasRevisadas, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -16495,7 +16701,7 @@ M["views/analisis"] = (function () {
  * enseñar.
  */
 
-const {nombreMes, money, moneyHTML, redondear, rangoMeses, mesActual, mesesConDatos, textoFecha, detalleDeGastos, gastoHormiga, HORMIGA, buscarHistorial, odometroHoy, dondeRecortar, guardarNivel, NIVELES} = M["calc"];
+const {nombreMes, money, moneyHTML, redondear, rangoMeses, mesActual, mesesConDatos, textoFecha, detalleDeGastos, gastoHormiga, HORMIGA, hormigaPorCategoria, buscarHistorial, odometroHoy, dondeRecortar, guardarNivel, NIVELES} = M["calc"];
 const {guardar} = M["store"];
 const {esc, $, $$, segmentado, modal, brindis, opciones, descargar, filaMovimiento} = M["ui"];
 const {plegable} = M["pliegue"];
@@ -16899,21 +17105,91 @@ function bloqueNoSeRecorta(filas) {
     </details>`;
 }
 
+/*
+ * Gasto hormiga, en dos partes.
+ *
+ * Arriba, POR CATEGORÍA y en el último año: es donde está el hábito. Las
+ * compras pequeñas de restaurante se reparten en decenas de sitios y ninguno
+ * destaca solo; juntas son lo que más se escapa. Solo entra lo que «se puede
+ * dejar»: víveres, combustible, farmacia o el carro son permanentes.
+ *
+ * Debajo, POR SITIO y en los meses elegidos arriba: para ver el café de
+ * todos los días o el sitio que se está acelerando.
+ */
 function seccionHormiga(meses, filtros) {
-  const filas = gastoHormiga(meses, filtros);
   const cab = `<header><h2>Gasto hormiga</h2>
     <span class="pista">Lo que se repite</span></header>`;
+  return `${cab}
+    ${bloqueHormigaCategorias(filtros)}
+    ${bloqueHormigaSitios(meses, filtros)}`;
+}
+
+/** «7 al mes», «2,8 al mes»: los decimales solo cuando son pocas. */
+const vecesAlMes = (n) => (n >= 5 ? String(Math.round(n)) : String(Math.round(n * 10) / 10).replace('.', ','));
+
+function bloqueHormigaCategorias(filtros) {
+  const h = hormigaPorCategoria(filtros);
+  const ventana = `${nombreMes(h.meses[0], true).toLowerCase()} – ${
+    nombreMes(h.meses[h.meses.length - 1], true).toLowerCase()}`;
+  const intro = `<p class="pista" style="margin:-4px 0 12px">Compras pequeñas
+    —de menos de ${money(HORMIGA.ticket)}— y frecuentes en lo que se puede
+    dejar. No cuentan víveres, combustible, farmacia ni el carro: se necesitan
+    cada mes.</p>`;
+
+  if (!h.filas.length) {
+    return `${intro}<p class="vacio">En el último año no hay ninguna categoría
+      de las que se pueden dejar con compras pequeñas dos veces al mes o más.</p>`;
+  }
+
+  return `${intro}
+    <div class="hormiga-total">
+      <span class="etq">Último año · ${esc(ventana)}</span>
+      <span class="cifra-h">${money(h.total)}</span>
+      <span class="nota">${h.compras} compras pequeñas · unos
+        <strong>${money(h.alMes)} al mes</strong></span>
+    </div>
+    ${h.pico ? `
+      <div class="aviso alerta"><span class="icono">!</span>
+        <span class="crece"><strong>${esc(nombreMes(h.pico.mes))}</strong>:
+        ${h.pico.compras} compras pequeñas, ${money(h.pico.total)}. Lo normal son
+        unas ${Math.round(h.normal)} al mes.</span></div>` : ''}
+
+    <ul class="hormiga-cats">${h.filas.map((f) => `
+      <li>
+        <div class="hc-cab">
+          <span class="hc-nombre">${esc(f.categoria)}</span>
+          <span class="hc-monto">${money(f.alAnio)}<span class="pie">${f.nueva
+    ? `desde ${esc(nombreMes(f.desde, true).toLowerCase())}` : 'al año'}</span></span>
+        </div>
+        <div class="hc-meta">${f.compras} compras · ${vecesAlMes(f.comprasAlMes)} al mes ·
+          ${money(f.ticket)} cada una${f.desde && !f.nueva
+    ? ` · desde ${esc(nombreMes(f.desde, true).toLowerCase())}` : ''}</div>
+        ${f.sitios.length ? `<div class="hc-meta">Donde más: ${f.sitios
+    .map((t) => `${esc(t.nombre)} ${t.compras}`).join(' · ')}${
+    f.nSitios > f.sitios.length ? ` · y ${f.nSitios - f.sitios.length} sitios más` : ''}</div>` : ''}
+        ${f.nueva ? `<div class="hc-meta">Categoría nueva: con unos meses más se
+          calcula cuánto se ahorraría al año.</div>` : `
+        <div class="hc-formas">${f.formas.map((x) => `
+          <span class="hc-forma">${esc(x.gesto)} <b>${money(x.alAnio)} al año</b></span>`).join('')}
+        </div>`}
+      </li>`).join('')}</ul>
+    <p class="pista hc-nota">Qué cuenta sale de «Dónde recortar»: si una
+      categoría está mal clasificada, cámbiala allí y esta lista la sigue.</p>`;
+}
+
+function bloqueHormigaSitios(meses, filtros) {
+  const filas = gastoHormiga(meses, filtros);
   // Los meses del corte dichos con todas las letras: «en septiembre 2026».
   const periodo = meses.length === 1
     ? `en ${nombreMes(meses[0]).toLowerCase()}`
     : `entre ${nombreMes(meses[0], true).toLowerCase()} y ${
       nombreMes(meses[meses.length - 1], true).toLowerCase()}`;
   const regla = `${HORMIGA.visitas} veces al mes o más`;
+  const sub = `<div class="veh-sub hc-sub">Por sitio, ${esc(periodo)}</div>`;
 
   if (!filas.length) {
-    return `${cab}<p class="vacio">${periodo.charAt(0).toUpperCase()}${periodo.slice(1)}
-      no hay ningún sitio con compras de menos de ${money(HORMIGA.ticket)} que
-      se repitan ${regla}.</p>`;
+    return `${sub}<p class="pista" style="margin:4px 0 0">Ningún sitio suelto
+      llega a ${regla} ${esc(periodo)}.</p>`;
   }
 
   const anio = redondear(filas.reduce((s, f) => s + f.ultimoAnio, 0));
@@ -16922,11 +17198,10 @@ function seccionHormiga(meses, filtros) {
   // El ritmo solo se cuenta cuando dice algo nuevo: que va más rápido que el año.
   const acelera = (real, proyectado) => proyectado > real * 1.1;
 
-  return `${cab}
-    <p class="pista" style="margin:-4px 0 12px">Compras de menos de
-    ${money(HORMIGA.ticket)} que se repiten ${regla}, ${periodo}. Se agrupan por
-    el nombre con que las apuntas. A la derecha, lo que sumaron ahí en el
-    último año.</p>
+  return `${sub}
+    <p class="pista" style="margin:4px 0 8px">Sitios con compras de menos de
+    ${money(HORMIGA.ticket)} que se repiten ${regla}. A la derecha, lo que
+    sumaron ahí en el último año.</p>
     <ul class="hormigas">${filas.map((f) => `
       <li>
         <div class="principal">
