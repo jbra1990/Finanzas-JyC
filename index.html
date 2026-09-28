@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-IMcOiZGXxOSFr6KcUXOYSR/1FDVd4OS2nmSdlFX7R2Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-JVUeAe+I4tw8uhOp6xUCDnlFkL+ASn4aWNmc4likdWs='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -1158,8 +1158,8 @@ a { color: var(--acento); }
 
 /*
  * Tarjetas plegables al tocar su título (pliegue.js): solo las largas que se
- * eligieron —«Dónde recortar», «Qué toca», «Lo que viene» y «Cada cuánto
- * compras»—. Plegada, es solo su cabecera. El cuerpo NO se quita con
+ * eligieron —«Dónde recortar», «Gasto hormiga», «Qué toca», «Lo que viene»
+ * y «Cada cuánto compras»—. Plegada, es solo su cabecera. El cuerpo NO se quita con
  * `display: none`: se queda con su ancho y altura cero, invisible —y fuera
  * del tabulador y del lector de pantalla, que es lo que hace `visibility`—.
  */
@@ -12480,9 +12480,9 @@ M["pliegue"] = (function () {
 /**
  * Tarjetas que se pliegan al tocar su título.
  *
- * Solo las que se eligen una a una, que son las largas: «Dónde recortar» en
- * Análisis, «Qué toca» y «Lo que viene» en Vehículo y «Cada cuánto compras»
- * en Presupuesto. Se probó plegarlas todas y no convenció: aquí cada vista
+ * Solo las que se eligen una a una, que son las largas: «Dónde recortar» y
+ * «Gasto hormiga» en Análisis, «Qué toca» y «Lo que viene» en Vehículo y
+ * «Cada cuánto compras» en Presupuesto. Se probó plegarlas todas y no convenció: aquí cada vista
  * decide cuál, llamando a `plegable` después de pintarla.
  *
  * Arrancan plegadas y se acuerdan de cómo las dejó quien las mira, en ESTE
@@ -16916,6 +16916,8 @@ function render(raiz) {
   $('#an-hormiga', raiz).innerHTML = seccionHormiga(resumen.meses, {
     usuario: corte.quien, medio: corte.medio,
   });
+  // Larga —categorías y sitios—: se pliega al tocar su título.
+  plegable($('#an-hormiga', raiz), 'analisis:hormiga');
 
   $('#an-resultado', raiz).innerHTML = resultado(resumen);
 }
