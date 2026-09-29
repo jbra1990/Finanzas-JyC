@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-CClOUG+6Pa8rWSCBWzIZAA84IfkPsCs5Vl9vkpVKaho='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-QzeAKX8pZMnFs69BHItoRdNOgXvYDW0tayqoXn3f6XM='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2774,6 +2774,16 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
   font-size: 10px; font-weight: 550; letter-spacing: 0;
   color: var(--tinta-3);
 }
+
+/* Cuentas: el mes de las listas. La barra se desliza de lado; el rótulo no. */
+.cuentas-mes { align-items: center; gap: 10px; flex-wrap: nowrap; }
+.cuentas-mes > .pista { flex: none; margin: 0; }
+/* El que encoge es el contenedor: sin `min-width: 0` se estiraba a lo que
+   miden todos los meses juntos y empujaba la página de lado. */
+.cuentas-mes > #seg-mes-cuentas { flex: 1 1 auto; min-width: 0; }
+.cuentas-mes .segmentado { width: 100%; }
+.cuentas-suma { margin: 10px 2px 0; font-variant-numeric: tabular-nums; }
+.cuentas-suma strong { color: var(--tinta); font-weight: 620; }
 
 /* Gasto hormiga por categoría: el año arriba, y cada categoría con sus
    sitios y dos formas de ahorrar dichas como gestos, con su cifra. */
@@ -14493,10 +14503,32 @@ M["views/cuentas"] = (function () {
 const {db, cuentasBancarias, eliminar, upsert, cuenta} = M["store"];
 const {money, moneyHTML, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes} = M["calc"];
 const {dona, linea, alRedimensionar} = M["charts"];
-const {esc, $, $$, confirmar, modal, brindis, aNumero, marcaNota, notaTexto} = M["ui"];
+const {esc, $, $$, confirmar, modal, brindis, aNumero, marcaNota, notaTexto, segmentado} = M["ui"];
 const {formMovimiento, formIngreso, formGastoEfectivo} = M["forms"];
+/*
+ * El mes de las listas de abajo. Vive fuera de render para que sobreviva a
+ * corregir o borrar un registro sin volver al mes en curso. '' es «Todos».
+ */
+let mesListas = null;
+
+/*
+ * Los meses que se pueden elegir: el actual y los anteriores que tengan algo
+ * en alguna de las tres listas, del más reciente al más antiguo. Los que aún
+ * no llegan no: aquí no hay nada apuntado en el futuro.
+ */
+function mesesConMovimientos() {
+  const hoy = mesActual();
+  const set = new Set([hoy]);
+  db.ingresos.forEach((i) => set.add(i.mes || claveMes(i.fecha)));
+  db.gastosEfectivo.forEach((g) => set.add(claveMes(g.fecha)));
+  db.movimientos.forEach((m) => set.add(claveMes(m.fecha)));
+  return [...set].filter((m) => /^\d{4}-\d{2}$/.test(m) && m <= hoy).sort().reverse();
+}
+
 function render(raiz) {
   const cuentas = cuentasBancarias();
+  if (mesListas === null) mesListas = mesActual();
+  const mesKpi = mesListas || mesActual();
   const ahorro = totalAhorrado();
 
   raiz.innerHTML = `
@@ -14548,12 +14580,17 @@ function render(raiz) {
       </div>
     </section>
 
+    <div class="barra-accion cuentas-mes">
+      <span class="pista">Ver el mes</span>
+      <div id="seg-mes-cuentas"></div>
+    </div>
+
     <section class="tarjeta">
       <header><h2>Ingresos registrados</h2>
         <button class="btn pequeno" id="btn-ing-2">+ Ingreso</button></header>
       <div class="rejilla kpis">
-        <div class="kpi"><div class="etq">Ingresos de ${esc(nombreMes(mesActual()))}</div>
-          <div class="valor">${money(ingresoDelMes(mesActual()))}</div></div>
+        <div class="kpi"><div class="etq">Ingresos de ${esc(nombreMes(mesKpi))}</div>
+          <div class="valor" id="kpi-ing-mes">${money(ingresoDelMes(mesKpi))}</div></div>
         <div class="kpi"><div class="etq">Ingresos del año</div>
           <div class="valor">${money(ingresosDelAnio())}</div></div>
         <div class="kpi"><div class="etq">Histórico</div>
@@ -14601,8 +14638,37 @@ function render(raiz) {
   pintar();
   alRedimensionar(pintar);
 
+  const meses = mesesConMovimientos();
+  if (mesListas && !meses.includes(mesListas)) mesListas = mesActual();
+  $('#seg-mes-cuentas', raiz).appendChild(segmentado(
+    [...meses.map((m) => ({ valor: m, texto: nombreMes(m, true) })), { valor: '', texto: 'Todos' }],
+    mesListas,
+    (v) => {
+      mesListas = v;
+      const kpiMes = v || mesActual();
+      const etq = $('#kpi-ing-mes', raiz)?.previousElementSibling;
+      if (etq) etq.textContent = `Ingresos de ${nombreMes(kpiMes)}`;
+      $('#kpi-ing-mes', raiz).textContent = money(ingresoDelMes(kpiMes));
+      // Solo las listas: repintar la vista entera devolvería la pantalla arriba.
+      pintarListas(raiz);
+    },
+  ));
+  pintarListas(raiz);
+}
+
+/** Las tres listas, filtradas por el mes elegido, con su recuento y su suma. */
+function pintarListas(raiz) {
+  const delMes = (fecha, mesFila) => !mesListas || (mesFila || claveMes(fecha)) === mesListas;
+  const cuando = mesListas ? `en ${nombreMes(mesListas).toLowerCase()}` : 'en total';
+  const recuento = (filas, campo, texto) => (filas.length ? `
+    <p class="pista cuentas-suma">${filas.length} ${filas.length === 1 ? 'registro' : 'registros'}
+      ${cuando} · <strong>${money(filas.reduce((s, f) => s + (Number(f[campo]) || 0), 0))}</strong>${
+  texto ? ` ${texto}` : ''}</p>` : '');
+
+  const ingresos = db.ingresos.filter((i) => delMes(i.fecha, i.mes))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
   $('#lista-ingresos', raiz).innerHTML = listaSimple(
-    db.ingresos.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))),
+    ingresos,
     (i) => ({
       nota: i.notas,
       titulo: `${i.concepto} · ${i.usuario}`,
@@ -14612,11 +14678,13 @@ function render(raiz) {
       id: i.id,
       coleccion: 'ingresos',
     }),
-    'Sin ingresos registrados.',
-  );
+    mesListas ? `Sin ingresos ${cuando}.` : 'Sin ingresos registrados.',
+  ) + recuento(ingresos, 'neto', 'netos');
 
+  const efectivo = db.gastosEfectivo.filter((g) => delMes(g.fecha))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
   $('#lista-efectivo', raiz).innerHTML = listaSimple(
-    db.gastosEfectivo.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))),
+    efectivo,
     (g) => ({
       titulo: `${g.detalle} · ${g.usuario}`,
       meta: `${g.fecha} · ${g.categoria} · ${cuenta(g.cuenta)?.nombre || g.cuenta}`,
@@ -14626,11 +14694,15 @@ function render(raiz) {
       id: g.id,
       coleccion: 'gastosEfectivo',
     }),
-    'Sin gastos en efectivo registrados.',
-  );
+    mesListas ? `Sin gastos en efectivo ${cuando}.` : 'Sin gastos en efectivo registrados.',
+  ) + recuento(efectivo, 'monto', '');
 
+  // Con «Todos», los cuarenta más recientes, como antes; con un mes, todos los suyos.
+  const movs = db.movimientos.filter((m) => delMes(m.fecha))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  const movsVisibles = mesListas ? movs : movs.slice(0, 40);
   $('#lista-movs', raiz).innerHTML = listaSimple(
-    db.movimientos.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).slice(0, 40),
+    movsVisibles,
     (m) => ({
       titulo: m.descripcion || m.tipo,
       meta: `${m.fecha} · ${m.tipo} · ${cuenta(m.cuenta_origen)?.nombre || m.cuenta_origen || '—'}
@@ -14640,26 +14712,29 @@ function render(raiz) {
       id: m.id,
       coleccion: 'movimientos',
     }),
-    'Sin movimientos registrados.',
-  );
+    mesListas ? `Sin movimientos ${cuando}.` : 'Sin movimientos registrados.',
+  ) + (mesListas ? recuento(movs, 'monto', 'movidos') : (movs.length > 40
+    ? `<p class="pista cuentas-suma">Los 40 más recientes de ${movs.length}. Elige un mes para ver los suyos.</p>` : ''));
 
   const FORMULARIOS = {
     ingresos: formIngreso,
     gastosEfectivo: formGastoEfectivo,
     movimientos: formMovimiento,
   };
-  $$('[data-corregir]', raiz).forEach((b) => b.addEventListener('click', () => {
-    const col = b.dataset.coleccion;
-    const fila = db[col].find((f) => f.id === b.dataset.corregir);
-    if (fila) FORMULARIOS[col](() => render(raiz), fila);
-  }));
+  $$('#lista-ingresos [data-corregir], #lista-efectivo [data-corregir], #lista-movs [data-corregir]', raiz)
+    .forEach((b) => b.addEventListener('click', () => {
+      const col = b.dataset.coleccion;
+      const fila = db[col].find((f) => f.id === b.dataset.corregir);
+      if (fila) FORMULARIOS[col](() => render(raiz), fila);
+    }));
 
-  $$('[data-borrar]', raiz).forEach((b) => b.addEventListener('click', () => {
-    confirmar('¿Eliminar este registro?', () => {
-      eliminar(b.dataset.coleccion, b.dataset.borrar);
-      render(raiz);
-    });
-  }));
+  $$('#lista-ingresos [data-borrar], #lista-efectivo [data-borrar], #lista-movs [data-borrar]', raiz)
+    .forEach((b) => b.addEventListener('click', () => {
+      confirmar('¿Eliminar este registro?', () => {
+        eliminar(b.dataset.coleccion, b.dataset.borrar);
+        render(raiz);
+      });
+    }));
 }
 
 /** Ingreso neto acumulado del año en curso. */
