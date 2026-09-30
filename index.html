@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-QzeAKX8pZMnFs69BHItoRdNOgXvYDW0tayqoXn3f6XM='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-qsctVCAy+YQaL5KN2wSgdF59D5Bwcl4qww2HILipGmY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2775,13 +2775,52 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
   color: var(--tinta-3);
 }
 
-/* Cuentas: el mes de las listas. La barra se desliza de lado; el rótulo no. */
-.cuentas-mes { align-items: center; gap: 10px; flex-wrap: nowrap; }
-.cuentas-mes > .pista { flex: none; margin: 0; }
+/* --- El sueldo del mes (Inicio) --------------------------------------------
+ * Arriba lo que queda y lo libre; debajo, una barra que reparte el sueldo
+ * entero —tarjeta, efectivo, por pagar, ahorro, libre— y el aviso de cómo va.
+ */
+.sueldo-cabeza { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 12px; }
+.sueldo-cabeza > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sueldo-cabeza .etq {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--tinta-3);
+}
+.sueldo-cabeza .nota { font-size: 12px; color: var(--tinta-2); }
+.sueldo-cifra { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.sueldo-cifra-2 { font-size: 18px; font-weight: 660; font-variant-numeric: tabular-nums; color: var(--ok); }
+.sueldo-cifra.neg, .sueldo-cifra-2.neg { color: var(--critico); }
+.sueldo-libre { text-align: right; align-items: flex-end; }
+.sueldo-barra {
+  display: flex; gap: 2px; height: 12px; margin: 14px 0 8px;
+  border-radius: var(--radio-pill); overflow: hidden; background: var(--superficie-3);
+}
+.sueldo-barra > span { min-width: 3px; }
+.st-tarjeta { background: var(--serie-1); }
+.st-efectivo { background: var(--serie-3); }
+.st-pendiente { background: var(--alerta); opacity: 0.75; }
+.st-ahorro { background: var(--ok); }
+.st-libre { background: color-mix(in srgb, var(--tinta-3) 45%, transparent); }
+.sueldo-leyenda {
+  list-style: none; margin: 0 0 12px; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  font-size: 11.5px; color: var(--tinta-2); font-variant-numeric: tabular-nums;
+}
+.sueldo-leyenda i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 0; }
+.sueldo-leyenda b { color: var(--tinta); font-weight: 620; }
+.sueldo-cuenta { margin-top: 10px; }
+.sueldo-cuenta summary { cursor: pointer; font-size: 12.5px; color: var(--acento); font-weight: 560; }
+.sueldo-cuenta li.sub { padding: 3px 2px 3px 14px; border-bottom: 0; }
+.sueldo-cuenta li.total { border-top: 1px solid var(--borde); }
+.sueldo-cuenta li.total span, .sueldo-cuenta li.total strong { color: var(--tinta); font-weight: 660; }
+.sueldo-acciones { display: flex; justify-content: flex-end; margin-top: 10px; }
+
+/* La barra de meses de Cuentas y Tarjetas. Se desliza de lado; el rótulo no. */
+.barra-meses { align-items: center; gap: 10px; flex-wrap: nowrap; }
+.barra-meses > .pista { flex: none; margin: 0; }
 /* El que encoge es el contenedor: sin `min-width: 0` se estiraba a lo que
    miden todos los meses juntos y empujaba la página de lado. */
-.cuentas-mes > #seg-mes-cuentas { flex: 1 1 auto; min-width: 0; }
-.cuentas-mes .segmentado { width: 100%; }
+.barra-meses > .barra-meses-seg { flex: 1 1 auto; min-width: 0; }
+.barra-meses .segmentado { width: 100%; }
 .cuentas-suma { margin: 10px 2px 0; font-variant-numeric: tabular-nums; }
 .cuentas-suma strong { color: var(--tinta); font-weight: 620; }
 
@@ -7722,6 +7761,19 @@ function segmentado(items, valorActual, alCambiar) {
 }
 
 /**
+ * Deja a la vista el botón elegido de una barra que se desliza de lado —la
+ * de los meses—, centrado. Con `scrollIntoView` se movería también la página;
+ * esto solo desliza la barra. Se llama con la barra ya en el documento.
+ */
+function centrarElegido(barra) {
+  const b = barra?.querySelector('button[aria-pressed="true"]');
+  if (!b) return;
+  const rb = b.getBoundingClientRect();
+  const rs = barra.getBoundingClientRect();
+  barra.scrollLeft += (rb.left + rb.width / 2) - (rs.left + rs.width / 2);
+}
+
+/**
  * Una fila de movimiento dentro de un desglose.
  *
  * Si el gasto lleva escrito PARA QUÉ era —«Mantenimiento Nissan» en un cargo
@@ -7850,7 +7902,7 @@ const ICONOS = {
   datos: '<path d="M12 7c4.4 0 8-1.1 8-2.5S16.4 2 12 2 4 3.1 4 4.5 7.6 7 12 7Zm8-2.5v15c0 1.4-3.6 2.5-8 2.5s-8-1.1-8-2.5v-15" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M20 12c0 1.4-3.6 2.5-8 2.5S4 13.4 4 12" fill="none" stroke="currentColor" stroke-width="1.8"/>',
 };
 
-return { $, $$, ICONOS, aNumero, alarma, avisoInfo, brindis, campoMonto, confirmar, crear, descargar, esc, filaMovimiento, hoyISO, marcaNota, modal, notaFila, notaTexto, opciones, pedirArchivo, segmentado };
+return { $, $$, ICONOS, aNumero, alarma, avisoInfo, brindis, campoMonto, centrarElegido, confirmar, crear, descargar, esc, filaMovimiento, hoyISO, marcaNota, modal, notaFila, notaTexto, opciones, pedirArchivo, segmentado };
 })();
 
 M["xlsx"] = (function () {
@@ -10704,7 +10756,122 @@ function mesesProyectados(n = 6) {
   return Array.from({ length: n }, (_, i) => sumarMeses(base, i));
 }
 
-return { MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, estaExcluida, fijosManuales, guardarAjuste, guardarManual, marcarPago, medioDe, mesesProyectados, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra };
+/* --- El sueldo del mes: cuánto queda y cuánto ahorrar ------------------------
+ *
+ * La pregunta de todos los días: «de lo que cobro este mes, ¿cuánto me queda
+ * y cuánto puedo seguir gastando sin tocar lo que quiero ahorrar?».
+ *
+ * Se parte del SUELDO —quincena, fin de mes, sueldo—, no de todo lo que entra:
+ * un arriendo cobrado o unos intereses no son con lo que se vive el mes. Y se
+ * le resta lo mismo que cuenta Presupuesto en «Cómo va el mes» para esa
+ * persona, para que las dos pantallas digan lo mismo:
+ *
+ *   - lo que ya salió: las cuotas de tarjeta del mes, el efectivo y el débito,
+ *     las cuotas de préstamo pagadas;
+ *   - lo que está por pagar: lo escrito a mano en Presupuesto para este mes y
+ *     todavía sin marcar como pagado —el crédito del terreno, un pago único—.
+ */
+
+/** Qué ingresos son sueldo. */
+const ES_SUELDO = /sueldo|quincena|fin de mes|salario|n[oó]mina|rol de pago/i;
+
+const claveSueldo = (u) => `sueldo_esperado_${u}`;
+const clavePct = (u) => `ahorro_pct_${u}`;
+
+/** El porcentaje de ahorro de alguien; 30 si nunca se tocó. */
+function porcentajeAhorro(usuario = 'J') {
+  const v = Number(db.config[clavePct(usuario)]);
+  return Number.isFinite(v) && v >= 0 && v <= 90 ? v : 30;
+}
+
+/** Guarda el sueldo esperado (0 = que lo estime la app) y el % de ahorro. */
+function guardarAjusteSueldo(usuario, { esperado, pct }) {
+  if (esperado !== undefined) db.config[claveSueldo(usuario)] = esperado > 0 ? String(redondear(esperado)) : '';
+  if (pct !== undefined) db.config[clavePct(usuario)] = String(Math.max(0, Math.min(90, Math.round(pct))));
+}
+
+/** El sueldo de un mes: lo cobrado con concepto de sueldo. */
+function sueldoCobrado(mes, usuario) {
+  return redondear(db.ingresos
+    .filter((i) => (i.mes || claveMes(i.fecha)) === mes && i.usuario === usuario && ES_SUELDO.test(i.concepto || ''))
+    .reduce((s, i) => s + (Number(i.neto) || 0), 0));
+}
+
+/**
+ * El sueldo que se espera cobrar en un mes. Lo puesto a mano manda; si no,
+ * la MEDIANA de los últimos seis meses cerrados con sueldo, que un mes con
+ * una liquidación o un bono no mueve.
+ */
+function sueldoEsperado(mes, usuario = 'J') {
+  const mio = Number(db.config[claveSueldo(usuario)]);
+  if (mio > 0) return { monto: redondear(mio), base: 'mio' };
+  const previos = [];
+  for (let i = 1; i <= 24 && previos.length < 6; i += 1) {
+    const v = sueldoCobrado(sumarMeses(mes, -i), usuario);
+    if (v > 0) previos.push(v);
+  }
+  if (!previos.length) return { monto: 0, base: 'ninguno' };
+  const o = [...previos].sort((a, b) => a - b);
+  const m = Math.floor(o.length / 2);
+  return { monto: redondear(o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2), base: 'mediana', meses: previos.length };
+}
+
+/**
+ * La cuenta del sueldo de un mes para una persona.
+ *
+ * @returns {object} sueldo (cobrado, esperado, el que se usa), lo gastado por
+ *   medio, lo pendiente con sus líneas, lo que queda, la meta de ahorro, lo
+ *   libre y cómo va («bien», «cerca», «ahorro», «pasado»).
+ */
+function cuentaDelSueldo(mes = mesActual(), usuario = 'J') {
+  const fila = proyeccion([mes], { quien: usuario }).filas[0];
+  const cobrado = sueldoCobrado(mes, usuario);
+  const esperado = sueldoEsperado(mes, usuario);
+  // Lo cobrado cuando ya llegó todo; mientras falte, lo esperado.
+  const sueldo = redondear(Math.max(cobrado, esperado.monto));
+  const porCobrar = redondear(Math.max(0, sueldo - cobrado));
+
+  const salido = (k) => redondear((fila.reales[k] || 0) - (fila.aMano[k] || 0));
+  const gastado = {
+    tarjeta: salido('Tarjeta'),
+    efectivo: salido('Efectivo'),
+    prestamo: salido('Préstamo'),
+  };
+  const totalGastado = redondear(gastado.tarjeta + gastado.efectivo + gastado.prestamo);
+  const pendientes = (fila.realLineas || []).filter((l) => l.aMano)
+    .map((l) => ({ detalle: l.detalle, monto: redondear(l.monto), medio: l.medio, nota: l.nota || '' }));
+  const pendiente = redondear(MEDIOS.reduce((s, k) => s + (fila.aMano[k] || 0), 0));
+
+  const queda = redondear(sueldo - totalGastado - pendiente);
+  const pct = porcentajeAhorro(usuario);
+  const ahorro = redondear((sueldo * pct) / 100);
+  const libre = redondear(queda - ahorro);
+
+  // Días que faltan, contando hoy: lo libre repartido para no pasarse.
+  const hoy = new Date();
+  const [y, mm] = mes.split('-').map(Number);
+  const diasMes = new Date(y, mm, 0).getDate();
+  const dias = mes === mesActual() ? diasMes - hoy.getDate() + 1 : 0;
+
+  // «Cerca»: lo libre ya es menos del 10 % del sueldo.
+  const estado = queda < 0 ? 'pasado'
+    : libre <= 0 ? 'ahorro'
+      : libre <= sueldo * 0.1 ? 'cerca' : 'bien';
+
+  return {
+    mes, usuario, sueldo, cobrado, porCobrar, esperado,
+    gastado, totalGastado, pendientes, pendiente,
+    queda, pct, ahorro, libre,
+    // Lo que de verdad se ahorraría si el mes acabara hoy así.
+    ahorroReal: redondear(Math.max(0, queda)),
+    pctReal: sueldo > 0 ? Math.round((Math.max(0, queda) / sueldo) * 100) : 0,
+    dias,
+    alDia: dias > 0 && libre > 0 ? redondear(libre / dias) : 0,
+    estado,
+  };
+}
+
+return { ES_SUELDO, MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, cuentaDelSueldo, estaExcluida, fijosManuales, guardarAjuste, guardarAjusteSueldo, guardarManual, marcarPago, medioDe, mesesProyectados, porcentajeAhorro, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra, sueldoEsperado };
 })();
 
 M["pdf"] = (function () {
@@ -12605,10 +12772,11 @@ return { plegable };
 M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
-const {db, tarjetas, usuarios} = M["store"];
+const {db, tarjetas, usuarios, guardar} = M["store"];
 const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, pagoDeTarjeta, topesDelMes, umbralAviso, comprometidoEnMes, realismoDeTopes, hoyLocal} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
-const {crear, esc, $, segmentado, opciones} = M["ui"];
+const {crear, esc, $, segmentado, opciones, modal, brindis, aNumero, campoMonto} = M["ui"];
+const {cuentaDelSueldo, guardarAjusteSueldo, sueldoEsperado, porcentajeAhorro} = M["plan"];
 const {formGastoTarjeta, formIngreso, formTopes} = M["forms"];
 let usuarioFiltro = 'ambos';
 /*
@@ -12688,6 +12856,8 @@ function render(raiz, { irA }) {
           <div class="val">${money(tarjetas().reduce((s, t) => s + pagoDelMes(t.id, mes, usuarioFiltro), 0))}</div></div>
       </div>
     </section>
+
+    <section class="tarjeta" id="sueldo-mes"></section>
 
     <section class="tarjeta" id="topes"></section>
 
@@ -12802,6 +12972,8 @@ function render(raiz, { irA }) {
   alRedimensionar(pintarGraficos);
 
   // Cuánto lleva cada tarjeta este mes y de quién es cada parte.
+  $('#sueldo-mes', raiz).innerHTML = seccionSueldo(mes, 'J');
+  $('#sueldo-ajustar', raiz)?.addEventListener('click', () => formSueldo(mes, 'J', () => render(raiz, { irA })));
   $('#topes', raiz).innerHTML = seccionTopes(mes, usuarioFiltro);
   $('#btn-topes', raiz)?.addEventListener('click', () => formTopes(() => render(raiz, { irA })));
 
@@ -12844,6 +13016,131 @@ function render(raiz, { irA }) {
  *   · cuando el tope está por debajo de lo que se gasta casi todos los meses,
  *     el rojo no dice «te pasaste», dice «el tope está mal puesto».
  */
+/*
+ * El sueldo del mes: cuánto queda de lo que se cobra, cuánto hay que apartar
+ * para el ahorro y cuánto se puede seguir gastando sin tocarlo.
+ *
+ * Es de UNA persona —la tarjeta de J solo con lo de J—, así que no sigue al
+ * «Ambos · J · C» del panel. Sí sigue al mes: en el que va, dice cuánto se
+ * puede gastar al día; en uno cerrado, cómo acabó.
+ */
+function seccionSueldo(mes, usuario) {
+  const c = cuentaDelSueldo(mes, usuario);
+  const cab = `<header><h2>Sueldo de ${esc(usuario)}</h2>
+    <span class="pista">Ahorro ${c.pct} %</span></header>`;
+
+  if (c.sueldo <= 0) {
+    return `${cab}<p class="vacio">No hay sueldo de ${esc(usuario)} en ${esc(nombreMes(mes))}
+      ni meses anteriores de donde estimarlo. Apunta la quincena o el sueldo en
+      Cuentas → + Ingreso, o escribe cuánto cobras al mes.</p>
+      <div class="sueldo-acciones"><button class="btn pequeno" id="sueldo-ajustar">Ajustar sueldo y ahorro</button></div>`;
+  }
+
+  const pct = (x) => Math.max(0, Math.min(100, (x / c.sueldo) * 100));
+  const tramos = [
+    ['Tarjeta', c.gastado.tarjeta, 'tarjeta'],
+    ['Efectivo y débito', c.gastado.efectivo + c.gastado.prestamo, 'efectivo'],
+    ['Por pagar', c.pendiente, 'pendiente'],
+    [`Ahorro ${c.pct} %`, Math.min(c.ahorro, Math.max(0, c.queda)), 'ahorro'],
+    ['Libre', Math.max(0, c.libre), 'libre'],
+  ].filter(([, v]) => v > 0);
+
+  const AVISO = {
+    bien: ['ok', '✓', `Vas bien: puedes gastar <strong>${money(c.libre)}</strong> más y
+      todavía ahorras el ${c.pct} %${c.alDia > 0 ? ` —unos <strong>${money(c.alDia)}</strong>
+      al día hasta fin de mes—` : ''}.`],
+    cerca: ['', '!', `Cerca del límite: te quedan <strong>${money(c.libre)}</strong> antes
+      de tocar el ahorro del ${c.pct} %${c.alDia > 0 ? `, unos ${money(c.alDia)} al día` : ''}.`],
+    ahorro: ['alerta', '!', `Ya estás usando el ahorro: si el mes acabara hoy,
+      ahorrarías <strong>${money(c.ahorroReal)}</strong> (${c.pctReal} %), no el ${c.pct} %.
+      Faltan ${money(-c.libre)} para llegar.`],
+    pasado: ['alerta', '!', `Llevas gastado y por pagar <strong>${money(-c.queda)}</strong>
+      más que el sueldo del mes: este mes no hay ahorro, sale de lo guardado.`],
+  }[c.estado];
+
+  const linea = (rotulo, valor, clase = '') => `
+    <li class="${clase}"><span>${rotulo}</span><strong>${valor}</strong></li>`;
+
+  return `${cab}
+    <div class="sueldo-cabeza">
+      <div>
+        <span class="etq">Te queda</span>
+        <span class="sueldo-cifra ${c.queda < 0 ? 'neg' : ''}">${money(c.queda)}</span>
+        <span class="nota">de ${money(c.sueldo)} de sueldo${c.porCobrar > 0
+    ? ` · falta cobrar ${money(c.porCobrar)}` : ''}</span>
+      </div>
+      <div class="sueldo-libre">
+        <span class="etq">Libre para gastar</span>
+        <span class="sueldo-cifra-2 ${c.libre <= 0 ? 'neg' : ''}">${money(Math.max(0, c.libre))}</span>
+        ${c.alDia > 0 ? `<span class="nota">${money(c.alDia)} al día</span>`
+    : c.libre <= 0 ? '<span class="nota">ya en el ahorro</span>' : ''}
+      </div>
+    </div>
+
+    <div class="sueldo-barra" role="img" aria-label="${esc(tramos.map(([r, v]) => `${r}: ${money(v)}`).join('; '))}">
+      ${tramos.map(([, v, k]) => `<span class="st-${k}" style="flex:${pct(v).toFixed(3)}"></span>`).join('')}
+    </div>
+    <ul class="sueldo-leyenda">${tramos.map(([r, v, k]) => `
+      <li><i class="st-${k}"></i>${esc(r)} <b>${money(v)}</b></li>`).join('')}</ul>
+
+    <div class="aviso ${AVISO[0]}"><span class="icono">${AVISO[1]}</span>
+      <span class="crece">${AVISO[2]}</span></div>
+
+    <details class="sueldo-cuenta">
+      <summary>Cómo sale la cuenta</summary>
+      <ul class="desglose-medios">
+        ${linea(`Sueldo del mes${c.porCobrar > 0 ? ` (cobrado ${money(c.cobrado)} · por cobrar ${money(c.porCobrar)})` : ''}`, money(c.sueldo))}
+        ${linea(`− Tarjetas de ${esc(usuario)}, cuotas del mes`, money(c.gastado.tarjeta))}
+        ${linea('− Efectivo y débito', money(c.gastado.efectivo))}
+        ${c.gastado.prestamo > 0 ? linea('− Préstamo pagado', money(c.gastado.prestamo)) : ''}
+        ${linea('− Por pagar este mes', money(c.pendiente))}
+        ${c.pendientes.map((p) => linea(`<small>${esc(p.detalle)}${p.nota ? ` · ${esc(p.nota)}` : ''}</small>`,
+    `<small>${money(p.monto)}</small>`, 'sub')).join('')}
+        ${linea('= Te queda', money(c.queda), 'total')}
+        ${linea(`− Ahorro ${c.pct} %`, money(c.ahorro))}
+        ${linea('= Libre para gastar', money(c.libre), 'total')}
+      </ul>
+      <p class="pista">${c.esperado.base === 'mio'
+    ? `Sueldo esperado: ${money(c.esperado.monto)}, puesto por ti.`
+    : c.esperado.base === 'mediana'
+      ? `Sueldo esperado: ${money(c.esperado.monto)}, la mediana de tus últimos ${c.esperado.meses} meses con sueldo. Si no es, cámbialo.`
+      : 'Sin sueldo esperado: se usa solo lo cobrado.'}
+      Cuenta como sueldo lo que se apunta como quincena, fin de mes o sueldo.
+      Lo «por pagar» es lo escrito en Presupuesto para este mes y aún sin marcar
+      como pagado.</p>
+    </details>
+    <div class="sueldo-acciones"><button class="btn pequeno" id="sueldo-ajustar">Ajustar sueldo y ahorro</button></div>`;
+}
+
+/** El sueldo esperado y el porcentaje de ahorro, en una ventana. */
+function formSueldo(mes, usuario, alTerminar) {
+  const esperado = sueldoEsperado(mes, usuario);
+  const mio = esperado.base === 'mio' ? esperado.monto : 0;
+  modal({
+    titulo: `Sueldo y ahorro de ${usuario}`,
+    cuerpo: `
+      ${campoMonto('sa-sueldo', 'sueldo', {
+    etiqueta: 'Sueldo que cobras al mes (neto)',
+    valor: mio ? String(mio).replace('.', ',') : '',
+  })}
+      <p class="pista" style="margin-top:4px">${mio ? '' : esperado.monto > 0
+    ? `En blanco, la app usa ${money(esperado.monto)}, la mediana de tus últimos meses.`
+    : 'En blanco, la app usa solo lo cobrado.'}</p>
+      <div class="campo"><label for="sa-pct">Cuánto ahorrar</label>
+        <select id="sa-pct" name="pct">${opciones(
+    Array.from({ length: 13 }, (_, i) => ({ valor: String(i * 5), texto: `${i * 5} % del sueldo` })),
+    String(porcentajeAhorro(usuario)),
+  )}</select></div>`,
+    aceptar: 'Guardar',
+    alEnviar(d) {
+      guardarAjusteSueldo(usuario, { esperado: aNumero(d.sueldo), pct: Number(d.pct) });
+      guardar();
+      brindis('Sueldo y ahorro guardados');
+      alTerminar?.();
+    },
+  });
+}
+
 function seccionTopes(mes, usuario) {
   const filas = topesDelMes(mes, usuario);
   const enCurso = mes === mesActual();
@@ -13759,7 +14056,7 @@ M["views/tarjetas"] = (function () {
 const {db, tarjetas, eliminar, guardar} = M["store"];
 const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir, comprometidoProximos} = M["calc"];
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
-const {esc, $, $$, segmentado, confirmar, opciones, aNumero, notaFila, marcaNota, notaTexto} = M["ui"];
+const {esc, $, $$, segmentado, confirmar, aNumero, notaFila, marcaNota, notaTexto, centrarElegido} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
 const estado = {
   tarjeta: null, usuario: 'ambos', mes: null, comprobando: false,
@@ -13879,16 +14176,26 @@ function render(raiz) {
   const vence = fechaPagoMes(mes, t.id);
   const comp = comprobacionDelMes(t.id, mes, estado.usuario);
 
-  const opcMes = rangoMeses(sumarMeses(mesActual(), -18), sumarMeses(mesActual(), 12))
-    .map((m) => ({ valor: m, texto: nombreMes(m) }));
+  /*
+   * Los meses de la barra: los que tienen alguna cuota de ESTA tarjeta, más
+   * el actual y el que se esté mirando. Aquí sí van los que vienen: son las
+   * cuotas de los diferidos, y ver qué cae en noviembre es a lo que se entra.
+   */
+  const mesesTarjeta = [...new Set([
+    ...db.cuotas.filter((c) => c.tarjeta === t.id && /^\d{4}-\d{2}$/.test(c.mes)).map((c) => c.mes),
+    mesActual(), mes,
+  ])].sort().reverse();
 
   raiz.innerHTML = `
     <div class="barra-accion">
       <div id="seg-tarjeta"></div>
       <button class="btn primario pequeno" id="btn-nuevo">+ Gasto</button>
     </div>
+    <div class="barra-accion barra-meses">
+      <span class="pista">Ver el mes</span>
+      <div id="seg-mes-tarjeta" class="barra-meses-seg"></div>
+    </div>
     <div class="barra-accion">
-      <select id="sel-mes" aria-label="Mes">${opciones(opcMes, mes)}</select>
       <div id="seg-usuario"></div>
     </div>
 
@@ -13978,7 +14285,12 @@ function render(raiz) {
     [{ valor: 'ambos', texto: 'Ambos' }, { valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' }],
     estado.usuario, (v) => { estado.usuario = v; render(raiz); },
   ));
-  $('#sel-mes', raiz).addEventListener('change', (e) => { estado.mes = e.target.value; render(raiz); });
+  const barraMes = segmentado(
+    mesesTarjeta.map((m) => ({ valor: m, texto: nombreMes(m, true) })),
+    mes, (v) => { estado.mes = v; render(raiz); },
+  );
+  $('#seg-mes-tarjeta', raiz).appendChild(barraMes);
+  centrarElegido(barraMes);
   $('#btn-nuevo', raiz).addEventListener('click', () => formGastoTarjeta((nuevo) => {
     irAlGasto(nuevo);
     render(raiz);
@@ -14503,7 +14815,7 @@ M["views/cuentas"] = (function () {
 const {db, cuentasBancarias, eliminar, upsert, cuenta} = M["store"];
 const {money, moneyHTML, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes} = M["calc"];
 const {dona, linea, alRedimensionar} = M["charts"];
-const {esc, $, $$, confirmar, modal, brindis, aNumero, marcaNota, notaTexto, segmentado} = M["ui"];
+const {esc, $, $$, confirmar, modal, brindis, aNumero, marcaNota, notaTexto, segmentado, centrarElegido} = M["ui"];
 const {formMovimiento, formIngreso, formGastoEfectivo} = M["forms"];
 /*
  * El mes de las listas de abajo. Vive fuera de render para que sobreviva a
@@ -14580,9 +14892,9 @@ function render(raiz) {
       </div>
     </section>
 
-    <div class="barra-accion cuentas-mes">
+    <div class="barra-accion barra-meses cuentas-mes">
       <span class="pista">Ver el mes</span>
-      <div id="seg-mes-cuentas"></div>
+      <div id="seg-mes-cuentas" class="barra-meses-seg"></div>
     </div>
 
     <section class="tarjeta">
@@ -14640,7 +14952,7 @@ function render(raiz) {
 
   const meses = mesesConMovimientos();
   if (mesListas && !meses.includes(mesListas)) mesListas = mesActual();
-  $('#seg-mes-cuentas', raiz).appendChild(segmentado(
+  const barraMes = segmentado(
     [...meses.map((m) => ({ valor: m, texto: nombreMes(m, true) })), { valor: '', texto: 'Todos' }],
     mesListas,
     (v) => {
@@ -14652,7 +14964,9 @@ function render(raiz) {
       // Solo las listas: repintar la vista entera devolvería la pantalla arriba.
       pintarListas(raiz);
     },
-  ));
+  );
+  $('#seg-mes-cuentas', raiz).appendChild(barraMes);
+  centrarElegido(barraMes);
   pintarListas(raiz);
 }
 
