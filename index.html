@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ujzvdYXAlE82rMZj6o7F6JWcB2gtuVi1q1uDTKfRSmU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-3JmIEn0C6P1LUANS4ECwrkBBnYp343cNQ7PUA2e0o1k='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2825,6 +2825,14 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
 .ajustes-lista span { font-size: 12.5px; color: var(--tinta-2); font-variant-numeric: tabular-nums; }
 .ajustes-lista strong { color: var(--tinta); }
 .ajustes-lista li.ya { opacity: 0.6; }
+.ajustes-pasos { margin: 6px 0 4px; padding-left: 16px; display: flex; flex-direction: column; gap: 5px; }
+.ajustes-lista .ajustes-pasos li {
+  display: list-item; padding: 0; border: 0;
+  font-size: 12.5px; line-height: 1.45; color: var(--tinta-2);
+}
+.ajustes-lista .ajustes-pasos li.ya { opacity: 0.55; }
+.ajustes-lista .ajustes-pasos li.aviso { color: var(--alerta); }
+.ajustes-lista .pista { margin: 6px 0 0; font-size: 12px; }
 
 /* La barra de meses de Cuentas y Tarjetas. Se desliza de lado; el rótulo no. */
 .barra-meses { align-items: center; gap: 10px; flex-wrap: nowrap; }
@@ -4407,6 +4415,28 @@ function eliminar(coleccion, id) {
   guardar();
 }
 
+/**
+ * Quita algunas cuotas de una compra —con su lápida, para que el otro
+ * teléfono también las quite— y deja la compra cuadrada: su número de cuotas
+ * y su total pasan a ser los de las que quedan.
+ */
+function quitarCuotas(gastoId, quitar) {
+  const fuera = db.cuotas.filter((c) => c.gasto_id === gastoId && quitar(c));
+  if (!fuera.length) return 0;
+  fuera.forEach((c) => sepultar('cuotas', c));
+  db.cuotas = db.cuotas.filter((c) => !fuera.includes(c));
+  const quedan = db.cuotas.filter((c) => c.gasto_id === gastoId);
+  const g = db.gastosTarjeta.find((x) => x.id === gastoId);
+  if (g) {
+    tocar(Object.assign(g, {
+      cuotas: quedan.length,
+      monto_total: Math.round(quedan.reduce((s, c) => s + (Number(c.monto) || 0), 0) * 100) / 100,
+    }));
+  }
+  guardar();
+  return fuera.length;
+}
+
 function cuenta(id) {
   return db.cuentas.find((c) => c.id === id) || null;
 }
@@ -4440,7 +4470,7 @@ function usuarios() {
     .filter(Boolean);
 }
 
-return { CLAVES, COLECCIONES, CONFIG_LOCAL, abrirCerradura, alCambiar, almacenamiento, capitalizar, cargar, categoriasGasto, categoriasIngreso, cerraduraAbierta, codigoDispositivo, comprobarAlmacenamiento, cuenta, cuentasBancarias, db, echarLlave, eliminar, escrituraPendiente, estaCifrada, guardar, instantanea, instantaneaSinSecretos, limpiarTodo, nuevoId, ponerCerradura, quitarCerradura, recolocar, reemplazar, tarjetas, tocar, upsert, usuarios };
+return { CLAVES, COLECCIONES, CONFIG_LOCAL, abrirCerradura, alCambiar, almacenamiento, capitalizar, cargar, categoriasGasto, categoriasIngreso, cerraduraAbierta, codigoDispositivo, comprobarAlmacenamiento, cuenta, cuentasBancarias, db, echarLlave, eliminar, escrituraPendiente, estaCifrada, guardar, instantanea, instantaneaSinSecretos, limpiarTodo, nuevoId, ponerCerradura, quitarCerradura, quitarCuotas, recolocar, reemplazar, tarjetas, tocar, upsert, usuarios };
 })();
 
 M["calc"] = (function () {
@@ -4766,14 +4796,32 @@ function cuotaPendiente(cuota, mesRef = mesActual()) {
   return cuota.pagado !== 'Si' && cuota.mes >= mesRef;
 }
 
-/** Cupo utilizado, disponible y % de uso de una tarjeta. */
+/**
+ * Cupo utilizado, disponible y % de uso de una tarjeta, con la regla del
+ * banco: lo que ocupa cupo es lo que se le debe.
+ *
+ *  - El mes ANTERIOR, mientras su estado de cuenta no esté pagado: el 3 de
+ *    octubre todavía se debe septiembre, que vence el 15. Antes se daba por
+ *    pagado todo mes pasado, y el cupo salía cientos de dólares más libre
+ *    que en el banco. Si el pago está registrado —o sus cuotas marcadas— ya
+ *    no cuenta. Lo de antes del mes anterior se sigue dando por pagado.
+ *  - El mes en curso, entero.
+ *  - De los meses que vienen, lo DIFERIDO —las cuotas que faltan—, pero no
+ *    las suscripciones: el Disney de diciembre todavía no se ha cobrado y el
+ *    banco no lo descuenta del cupo.
+ */
 function estadoTarjeta(tarjetaId, mesRef = mesActual()) {
   const tarjeta = db.cuentas.find((c) => c.id === tarjetaId);
   const cupo = Number(tarjeta?.cupo) || 0;
+  const previo = sumarMeses(mesRef, -1);
+  const previoPagado = Boolean(pagoDeTarjeta(tarjetaId, previo));
+  const tipos = tipoPorGasto();
   let utilizado = 0;
   const porUsuario = {};
   for (const c of db.cuotas) {
-    if (c.tarjeta !== tarjetaId || !cuotaPendiente(c, mesRef)) continue;
+    if (c.tarjeta !== tarjetaId || c.pagado === 'Si' || c.mes < previo) continue;
+    if (c.mes === previo && previoPagado) continue;
+    if (c.mes > mesRef && tipos.get(c.gasto_id) === 'Recurrente') continue;
     utilizado += c.monto;
     porUsuario[c.usuario] = (porUsuario[c.usuario] || 0) + c.monto;
   }
@@ -12569,10 +12617,10 @@ M["ajustes"] = (function () {
  *    descarta para siempre.
  */
 
-const {db, upsert, guardar} = M["store"];
+const {db, upsert, guardar, quitarCuotas} = M["store"];
 const {alCambiarSync, configurado, estadoSync} = M["sync"];
 const {registrarGastoTarjeta} = M["forms"];
-const {money, nombreMes, sumarMeses} = M["calc"];
+const {money, nombreMes, sumarMeses, claveEstadoCuenta, redondear} = M["calc"];
 const {$, esc, modal, brindis} = M["ui"];
 const CLAVE = 'ajustes_hechos';
 /** Así lo escribe la gente —y así está en los datos—: «Anthropic» y «Antrhopic». */
@@ -12623,55 +12671,214 @@ const AJUSTES = [
     },
   },
   {
-    id: 'anthropic-recurrente-octubre',
+    /*
+     * Bolivariano igual al estado de cuenta de septiembre de 2026 ($117,26) y
+     * al comprobante de octubre. Cada paso mira primero cómo están los datos
+     * de este teléfono y solo hace lo que falte.
+     */
+    id: 'bolivariano-estado-2026-09',
     desde: '2026-10',
     importe: 23,
     mesesPorDefecto: 12,
-    /** Los cargos de Anthropic de la tarjeta, de cualquier registro. */
-    previos() {
-      return db.gastosTarjeta.filter((g) => g.tarjeta === 'TC-BOLI' && ES_ANTHROPIC.test(g.detalle || ''));
-    },
     revisar() {
-      const t = tarjetaBolivariano();
-      if (!t) return { estado: 'falta', texto: 'No encuentro la tarjeta Bolivariano.' };
-      const ids = new Set(this.previos().map((g) => g.id));
-      const desdeOctubre = db.cuotas
-        .filter((c) => ids.has(c.gasto_id) && c.mes >= this.desde)
-        .sort((a, b) => a.mes.localeCompare(b.mes));
-      if (desdeOctubre.length) {
-        return {
-          estado: 'ya',
-          titulo: 'Anthropic, recurrente desde octubre',
-          texto: `ya hay ${desdeOctubre.length} ${desdeOctubre.length === 1 ? 'cuota' : 'cuotas'} de Anthropic desde ${nombreMes(desdeOctubre[0].mes)}: no se toca`,
-        };
-      }
+      if (!tarjetaBolivariano()) return { estado: 'falta', texto: 'No encuentro la tarjeta Bolivariano.' };
+      const r = PASOS.map((p) => ({ paso: p, ...p.revisar() }));
+      const hay = r.some((x) => x.estado === 'aplicar');
+      const linea = (x) => `<li class="${x.estado}">${x.texto}</li>`;
+      const cuadre = proyeccionSeptiembre(r);
       return {
-        estado: 'aplicar',
-        titulo: 'Anthropic, recurrente desde octubre',
-        texto: `${money(this.importe)} al mes en ${t.nombre}, desde ${nombreMes(this.desde)}`,
-        pideMeses: true,
+        estado: hay ? 'aplicar' : 'ya',
+        titulo: 'Bolivariano según el estado de cuenta',
+        texto: hay ? `<ul class="ajustes-pasos">${r.map(linea).join('')}</ul>${cuadre}`
+          : 'ya coincide con el estado de cuenta: no se toca',
+        pideMeses: r.some((x) => x.estado === 'aplicar' && x.pideMeses),
       };
     },
     aplicar({ meses }) {
-      const previo = this.previos().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))[0];
-      const n = Math.max(2, Math.min(48, Math.round(Number(meses)) || this.mesesPorDefecto));
-      registrarGastoTarjeta({
-        // Identificador fijo: dos teléfonos que lo apliquen a la vez crean el
-        // mismo registro, no dos.
-        id: 'AJ-ANTHROPIC-2026-10',
-        fecha: `${this.desde}-01`,
-        tarjeta: 'TC-BOLI',
-        usuario: previo?.usuario || 'J',
-        detalle: previo?.detalle || 'Anthropic',
-        categoria: previo?.categoria || 'Streaming',
-        tipo: 'Recurrente',
-        cuotas: n,
-        montoTotal: this.importe * n,
-        mesInicio: this.desde,
-      });
+      PASOS.forEach((p) => { if (p.revisar().estado === 'aplicar') p.aplicar({ meses }); });
     },
   },
 ];
+
+/* --- Los pasos del estado de cuenta de Bolivariano ------------------------ */
+
+const T = 'TC-BOLI';
+const SEP = '2026-09';
+const OCT = '2026-10';
+const TOTAL_SEP = 117.26;
+const plano = (t) => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const cerca = (a, b) => Math.abs((Number(a) || 0) - b) < 0.011;
+const cuotasDe = (id) => db.cuotas.filter((c) => c.gasto_id === id);
+const enMes = (g, mes) => cuotasDe(g.id).some((c) => c.mes === mes);
+const delMes = (g, mes) => cuotasDe(g.id).filter((c) => c.mes === mes).reduce((s, c) => s + (Number(c.monto) || 0), 0);
+
+/** Una compra de un solo pago a otro mes (y, si hace falta, a otra tarjeta). */
+function moverCompra(g, mes, tarjeta = g.tarjeta) {
+  upsert('gastosTarjeta', { ...g, mes_inicio: mes, tarjeta });
+  cuotasDe(g.id).forEach((c) => upsert('cuotas', { ...c, mes, tarjeta }));
+}
+
+/** Una compra nueva con identificador fijo: dos teléfonos crean la misma. */
+function nuevaCompra(datos) {
+  if (db.gastosTarjeta.some((g) => g.id === datos.id)) return;
+  registrarGastoTarjeta({ tarjeta: T, usuario: 'J', tipo: 'Corriente', cuotas: 1, ...datos });
+}
+
+const nube = () => db.gastosTarjeta.find((g) => g.tarjeta === T && plano(g.detalle) === 'apple.com bill us 840');
+const anthropicPrevios = () => db.gastosTarjeta
+  .filter((g) => g.tarjeta === T && ES_ANTHROPIC.test(g.detalle || '') && g.id !== 'AJ-ANTHROPIC-2026-10');
+const pedidos = () => db.gastosTarjeta.find((g) => /pedidos/i.test(g.detalle || '') && cerca(g.monto_total, 23.07)
+  && (enMes(g, SEP) || enMes(g, OCT)));
+const farmacia = () => db.gastosTarjeta.find((g) => /santa mart/i.test(plano(g.detalle)) && cerca(g.monto_total, 10.91));
+
+const PASOS = [
+  {
+    // El cargo de septiembre lo cobró el banco el 1 de octubre; y desde
+    // octubre, $23 al mes.
+    revisar() {
+      const sep = anthropicPrevios().flatMap((g) => cuotasDe(g.id).filter((c) => c.mes === SEP));
+      const ids = new Set([...anthropicPrevios().map((g) => g.id), 'AJ-ANTHROPIC-2026-10']);
+      const desdeOct = db.cuotas.filter((c) => ids.has(c.gasto_id) && c.mes >= OCT);
+      const partes = [];
+      if (sep.length) partes.push(`se quita de septiembre (${money(sep.reduce((s, c) => s + c.monto, 0))}): el banco lo cobró el 1 de octubre`);
+      if (!desdeOct.length) partes.push(`<strong>${money(23)} al mes desde octubre</strong>`);
+      if (!partes.length) return { estado: 'ya', texto: 'Anthropic: ya está bien (nada en septiembre, $23 desde octubre)' };
+      return { estado: 'aplicar', texto: `Anthropic: ${partes.join('; ')}`, pideMeses: !desdeOct.length, menosSep: sep.reduce((s, c) => s + c.monto, 0) };
+    },
+    aplicar({ meses }) {
+      anthropicPrevios().forEach((g) => quitarCuotas(g.id, (c) => c.mes === SEP));
+      const ids = new Set(anthropicPrevios().map((g) => g.id));
+      if (db.cuotas.some((c) => (ids.has(c.gasto_id) || c.gasto_id === 'AJ-ANTHROPIC-2026-10') && c.mes >= OCT)) return;
+      const previo = anthropicPrevios().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))[0];
+      const n = Math.max(2, Math.min(48, Math.round(Number(meses)) || 12));
+      registrarGastoTarjeta({
+        id: 'AJ-ANTHROPIC-2026-10',
+        fecha: `${OCT}-01`,
+        tarjeta: T,
+        usuario: previo?.usuario || 'J',
+        detalle: previo?.detalle || 'Anthropic',
+        categoria: previo?.categoria || 'Digital',
+        tipo: 'Recurrente',
+        cuotas: n,
+        montoTotal: 23 * n,
+        mesInicio: OCT,
+      });
+    },
+  },
+  {
+    // «La nube»: 2,99 + IVA 0,45 = 3,44 desde septiembre. Agosto ya
+    // cuadraba con el banco tal como estaba.
+    revisar() {
+      const g = nube();
+      if (!g) return { estado: 'aviso', texto: 'No encuentro «Apple.com bill us 840»: la nube no se toca' };
+      const malas = cuotasDe(g.id).filter((c) => c.mes >= SEP && !cerca(c.monto, 3.44)).sort((a, b) => a.mes.localeCompare(b.mes));
+      if (!malas.length) return { estado: 'ya', texto: 'Apple, la nube: ya está en $3,44' };
+      const antes = [...new Set(malas.map((c) => money(c.monto)))].join(' / ');
+      const sep = malas.find((c) => c.mes === SEP);
+      return {
+        estado: 'aplicar',
+        texto: `Apple «la nube»: ${antes} → <strong>${money(3.44)}</strong> al mes desde ${nombreMes(malas[0].mes)} (2,99 + IVA)`,
+        masSep: sep ? 3.44 - sep.monto : 0,
+      };
+    },
+    aplicar() {
+      const g = nube();
+      cuotasDe(g.id).filter((c) => c.mes >= SEP).forEach((c) => upsert('cuotas', { ...c, monto: 3.44 }));
+      upsert('gastosTarjeta', { ...g, monto_total: redondear(cuotasDe(g.id).reduce((s, c) => s + c.monto, 0)) });
+    },
+  },
+  {
+    // El cargo de Apple del 28 de septiembre: 49,90 + IVA 7,49.
+    revisar() {
+      const ya = db.gastosTarjeta.some((g) => g.tarjeta === T && /apple/i.test(g.detalle || '') && enMes(g, SEP)
+        && (cerca(g.monto_total, 49.9) || cerca(g.monto_total, 57.39)));
+      if (ya) return { estado: 'ya', texto: 'Apple del 28 de septiembre: ya está' };
+      return { estado: 'aplicar', texto: `Apple del 28 de septiembre: se añade <strong>${money(57.39)}</strong> (49,90 + IVA 7,49)`, masSep: 57.39 };
+    },
+    aplicar() {
+      nuevaCompra({
+        id: 'AJ-APPLE-2026-09-28',
+        fecha: '2026-09-28',
+        detalle: 'Apple.com/bill',
+        categoria: nube()?.categoria || 'Digital',
+        montoTotal: 57.39,
+        mesInicio: SEP,
+        proposito: 'Estado de cuenta: 49,90 + IVA 7,49',
+      });
+    },
+  },
+  {
+    revisar() {
+      const g = pedidos();
+      if (!g) return { estado: 'aviso', texto: 'No encuentro Pedidos Ya de $23,07: no se toca' };
+      if (enMes(g, OCT)) return { estado: 'ya', texto: 'Pedidos Ya $23,07: ya está en octubre' };
+      return { estado: 'aplicar', texto: 'Pedidos Ya $23,07: de septiembre a <strong>octubre</strong>', menosSep: g.tarjeta === T ? 23.07 : 0 };
+    },
+    aplicar() { moverCompra(pedidos(), OCT); },
+  },
+  {
+    // Compra del 30 de septiembre que el banco puso en octubre, en Bolivariano.
+    revisar() {
+      const g = farmacia();
+      if (g && enMes(g, OCT) && g.tarjeta === T) return { estado: 'ya', texto: 'Farmacia Santa Martha $10,91: ya está en octubre' };
+      if (g) {
+        const otra = g.tarjeta !== T ? ` y a ${tarjetaBolivariano().nombre}` : '';
+        return { estado: 'aplicar', texto: `Farmacia Santa Martha $10,91: a <strong>octubre</strong>${otra}`, menosSep: g.tarjeta === T && enMes(g, SEP) ? 10.91 : 0 };
+      }
+      const efectivo = db.gastosEfectivo.find((x) => /santa mart/i.test(plano(x.detalle)) && cerca(x.monto, 10.91));
+      if (efectivo) return { estado: 'aviso', texto: 'Farmacia Santa Martha $10,91 está como gasto en efectivo: si fue con Bolivariano, bórrala de efectivo (no la toco)' };
+      return { estado: 'aplicar', texto: `Farmacia Santa Martha: se añade <strong>${money(10.91)}</strong> en octubre (compra del 30 de septiembre)` };
+    },
+    aplicar() {
+      const g = farmacia();
+      if (g) { moverCompra(g, OCT, T); return; }
+      nuevaCompra({ id: 'AJ-FARMACIA-2026-09-30', fecha: '2026-09-30', detalle: 'Farmacias santa martha', categoria: 'Farmacia', montoTotal: 10.91, mesInicio: OCT });
+    },
+  },
+  {
+    // 1 de octubre: gasolina 6,98 + comisión de gasolinera 0,20 + IVA 0,03.
+    revisar() {
+      const esGas = (g, monto) => (plano(g.categoria) === 'combustible' || /roj|gasolin/.test(plano(g.detalle)))
+        && [6.98, 7.18, 7.21].some((v) => cerca(monto, v));
+      const enTarjeta = db.gastosTarjeta.some((g) => g.tarjeta === T && enMes(g, OCT) && esGas(g, g.monto_total));
+      if (enTarjeta) return { estado: 'ya', texto: 'Gasolinera del 1 de octubre: ya está' };
+      const efectivo = db.gastosEfectivo.find((x) => String(x.fecha).slice(0, 10) === '2026-10-01' && esGas(x, x.monto));
+      if (efectivo) return { estado: 'aviso', texto: 'La gasolinera del 1 de octubre está como efectivo: si fue con Bolivariano, cámbiala (no la toco)' };
+      return { estado: 'aplicar', texto: `Gasolinera del 1 de octubre: se añade <strong>${money(7.21)}</strong> (6,98 + comisión 0,20 + IVA 0,03)` };
+    },
+    aplicar() {
+      nuevaCompra({ id: 'AJ-GAS-2026-10-01', fecha: '2026-10-01', detalle: 'Estación de servicio rojas', categoria: 'Combustible', montoTotal: 7.21, mesInicio: OCT, proposito: 'Estado de cuenta: 6,98 + comisión gasolinera 0,20 + IVA 0,03' });
+    },
+  },
+  {
+    // El total del banco, para que «Comprobar» diga si cuadra.
+    revisar() {
+      const clave = claveEstadoCuenta(T, SEP);
+      if (cerca(db.config[clave], TOTAL_SEP)) return { estado: 'ya', texto: 'Total del estado de septiembre: ya anotado' };
+      return { estado: 'aplicar', texto: `Total del estado de septiembre: <strong>${money(TOTAL_SEP)}</strong>, para «Comprobar»` };
+    },
+    aplicar() { db.config[claveEstadoCuenta(T, SEP)] = String(TOTAL_SEP); },
+  },
+];
+
+/*
+ * Cómo quedará septiembre, para decirlo antes de aplicar: si no da $117,26
+ * es que en este teléfono hay compras que el banco no cobró ese mes, y se
+ * enumeran para revisarlas a mano (no se tocan).
+ */
+function proyeccionSeptiembre(r) {
+  const ahora = db.gastosTarjeta.filter((g) => g.tarjeta === T).reduce((s, g) => s + delMes(g, SEP), 0);
+  const cambio = r.filter((x) => x.estado === 'aplicar').reduce((s, x) => s + (x.masSep || 0) - (x.menosSep || 0), 0);
+  const queda = redondear(ahora + cambio);
+  if (cerca(queda, TOTAL_SEP)) {
+    return `<p class="pista">Septiembre de Bolivariano quedará en <strong>${money(queda)}</strong>, lo mismo que el estado de cuenta.</p>`;
+  }
+  const conocidos = [6.89, 3.44, 1.14, 19.54, 57.39, 49.9, 30, 23, 23.07, 10.91];
+  const raras = db.gastosTarjeta.filter((g) => g.tarjeta === T && enMes(g, SEP) && !conocidos.some((v) => cerca(delMes(g, SEP), v)));
+  return `<p class="pista">Septiembre de Bolivariano quedará en <strong>${money(queda)}</strong> y el banco dice
+    ${money(TOTAL_SEP)}${raras.length ? `. No salen en el estado de cuenta: ${raras.map((g) => `${esc(g.detalle)} ${money(delMes(g, SEP))}`).join(', ')}` : ''}.
+    Revísalo en Tarjetas → Bolivariano → Septiembre.</p>`;
+}
 
 /** Los que están por ofrecer: no aplicados ni descartados, y con algo que hacer. */
 function pendientes() {
@@ -13108,7 +13315,7 @@ function render(raiz, { irA }) {
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Cupos de las tarjetas</h2><span class="pista">Saldo pendiente</span></header>
+        <header><h2>Cupos de las tarjetas</h2><span class="pista">Cupo utilizado</span></header>
         <div id="cupos"></div>
       </div>
       <div class="tarjeta">
@@ -14853,9 +15060,9 @@ function render(raiz) {
         <span class="pista">Todos los meses</span></header>
       <div id="cupo"></div>
       <div class="rejilla kpis">
-        <div class="kpi"><div class="etq">Saldo pendiente</div>
+        <div class="kpi"><div class="etq">Cupo utilizado</div>
           <div class="valor">${money(est.utilizado)}</div>
-          <div class="delta">Suma de las cuotas por pagar</div></div>
+          <div class="delta">Sin pagar, este mes y lo diferido</div></div>
         <div class="kpi"><div class="etq">Cupo</div>
           <div class="valor">${money(est.cupo)}</div></div>
         <div class="kpi"><div class="etq">Disponible</div>
