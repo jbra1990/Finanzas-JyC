@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-3JmIEn0C6P1LUANS4ECwrkBBnYp343cNQ7PUA2e0o1k='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-MbmnFYLY+O7qXKjA4Gzbs9Y0myzO5uqZokn59lyP8nc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2812,7 +2812,7 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
 .sueldo-cuenta li.sub { padding: 3px 2px 3px 14px; border-bottom: 0; }
 .sueldo-cuenta li.total { border-top: 1px solid var(--borde); }
 .sueldo-cuenta li.total span, .sueldo-cuenta li.total strong { color: var(--tinta); font-weight: 660; }
-.sueldo-acciones { display: flex; justify-content: flex-end; margin-top: 10px; }
+.sueldo-acciones { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 
 /* La ventana de ajustes de datos: qué cambia, en una línea cada uno. */
 .ajustes-lista { list-style: none; margin: 8px 0 14px; padding: 0; }
@@ -3582,6 +3582,29 @@ body.velada .cabecera { filter: blur(18px); }
   background: radial-gradient(var(--filete-der) var(--filete-der) at left bottom,
     transparent 99%, var(--ficha-tapa) 100%);
 }
+
+/* «Cuadrar con el banco» (Tarjetas). */
+.cupo-por-cobrar { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; }
+.cupo-por-cobrar strong { color: var(--tinta); font-variant-numeric: tabular-nums; }
+.cuadre { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.cuadre .pista { margin: 0; font-size: 12.5px; line-height: 1.45; }
+.cuadre .cuadre-mal { color: var(--alerta); }
+.cuadre-suma, .cuadre-items { list-style: none; margin: 0; padding: 0; }
+.cuadre-suma li, .cuadre-items li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 0; border-bottom: 1px solid var(--grid);
+  font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.cuadre-suma li span, .cuadre-items li span { flex: 1 1 auto; min-width: 0; color: var(--tinta-2); }
+.cuadre-suma li.total { border-bottom: 0; font-weight: 620; }
+.cuadre-suma li.total span { color: var(--tinta); }
+.cuadre-items li span small { display: block; font-size: 11.5px; color: var(--tinta-3); }
+.cuadre-items li strong { color: var(--tinta); }
+.cuadre-items { padding: 2px 10px; border: 1px solid var(--borde); border-radius: 10px; }
+.cuadre-items li:last-child { border-bottom: 0; }
+.cuadre-o { text-align: center; }
+.cuadre-veredicto { margin: 4px 0 0; font-size: 14px; font-weight: 600; }
+.cuadre .cuadre-bien { color: var(--ok-texto); }
 
 </style>
 </head>
@@ -4810,20 +4833,53 @@ function cuotaPendiente(cuota, mesRef = mesActual()) {
  *    las suscripciones: el Disney de diciembre todavía no se ha cobrado y el
  *    banco no lo descuenta del cupo.
  */
+/**
+ * Día del mes en que el banco cobra una suscripción (`dia_cobro`). Sin él,
+ * el 1: la fecha no sirve, porque lo importado del libro trae fechas que no
+ * son las del cobro (Anthropic figura el 30 y el banco lo cobra el 1).
+ */
+function diaDeCobro(gasto) {
+  const fijo = Math.round(Number(gasto?.dia_cobro));
+  return fijo >= 1 && fijo <= 31 ? fijo : 1;
+}
+
+/**
+ * Cupo de una tarjeta como lo cuenta el banco:
+ *  - el mes anterior, mientras no esté pagado (el estado de cuenta ya emitido);
+ *  - lo del mes en curso, salvo las suscripciones cuyo día de cobro todavía
+ *    no ha llegado (Disney se cobra el 16: el 3 de octubre aún no ocupa cupo);
+ *  - las cuotas que faltan de los diferidos (el «saldo diferido»).
+ * Las suscripciones de meses que vienen no cuentan: aún no se han cobrado.
+ */
 function estadoTarjeta(tarjetaId, mesRef = mesActual()) {
   const tarjeta = db.cuentas.find((c) => c.id === tarjetaId);
   const cupo = Number(tarjeta?.cupo) || 0;
   const previo = sumarMeses(mesRef, -1);
   const previoPagado = Boolean(pagoDeTarjeta(tarjetaId, previo));
   const tipos = tipoPorGasto();
+  const hoy = hoyLocal();
+  const enCurso = mesRef === claveMes(hoy);
+  const diaHoy = Number(hoy.slice(8, 10));
+  const ultimoDia = new Date(Number(mesRef.slice(0, 4)), Number(mesRef.slice(5, 7)), 0).getDate();
+  const gastos = new Map(db.gastosTarjeta.map((g) => [g.id, g]));
   let utilizado = 0;
   const porUsuario = {};
+  const partes = { previo: 0, actual: 0, futuro: 0 };
+  const cuentan = [];
+  const porCobrar = [];
   for (const c of db.cuotas) {
     if (c.tarjeta !== tarjetaId || c.pagado === 'Si' || c.mes < previo) continue;
     if (c.mes === previo && previoPagado) continue;
-    if (c.mes > mesRef && tipos.get(c.gasto_id) === 'Recurrente') continue;
+    const recurrente = tipos.get(c.gasto_id) === 'Recurrente';
+    if (c.mes > mesRef && recurrente) continue;
+    if (c.mes === mesRef && recurrente && enCurso) {
+      const dia = Math.min(diaDeCobro(gastos.get(c.gasto_id)), ultimoDia);
+      if (dia > diaHoy) { porCobrar.push({ cuota: c, gasto: gastos.get(c.gasto_id), dia }); continue; }
+    }
     utilizado += c.monto;
     porUsuario[c.usuario] = (porUsuario[c.usuario] || 0) + c.monto;
+    partes[c.mes === previo ? 'previo' : (c.mes === mesRef ? 'actual' : 'futuro')] += c.monto;
+    cuentan.push(c);
   }
   utilizado = redondear(utilizado);
   return {
@@ -4834,6 +4890,11 @@ function estadoTarjeta(tarjetaId, mesRef = mesActual()) {
     uso: cupo > 0 ? Math.min(100, (utilizado / cupo) * 100) : 0,
     porUsuario: Object.fromEntries(
       Object.entries(porUsuario).map(([k, v]) => [k, redondear(v)])),
+    previo,
+    previoPagado,
+    partes: Object.fromEntries(Object.entries(partes).map(([k, v]) => [k, redondear(v)])),
+    cuentan,
+    porCobrar: porCobrar.sort((a, b) => a.dia - b.dia),
   };
 }
 
@@ -6796,7 +6857,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasRevisadas, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+return { DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasRevisadas, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -11836,7 +11897,7 @@ function categoriaElegida(d, tipo = 'Gasto') {
 function registrarGastoTarjeta({
   id: idExistente = null, fecha, tarjeta, usuario, detalle, proposito = '',
   categoria, tipo = 'Corriente', cuotas = 1, montoTotal, tasaInteres = 0,
-  mesInicio, notas = '', km = '', mantenimiento = undefined,
+  mesInicio, notas = '', km = '', mantenimiento = undefined, diaCobro = undefined,
 }) {
   const enCuotas = tipo !== 'Corriente';
   const n = enCuotas ? Math.max(2, Number(cuotas) || 2) : 1;
@@ -11874,6 +11935,13 @@ function registrarGastoTarjeta({
      * corregir el importe no lo desetiquete.
      */
     mantenimiento: mantenimiento !== undefined ? mantenimiento : (previo?.mantenimiento || ''),
+    /*
+     * Día del mes en que el banco cobra una suscripción: hasta ese día no
+     * ocupa cupo (ver `estadoTarjeta`). Se arrastra igual que lo anterior.
+     */
+    dia_cobro: tipo !== 'Recurrente' ? ''
+      : (diaCobro !== undefined ? (Number(diaCobro) >= 1 && Number(diaCobro) <= 31 ? Math.round(Number(diaCobro)) : '')
+        : (previo?.dia_cobro || '')),
   });
 
   const pagados = new Set(db.cuotas
@@ -11946,6 +12014,9 @@ function formGastoTarjeta(alTerminar, existente = null) {
       <div class="campo" id="caja-cuotas" hidden><label for="f-cuotas">N.º de cuotas</label>
         <input id="f-cuotas" name="cuotas" type="number" min="2" max="48" step="1"
                value="${g && g.cuotas > 1 ? g.cuotas : 3}" inputmode="numeric"></div>
+      <div class="campo" id="caja-dia" hidden><label for="f-dia">Día de cobro</label>
+        <input id="f-dia" name="dia_cobro" type="number" min="1" max="31" step="1"
+               value="${esc(g?.dia_cobro || '')}" placeholder="${g ? '1' : 'el de la fecha'}" inputmode="numeric"></div>
     </div>
     <div class="filtros">
       <div class="campo"><label for="f-mes">Mes de la primera cuota</label>
@@ -12000,6 +12071,8 @@ function formGastoTarjeta(alTerminar, existente = null) {
         const enCuotas = tipo.value !== 'Corriente';
         cajaCuotas.hidden = !enCuotas;
         cajaTasa.hidden = tipo.value !== 'Diferido';
+        $('#caja-dia', form).hidden = tipo.value !== 'Recurrente';
+        $('#f-dia', form).disabled = tipo.value !== 'Recurrente';
         /*
          * Además de ocultarlos hay que desactivarlos. Un campo oculto sigue
          * validándose: si quedaba un «1» en las cuotas y se pasaba a
@@ -12057,6 +12130,8 @@ function formGastoTarjeta(alTerminar, existente = null) {
         mesInicio: d.mes_inicio,
         notas: g?.notas || '',
         km: d.km,
+        // Una suscripción nueva sin día de cobro se cobra el día de la fecha.
+        diaCobro: d.dia_cobro || (g ? '' : String(d.fecha || '').slice(8, 10)),
       });
       brindis(g
         ? `Gasto corregido · ${money(plan.totalPagado)}`
@@ -12698,6 +12773,32 @@ const AJUSTES = [
       PASOS.forEach((p) => { if (p.revisar().estado === 'aplicar') p.aplicar({ meses }); });
     },
   },
+  {
+    /*
+     * El día en que el banco cobra cada suscripción, según el estado de
+     * cuenta. Hasta ese día no ocupa cupo: el 3 de octubre Disney (día 16) y
+     * la nube (día 23) aún no están en los $800,31 del banco.
+     */
+    id: 'bolivariano-dias-cobro',
+    revisar() {
+      const cambios = DIAS_COBRO
+        .map(({ cual, dia, nombre }) => ({ g: cual(), dia, nombre }))
+        .filter(({ g, dia }) => g && Number(g.dia_cobro) !== dia);
+      if (!cambios.length) return { estado: 'ya', titulo: 'Día de cobro de las suscripciones', texto: 'ya está puesto' };
+      return {
+        estado: 'aplicar',
+        titulo: 'Día de cobro de las suscripciones',
+        texto: `${cambios.map(({ nombre, dia }) => `${esc(nombre)}: el <strong>${dia}</strong>`).join('; ')}. `
+          + 'Hasta ese día no cuentan en el cupo utilizado, igual que en el banco.',
+      };
+    },
+    aplicar() {
+      DIAS_COBRO.forEach(({ cual, dia }) => {
+        const g = cual();
+        if (g && Number(g.dia_cobro) !== dia) upsert('gastosTarjeta', { ...g, dia_cobro: dia });
+      });
+    },
+  },
 ];
 
 /* --- Los pasos del estado de cuenta de Bolivariano ------------------------ */
@@ -12730,6 +12831,12 @@ const anthropicPrevios = () => db.gastosTarjeta
 const pedidos = () => db.gastosTarjeta.find((g) => /pedidos/i.test(g.detalle || '') && cerca(g.monto_total, 23.07)
   && (enMes(g, SEP) || enMes(g, OCT)));
 const farmacia = () => db.gastosTarjeta.find((g) => /santa mart/i.test(plano(g.detalle)) && cerca(g.monto_total, 10.91));
+
+const disney = () => db.gastosTarjeta.find((g) => g.tarjeta === T && g.tipo === 'Recurrente' && /^disney/.test(plano(g.detalle)));
+const DIAS_COBRO = [
+  { nombre: 'Disney plus', dia: 16, cual: disney },
+  { nombre: 'Apple, la nube', dia: 23, cual: nube },
+];
 
 const PASOS = [
   {
@@ -14889,7 +14996,7 @@ M["views/tarjetas"] = (function () {
 const {db, tarjetas, eliminar, guardar} = M["store"];
 const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir, comprometidoProximos} = M["calc"];
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
-const {esc, $, $$, segmentado, confirmar, aNumero, notaFila, marcaNota, notaTexto, centrarElegido} = M["ui"];
+const {esc, $, $$, segmentado, confirmar, aNumero, notaFila, marcaNota, notaTexto, centrarElegido, modal} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
 const {formCuenta} = M["views/cuentas"];
 const estado = {
@@ -15071,7 +15178,12 @@ function render(raiz) {
           <div class="kpi"><div class="etq">Pendiente ${esc(u)}</div>
             <div class="valor">${money(v)}</div></div>`).join('')}
       </div>
+      ${est.porCobrar.length ? `
+        <p class="pista cupo-por-cobrar">Aún no cuentan, el banco las cobra más adelante:
+          ${est.porCobrar.map(({ cuota, gasto, dia }) => `${esc(gasto?.detalle || 'Suscripción')}
+            <strong>${money(cuota.monto)}</strong> el ${dia}`).join(' · ')}</p>` : ''}
       <div class="sueldo-acciones">
+        <button class="btn pequeno" id="btn-cuadrar">Cuadrar con el banco</button>
         <button class="btn pequeno" id="btn-editar-tarjeta">Cambiar cupo, corte o pago</button></div>
     </section>
 
@@ -15129,6 +15241,7 @@ function render(raiz) {
   centrarElegido(barraMes);
   // El cupo, el día de corte y el de pago viven en la ficha de la tarjeta, y
   // la lista de Cuentas solo enseña bancos: sin este botón no había dónde.
+  $('#btn-cuadrar', raiz).addEventListener('click', () => formCuadrar(t, () => render(raiz)));
   $('#btn-editar-tarjeta', raiz).addEventListener('click', () => formCuenta(t.id, () => render(raiz)));
   $('#btn-nuevo', raiz).addEventListener('click', () => formGastoTarjeta((nuevo) => {
     irAlGasto(nuevo);
@@ -15456,6 +15569,145 @@ function listaMovimientos(tarjetaId, mes, usuario, marcable = false, busca = '')
        <strong>${money(total)}</strong> de los ${money(totalMes)} del mes.`
     : `${filas.length} ${filas.length === 1 ? 'movimiento' : 'movimientos'} en el mes ·
        total <strong>${money(total)}</strong>.`}</span></div>`;
+}
+
+/* --- Cuadrar el cupo con el banco ----------------------------------------- */
+
+const claveBanco = (tarjetaId) => `banco_utilizado_${tarjetaId}`;
+const centavos = (n) => Math.round((Number(n) || 0) * 100);
+
+/**
+ * Combinaciones de hasta tres cargos que suman exactamente `objetivo` (en
+ * centavos). Si sobran $25,37 y hay un cargo de $23,07 y otro de $2,30, esa es
+ * la pareja que hay que mirar.
+ */
+function combinaciones(cuotas, objetivo, max = 5) {
+  const c = cuotas.slice(0, 60);
+  const v = c.map((x) => centavos(x.monto));
+  const res = [];
+  for (let i = 0; i < c.length && res.length < max; i++) {
+    if (v[i] === objetivo) { res.push([c[i]]); continue; }
+    for (let j = i + 1; j < c.length && res.length < max; j++) {
+      if (v[i] + v[j] === objetivo) { res.push([c[i], c[j]]); continue; }
+      for (let k = j + 1; k < c.length && res.length < max; k++) {
+        if (v[i] + v[j] + v[k] === objetivo) res.push([c[i], c[j], c[k]]);
+      }
+    }
+  }
+  return res;
+}
+
+/** Cargos que se repiten: mismo mes, mismo importe y mismo comercio. */
+function repetidos(cuotas) {
+  const grupos = new Map();
+  for (const c of cuotas) {
+    const g = db.gastosTarjeta.find((x) => x.id === c.gasto_id);
+    const k = `${c.mes}|${centavos(c.monto)}|${plano(g?.detalle).slice(0, 10)}`;
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(c);
+  }
+  return [...grupos.values()].filter((x) => x.length > 1);
+}
+
+function formCuadrar(t, alTerminar) {
+  const guardado = db.config[claveBanco(t.id)];
+  const linea = (c) => {
+    const g = db.gastosTarjeta.find((x) => x.id === c.gasto_id);
+    return `<li><span>${esc(g?.detalle || c.gasto_id)}
+        <small>${esc(c.usuario || '')} · ${esc(nombreMes(c.mes))}${g?.tipo && g.tipo !== 'Corriente' ? ` · ${esc(g.tipo.toLowerCase())}` : ''}</small></span>
+      <strong>${money(c.monto)}</strong>
+      <button type="button" class="btn pequeno" data-abrir="${esc(c.gasto_id)}">Abrir</button></li>`;
+  };
+
+  const pintar = (form) => {
+    const est = estadoTarjeta(t.id);
+    const caja = $('#cq-res', form);
+    const texto = $('#cq-banco', form).value.trim();
+    const filas = [
+      [`${nombreMes(est.previo)}, sin pagar`, est.partes.previo],
+      [`${nombreMes(mesActual())}, lo cobrado`, est.partes.actual],
+      ['Cuotas de diferidos por venir', est.partes.futuro],
+    ];
+    let html = `<ul class="cuadre-suma">${filas.map(([e, v]) => `<li><span>${esc(e)}</span><b>${money(v)}</b></li>`).join('')}
+      <li class="total"><span>Cupo utilizado en la app</span><b>${money(est.utilizado)}</b></li></ul>`;
+
+    if (est.porCobrar.length) {
+      html += `<p class="pista">No se cuentan porque el banco aún no las cobra: ${est.porCobrar
+        .map(({ cuota, gasto, dia }) => `${esc(gasto?.detalle || '')} ${money(cuota.monto)} (el ${dia})`).join(', ')}.</p>`;
+    }
+    // El estado de cuenta del mes anterior, si se apuntó, dice si el fallo está ahí.
+    const comp = comprobacionDelMes(t.id, est.previo);
+    if (!est.previoPagado && comp.declarado !== null) {
+      html += comp.cuadra
+        ? `<p class="pista cuadre-bien">✓ ${esc(nombreMes(est.previo))} coincide con el estado de cuenta (${money(comp.declarado)}).</p>`
+        : `<p class="pista cuadre-mal">${esc(nombreMes(est.previo))}: la app tiene ${money(comp.total)} y el estado de cuenta
+            ${money(comp.declarado)}. ${comp.diferencia < 0 ? `Sobran ${money(-comp.diferencia)}` : `Faltan ${money(comp.diferencia)}`} en ese mes.</p>`;
+    }
+
+    if (texto !== '') {
+      const banco = aNumero(texto);
+      const dif = redondear(est.utilizado - banco);
+      if (Math.abs(dif) < 0.005) {
+        html += `<p class="cuadre-veredicto cuadre-bien">✓ Cuadra con el banco: ${money(banco)}.</p>`;
+      } else if (dif > 0) {
+        html += `<p class="cuadre-veredicto cuadre-mal">La app tiene <strong>${money(dif)}</strong> más que el banco.
+          Hay algo registrado en esta tarjeta que el banco no tiene.</p>`;
+        const recientes = est.cuentan.filter((c) => c.mes >= est.previo && c.mes <= mesActual());
+        const combos = combinaciones(recientes, centavos(dif));
+        if (combos.length) {
+          html += `<p class="pista">Estos cargos suman justo esa diferencia. Revisa si de verdad son de
+            ${esc(t.nombre)}: si son de otra tarjeta o de otro mes, ábrelos y corrígelos.</p>
+            ${combos.map((k) => `<ul class="cuadre-items">${k.map(linea).join('')}</ul>`).join('<p class="pista cuadre-o">o bien</p>')}`;
+        }
+        const dobles = repetidos(recientes);
+        if (dobles.length) {
+          html += `<p class="pista">Parecen repetidos:</p>
+            ${dobles.map((k) => `<ul class="cuadre-items">${k.map(linea).join('')}</ul>`).join('')}`;
+        }
+        if (!combos.length && !dobles.length) {
+          html += `<p class="pista">Ningún cargo ni grupo de cargos suma exactamente eso. Usa «✓ Comprobar»
+            en ${esc(nombreMes(mesActual()))} con el detalle del banco a la vista.</p>`;
+        }
+      } else {
+        html += `<p class="cuadre-veredicto cuadre-mal">El banco tiene <strong>${money(-dif)}</strong> más que la app:
+          falta registrar algún cargo en ${esc(t.nombre)}.</p>`;
+      }
+    }
+    caja.innerHTML = html;
+    $$('[data-abrir]', caja).forEach((b) => b.addEventListener('click', () => {
+      const gasto = db.gastosTarjeta.find((g) => g.id === b.dataset.abrir);
+      if (!gasto) return;
+      form.closest('dialog').querySelector('.cerrar').click();
+      formGastoTarjeta(() => { alTerminar?.(); formCuadrar(t, alTerminar); }, gasto);
+    }));
+  };
+
+  modal({
+    titulo: `Cuadrar ${t.nombre} con el banco`,
+    cuerpo: `
+      <div class="campo"><label for="cq-banco">Cupo utilizado que dice el banco</label>
+        <input id="cq-banco" name="banco" type="text" inputmode="decimal" autocomplete="off"
+               placeholder="800,31" value="${esc(guardado ?? '')}"></div>
+      <div id="cq-res" class="cuadre"></div>`,
+    aceptar: 'Listo',
+    soloCerrar: true,
+    alAbrir(form) {
+      const campo = $('#cq-banco', form);
+      campo.addEventListener('input', () => pintar(form));
+      campo.addEventListener('change', () => {
+        const texto = campo.value.trim();
+        db.config[claveBanco(t.id)] = texto === '' ? '' : String(aNumero(texto));
+        guardar();
+      });
+      pintar(form);
+    },
+    alEnviar(d, form) {
+      const texto = $('#cq-banco', form).value.trim();
+      db.config[claveBanco(t.id)] = texto === '' ? '' : String(aNumero(texto));
+      guardar();
+      alTerminar?.();
+    },
+  });
 }
 
 return { enfocarGasto, render };
