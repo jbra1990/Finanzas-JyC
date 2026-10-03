@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-qsctVCAy+YQaL5KN2wSgdF59D5Bwcl4qww2HILipGmY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ujzvdYXAlE82rMZj6o7F6JWcB2gtuVi1q1uDTKfRSmU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2813,6 +2813,18 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
 .sueldo-cuenta li.total { border-top: 1px solid var(--borde); }
 .sueldo-cuenta li.total span, .sueldo-cuenta li.total strong { color: var(--tinta); font-weight: 660; }
 .sueldo-acciones { display: flex; justify-content: flex-end; margin-top: 10px; }
+
+/* La ventana de ajustes de datos: qué cambia, en una línea cada uno. */
+.ajustes-lista { list-style: none; margin: 8px 0 14px; padding: 0; }
+.ajustes-lista li {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 0; border-bottom: 1px solid var(--grid);
+}
+.ajustes-lista li:last-child { border-bottom: 0; }
+.ajustes-lista b { font-size: 13.5px; font-weight: 620; }
+.ajustes-lista span { font-size: 12.5px; color: var(--tinta-2); font-variant-numeric: tabular-nums; }
+.ajustes-lista strong { color: var(--tinta); }
+.ajustes-lista li.ya { opacity: 0.6; }
 
 /* La barra de meses de Cuentas y Tarjetas. Se desliza de lado; el rótulo no. */
 .barra-meses { align-items: center; gap: 10px; flex-wrap: nowrap; }
@@ -12538,6 +12550,237 @@ function liquidarInversion(id, alTerminar) {
 return { campoCategoria, categoriaElegida, conectarCategoria, esCombustible, formDiferir, formGastoEfectivo, formGastoTarjeta, formIngreso, formInversion, formMantenimiento, formMovimiento, formPagoTarjeta, formTopes, liquidarInversion, registrarGastoTarjeta };
 })();
 
+M["ajustes"] = (function () {
+/**
+ * Ajustes puntuales de datos, ofrecidos al abrir la app.
+ *
+ * Hay cambios en los datos que no se pueden hacer desde fuera: viven en el
+ * teléfono de quien los usa. Esto los ofrece AHÍ, a la vista y con permiso:
+ * al abrir la app sale una ventana que dice exactamente qué va a cambiar y no
+ * toca nada hasta que se pulsa «Aplicar».
+ *
+ * Reglas de cada ajuste, y por qué:
+ *  - Se calcula sobre los datos de ESTE teléfono, ya sincronizados. Si lo que
+ *    pide ya está hecho —o algo parecido ya existe— no hace nada y lo dice.
+ *  - Tiene un identificador fijo. Lo aplicado se anota, y si los dos teléfonos
+ *    lo aplican a la vez, crean el MISMO registro (misma clave), no dos.
+ *  - Nunca borra nada. Solo añade un registro o cambia un campo concreto.
+ *  - «Ahora no» lo vuelve a ofrecer en la próxima apertura; «No aplicar» lo
+ *    descarta para siempre.
+ */
+
+const {db, upsert, guardar} = M["store"];
+const {alCambiarSync, configurado, estadoSync} = M["sync"];
+const {registrarGastoTarjeta} = M["forms"];
+const {money, nombreMes, sumarMeses} = M["calc"];
+const {$, esc, modal, brindis} = M["ui"];
+const CLAVE = 'ajustes_hechos';
+/** Así lo escribe la gente —y así está en los datos—: «Anthropic» y «Antrhopic». */
+const ES_ANTHROPIC = /anthropic|antrhopic/i;
+
+/** Los ajustes ya aplicados o descartados, en la configuración. */
+function marcados() {
+  try {
+    const m = JSON.parse(db.config[CLAVE] || '{}');
+    return m && typeof m === 'object' ? m : {};
+  } catch {
+    return {};
+  }
+}
+function marcar(id, estado) {
+  db.config[CLAVE] = JSON.stringify({ ...marcados(), [id]: estado });
+}
+
+/** La tarjeta Bolivariano, por id y, si no, por nombre. */
+function tarjetaBolivariano() {
+  return db.cuentas.find((c) => c.id === 'TC-BOLI')
+    || db.cuentas.find((c) => c.tipo === 'Tarjeta' && /bolivariano/i.test(c.nombre || ''));
+}
+
+/* --- Los ajustes --------------------------------------------------------- */
+
+const CUPO = 6000;
+
+const AJUSTES = [
+  {
+    id: 'cupo-bolivariano-6000',
+    /** @returns {{estado: 'aplicar'|'ya'|'falta', texto: string}} */
+    revisar() {
+      const t = tarjetaBolivariano();
+      if (!t) return { estado: 'falta', texto: 'No encuentro la tarjeta Bolivariano.' };
+      if (Number(t.cupo) === CUPO) {
+        return { estado: 'ya', titulo: `Cupo de ${t.nombre}`, texto: `ya es ${money(CUPO)}: no se toca` };
+      }
+      return {
+        estado: 'aplicar',
+        titulo: `Cupo de ${t.nombre}`,
+        texto: `${money(Number(t.cupo) || 0)} → <strong>${money(CUPO)}</strong>`,
+      };
+    },
+    aplicar() {
+      const t = tarjetaBolivariano();
+      upsert('cuentas', { ...t, cupo: CUPO });
+    },
+  },
+  {
+    id: 'anthropic-recurrente-octubre',
+    desde: '2026-10',
+    importe: 23,
+    mesesPorDefecto: 12,
+    /** Los cargos de Anthropic de la tarjeta, de cualquier registro. */
+    previos() {
+      return db.gastosTarjeta.filter((g) => g.tarjeta === 'TC-BOLI' && ES_ANTHROPIC.test(g.detalle || ''));
+    },
+    revisar() {
+      const t = tarjetaBolivariano();
+      if (!t) return { estado: 'falta', texto: 'No encuentro la tarjeta Bolivariano.' };
+      const ids = new Set(this.previos().map((g) => g.id));
+      const desdeOctubre = db.cuotas
+        .filter((c) => ids.has(c.gasto_id) && c.mes >= this.desde)
+        .sort((a, b) => a.mes.localeCompare(b.mes));
+      if (desdeOctubre.length) {
+        return {
+          estado: 'ya',
+          titulo: 'Anthropic, recurrente desde octubre',
+          texto: `ya hay ${desdeOctubre.length} ${desdeOctubre.length === 1 ? 'cuota' : 'cuotas'} de Anthropic desde ${nombreMes(desdeOctubre[0].mes)}: no se toca`,
+        };
+      }
+      return {
+        estado: 'aplicar',
+        titulo: 'Anthropic, recurrente desde octubre',
+        texto: `${money(this.importe)} al mes en ${t.nombre}, desde ${nombreMes(this.desde)}`,
+        pideMeses: true,
+      };
+    },
+    aplicar({ meses }) {
+      const previo = this.previos().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))[0];
+      const n = Math.max(2, Math.min(48, Math.round(Number(meses)) || this.mesesPorDefecto));
+      registrarGastoTarjeta({
+        // Identificador fijo: dos teléfonos que lo apliquen a la vez crean el
+        // mismo registro, no dos.
+        id: 'AJ-ANTHROPIC-2026-10',
+        fecha: `${this.desde}-01`,
+        tarjeta: 'TC-BOLI',
+        usuario: previo?.usuario || 'J',
+        detalle: previo?.detalle || 'Anthropic',
+        categoria: previo?.categoria || 'Streaming',
+        tipo: 'Recurrente',
+        cuotas: n,
+        montoTotal: this.importe * n,
+        mesInicio: this.desde,
+      });
+    },
+  },
+];
+
+/** Los que están por ofrecer: no aplicados ni descartados, y con algo que hacer. */
+function pendientes() {
+  const hechos = marcados();
+  return AJUSTES
+    .filter((a) => !hechos[a.id])
+    .map((a) => ({ ajuste: a, estado: a.revisar() }));
+}
+
+/** Aplica los que quedan por hacer; los que ya estaban hechos, solo los anota. */
+function aplicarTodos({ meses } = {}) {
+  const hechos = [];
+  for (const { ajuste, estado } of pendientes()) {
+    if (estado.estado === 'aplicar') {
+      ajuste.aplicar({ meses });
+      marcar(ajuste.id, 'aplicado');
+      hechos.push(ajuste.id);
+    } else if (estado.estado === 'ya') {
+      marcar(ajuste.id, 'ya-estaba');
+    }
+  }
+  guardar();
+  return hechos;
+}
+
+/** La ventana que los ofrece. */
+function ofrecerAjustes(alTerminar) {
+  const todos = pendientes();
+  // Lo que ya estaba hecho se anota en silencio, para no volver a mirarlo.
+  const yaEstaba = todos.filter((p) => p.estado.estado === 'ya');
+  yaEstaba.forEach((p) => marcar(p.ajuste.id, 'ya-estaba'));
+  if (yaEstaba.length) guardar();
+  const porHacer = todos.filter((p) => p.estado.estado === 'aplicar');
+  if (!porHacer.length) return null;
+
+  const pideMeses = porHacer.some((p) => p.estado.pideMeses);
+  const meses0 = porHacer.find((p) => p.estado.pideMeses)?.ajuste.mesesPorDefecto || 12;
+  const dlg = modal({
+    titulo: 'Ajustes listos para aplicar',
+    cuerpo: `
+      <p class="pista" style="margin-top:0">Esto es lo que va a cambiar en tus datos.
+        No se toca nada hasta que pulses <strong>Aplicar</strong>.</p>
+      <ul class="ajustes-lista">${porHacer.map(({ estado }) => `
+        <li><b>${esc(estado.titulo)}</b><span>${estado.texto}</span></li>`).join('')}
+        ${yaEstaba.map(({ estado }) => `
+        <li class="ya"><b>${esc(estado.titulo)}</b><span>${estado.texto}</span></li>`).join('')}</ul>
+      ${pideMeses ? `
+        <div class="campo"><label for="aj-meses">¿Cuántos meses dura Anthropic?</label>
+          <input id="aj-meses" name="meses" type="number" min="2" max="48" step="1"
+                 value="${meses0}" inputmode="numeric" required></div>
+        <p class="pista" id="aj-total"></p>` : ''}
+      <p class="pista"><button type="button" class="btn pequeno" id="aj-descartar">No aplicar estos ajustes</button></p>`,
+    aceptar: 'Aplicar',
+    alAbrir(form) {
+      const total = $('#aj-total', form);
+      const pintarTotal = () => {
+        if (!total) return;
+        const n = Math.max(2, Math.min(48, Math.round(Number($('#aj-meses', form).value)) || 0));
+        const importe = porHacer.find((p) => p.estado.pideMeses).ajuste.importe;
+        const desde = porHacer.find((p) => p.estado.pideMeses).ajuste.desde;
+        total.textContent = `${n} cuotas de ${money(importe)} = ${money(importe * n)}, `
+          + `de ${nombreMes(desde)} a ${nombreMes(sumarMeses(desde, n - 1))}.`;
+      };
+      $('#aj-meses', form)?.addEventListener('input', pintarTotal);
+      pintarTotal();
+      $('#aj-descartar', form).addEventListener('click', () => {
+        porHacer.forEach((p) => marcar(p.ajuste.id, 'descartado'));
+        guardar();
+        brindis('Ajustes descartados');
+        dlg.querySelector('[data-cancelar]').click();
+      });
+    },
+    alEnviar(d) {
+      const hechos = aplicarTodos({ meses: d.meses });
+      brindis(hechos.length === 1 ? 'Ajuste aplicado' : `${hechos.length} ajustes aplicados`);
+      alTerminar?.();
+    },
+  });
+  return dlg;
+}
+
+/**
+ * Los ofrece cuando los datos ya son los buenos: con la sincronización
+ * puesta, al terminar la primera; si tarda, a los pocos segundos; y sin
+ * sincronización, enseguida. Una sola vez por apertura.
+ */
+function ofrecerAlArrancar(alTerminar) {
+  let hecho = false;
+  const una = () => {
+    if (hecho) return;
+    hecho = true;
+    // Si hay otra ventana abierta (formulario, PIN) no se le pisa.
+    if (document.querySelector('dialog[open]')) return;
+    ofrecerAjustes(alTerminar);
+  };
+  if (!configurado()) {
+    setTimeout(una, 1200);
+    return;
+  }
+  const dejar = alCambiarSync((e) => {
+    if (!e.sincronizando && (e.ultima || e.error)) { dejar(); una(); }
+  });
+  if (!estadoSync.sincronizando && (estadoSync.ultima || estadoSync.error)) { dejar(); una(); return; }
+  setTimeout(() => { dejar(); una(); }, 6000);
+}
+
+return { aplicarTodos, ofrecerAjustes, ofrecerAlArrancar, pendientes };
+})();
+
 M["pantalla_llave"] = (function () {
 /**
  * La pantalla de la cerradura y lo que la dispara: autobloqueo y velo.
@@ -14050,6 +14293,389 @@ function tablaAnual(matriz, serie) {
 return { render };
 })();
 
+M["views/cuentas"] = (function () {
+/** Vista «Cuentas»: saldos reales de banco y efectivo, y sus movimientos. */
+
+const {db, cuentasBancarias, eliminar, upsert, cuenta} = M["store"];
+const {money, moneyHTML, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes} = M["calc"];
+const {dona, linea, alRedimensionar} = M["charts"];
+const {esc, $, $$, confirmar, modal, brindis, aNumero, marcaNota, notaTexto, segmentado, centrarElegido} = M["ui"];
+const {formMovimiento, formIngreso, formGastoEfectivo} = M["forms"];
+/*
+ * El mes de las listas de abajo. Vive fuera de render para que sobreviva a
+ * corregir o borrar un registro sin volver al mes en curso. '' es «Todos».
+ */
+let mesListas = null;
+
+/*
+ * Los meses que se pueden elegir: el actual y los anteriores que tengan algo
+ * en alguna de las tres listas, del más reciente al más antiguo. Los que aún
+ * no llegan no: aquí no hay nada apuntado en el futuro.
+ */
+function mesesConMovimientos() {
+  const hoy = mesActual();
+  const set = new Set([hoy]);
+  db.ingresos.forEach((i) => set.add(i.mes || claveMes(i.fecha)));
+  db.gastosEfectivo.forEach((g) => set.add(claveMes(g.fecha)));
+  db.movimientos.forEach((m) => set.add(claveMes(m.fecha)));
+  return [...set].filter((m) => /^\d{4}-\d{2}$/.test(m) && m <= hoy).sort().reverse();
+}
+
+function render(raiz) {
+  const cuentas = cuentasBancarias();
+  if (mesListas === null) mesListas = mesActual();
+  const mesKpi = mesListas || mesActual();
+  const ahorro = totalAhorrado();
+
+  raiz.innerHTML = `
+    <section class="panel">
+      <div class="panel-cab">
+        <div>
+          <span class="etiqueta">Total ahorrado</span>
+          <span class="cifra">${moneyHTML(ahorro)}</span>
+          <span class="nota">Suma de bancos y efectivo</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+          <button class="btn pequeno" id="btn-mov">+ Movimiento</button>
+          <button class="btn primario pequeno" id="btn-ing">+ Ingreso</button>
+        </div>
+      </div>
+      <div class="panel-datos">
+        <div><div class="etq">Invertido</div><div class="val">${money(totalInvertido())}</div></div>
+        <div><div class="etq">Deuda tarjetas</div><div class="val">${money(deudaTotalTarjetas())}</div></div>
+        <div><div class="etq">Patrimonio neto</div><div class="val">${money(patrimonioNeto())}</div></div>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <header><h2>Saldos por cuenta</h2>
+        <button class="btn pequeno" id="btn-cuenta">+ Cuenta</button></header>
+      <ul class="lista">${cuentas.map((c) => {
+    const saldo = saldoCuenta(c.id);
+    return `
+        <li>
+          <div class="principal">
+            <div class="titulo">${esc(c.nombre)}</div>
+            <div class="meta">${esc(c.tipo)}${c.banco ? ` · ${esc(c.banco)}` : ''} ·
+              saldo inicial ${money(c.saldo_inicial)}</div>
+          </div>
+          <div class="monto ${saldo < 0 ? 'neg' : 'pos'}">${money(saldo)}</div>
+          <button class="btn pequeno" data-editar="${esc(c.id)}">Editar</button>
+        </li>`;
+  }).join('')}</ul>
+    </section>
+
+    <section class="rejilla dos">
+      <div class="tarjeta">
+        <header><h2>Reparto del ahorro</h2><span class="pista">Por cuenta</span></header>
+        <div id="g-cuentas"></div>
+      </div>
+      <div class="tarjeta">
+        <header><h2>Evolución del ahorro</h2><span class="pista">Acumulado por mes</span></header>
+        <div id="g-evolucion"></div>
+      </div>
+    </section>
+
+    <div class="barra-accion barra-meses cuentas-mes">
+      <span class="pista">Ver el mes</span>
+      <div id="seg-mes-cuentas" class="barra-meses-seg"></div>
+    </div>
+
+    <section class="tarjeta">
+      <header><h2>Ingresos registrados</h2>
+        <button class="btn pequeno" id="btn-ing-2">+ Ingreso</button></header>
+      <div class="rejilla kpis">
+        <div class="kpi"><div class="etq">Ingresos de ${esc(nombreMes(mesKpi))}</div>
+          <div class="valor" id="kpi-ing-mes">${money(ingresoDelMes(mesKpi))}</div></div>
+        <div class="kpi"><div class="etq">Ingresos del año</div>
+          <div class="valor">${money(ingresosDelAnio())}</div></div>
+        <div class="kpi"><div class="etq">Histórico</div>
+          <div class="valor">${money(db.ingresos.reduce((s, i) => s + (Number(i.neto) || 0), 0))}</div>
+          <div class="delta">${db.ingresos.length} ${db.ingresos.length === 1 ? 'registro' : 'registros'}</div></div>
+      </div>
+      <div id="lista-ingresos"></div>
+    </section>
+
+    <section class="tarjeta">
+      <header><h2>Gastos en efectivo / débito</h2>
+        <button class="btn pequeno" id="btn-efectivo">+ Gasto en efectivo</button></header>
+      <div id="lista-efectivo"></div>
+    </section>
+
+    <section class="tarjeta">
+      <header><h2>Movimientos y transacciones</h2>
+        <span class="pista">Pagos y traspasos</span></header>
+      <div id="lista-movs"></div>
+    </section>`;
+
+  $('#btn-mov', raiz).addEventListener('click', () => formMovimiento(() => render(raiz)));
+  $('#btn-ing', raiz).addEventListener('click', () => formIngreso(() => render(raiz)));
+  $('#btn-ing-2', raiz).addEventListener('click', () => formIngreso(() => render(raiz)));
+  $('#btn-efectivo', raiz).addEventListener('click', () => formGastoEfectivo(() => render(raiz)));
+  $('#btn-cuenta', raiz).addEventListener('click', () => formCuenta(null, () => render(raiz)));
+  $$('[data-editar]', raiz).forEach((b) => b.addEventListener('click', () => {
+    formCuenta(b.dataset.editar, () => render(raiz));
+  }));
+
+  const pintar = () => {
+    dona($('#g-cuentas', raiz), cuentas
+      .map((c) => ({ nombre: c.nombre, valor: Math.max(0, saldoCuenta(c.id)) }))
+      .filter((x) => x.valor > 0), { titulo: 'Ahorro' });
+
+    const meses = rangoMeses(sumarMeses(mesActual(), -11), mesActual());
+    let acc = 0;
+    const serie = meses.map((m) => {
+      acc = redondear(acc + ingresoDelMes(m) - salidasDelMes(m));
+      return acc;
+    });
+    linea($('#g-evolucion', raiz), meses.map((m) => nombreMes(m, true)),
+      [{ nombre: 'Flujo acumulado', valores: serie }], { alto: 230 });
+  };
+  pintar();
+  alRedimensionar(pintar);
+
+  const meses = mesesConMovimientos();
+  if (mesListas && !meses.includes(mesListas)) mesListas = mesActual();
+  const barraMes = segmentado(
+    [...meses.map((m) => ({ valor: m, texto: nombreMes(m, true) })), { valor: '', texto: 'Todos' }],
+    mesListas,
+    (v) => {
+      mesListas = v;
+      const kpiMes = v || mesActual();
+      const etq = $('#kpi-ing-mes', raiz)?.previousElementSibling;
+      if (etq) etq.textContent = `Ingresos de ${nombreMes(kpiMes)}`;
+      $('#kpi-ing-mes', raiz).textContent = money(ingresoDelMes(kpiMes));
+      // Solo las listas: repintar la vista entera devolvería la pantalla arriba.
+      pintarListas(raiz);
+    },
+  );
+  $('#seg-mes-cuentas', raiz).appendChild(barraMes);
+  centrarElegido(barraMes);
+  pintarListas(raiz);
+}
+
+/** Las tres listas, filtradas por el mes elegido, con su recuento y su suma. */
+function pintarListas(raiz) {
+  const delMes = (fecha, mesFila) => !mesListas || (mesFila || claveMes(fecha)) === mesListas;
+  const cuando = mesListas ? `en ${nombreMes(mesListas).toLowerCase()}` : 'en total';
+  const recuento = (filas, campo, texto) => (filas.length ? `
+    <p class="pista cuentas-suma">${filas.length} ${filas.length === 1 ? 'registro' : 'registros'}
+      ${cuando} · <strong>${money(filas.reduce((s, f) => s + (Number(f[campo]) || 0), 0))}</strong>${
+  texto ? ` ${texto}` : ''}</p>` : '');
+
+  const ingresos = db.ingresos.filter((i) => delMes(i.fecha, i.mes))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  $('#lista-ingresos', raiz).innerHTML = listaSimple(
+    ingresos,
+    (i) => ({
+      nota: i.notas,
+      titulo: `${i.concepto} · ${i.usuario}`,
+      meta: `${i.fecha} · bruto ${money(i.bruto)} − descuentos ${money(i.descuentos)} → ${cuenta(i.cuenta)?.nombre || i.cuenta}`,
+      monto: Number(i.neto) || 0,
+      signo: 'pos',
+      id: i.id,
+      coleccion: 'ingresos',
+    }),
+    mesListas ? `Sin ingresos ${cuando}.` : 'Sin ingresos registrados.',
+  ) + recuento(ingresos, 'neto', 'netos');
+
+  const efectivo = db.gastosEfectivo.filter((g) => delMes(g.fecha))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  $('#lista-efectivo', raiz).innerHTML = listaSimple(
+    efectivo,
+    (g) => ({
+      titulo: `${g.detalle} · ${g.usuario}`,
+      meta: `${g.fecha} · ${g.categoria} · ${cuenta(g.cuenta)?.nombre || g.cuenta}`,
+      nota: g.proposito,
+      monto: Number(g.monto) || 0,
+      signo: 'neg',
+      id: g.id,
+      coleccion: 'gastosEfectivo',
+    }),
+    mesListas ? `Sin gastos en efectivo ${cuando}.` : 'Sin gastos en efectivo registrados.',
+  ) + recuento(efectivo, 'monto', '');
+
+  // Con «Todos», los cuarenta más recientes, como antes; con un mes, todos los suyos.
+  const movs = db.movimientos.filter((m) => delMes(m.fecha))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  const movsVisibles = mesListas ? movs : movs.slice(0, 40);
+  $('#lista-movs', raiz).innerHTML = listaSimple(
+    movsVisibles,
+    (m) => ({
+      titulo: m.descripcion || m.tipo,
+      meta: `${m.fecha} · ${m.tipo} · ${cuenta(m.cuenta_origen)?.nombre || m.cuenta_origen || '—'}
+             → ${cuenta(m.cuenta_destino)?.nombre || m.cuenta_destino || '—'}`,
+      monto: Number(m.monto) || 0,
+      signo: 'neg',
+      id: m.id,
+      coleccion: 'movimientos',
+    }),
+    mesListas ? `Sin movimientos ${cuando}.` : 'Sin movimientos registrados.',
+  ) + (mesListas ? recuento(movs, 'monto', 'movidos') : (movs.length > 40
+    ? `<p class="pista cuentas-suma">Los 40 más recientes de ${movs.length}. Elige un mes para ver los suyos.</p>` : ''));
+
+  const FORMULARIOS = {
+    ingresos: formIngreso,
+    gastosEfectivo: formGastoEfectivo,
+    movimientos: formMovimiento,
+  };
+  $$('#lista-ingresos [data-corregir], #lista-efectivo [data-corregir], #lista-movs [data-corregir]', raiz)
+    .forEach((b) => b.addEventListener('click', () => {
+      const col = b.dataset.coleccion;
+      const fila = db[col].find((f) => f.id === b.dataset.corregir);
+      if (fila) FORMULARIOS[col](() => render(raiz), fila);
+    }));
+
+  $$('#lista-ingresos [data-borrar], #lista-efectivo [data-borrar], #lista-movs [data-borrar]', raiz)
+    .forEach((b) => b.addEventListener('click', () => {
+      confirmar('¿Eliminar este registro?', () => {
+        eliminar(b.dataset.coleccion, b.dataset.borrar);
+        render(raiz);
+      });
+    }));
+}
+
+/** Ingreso neto acumulado del año en curso. */
+function ingresosDelAnio() {
+  const anio = mesActual().slice(0, 4);
+  return redondear(db.ingresos
+    .filter((i) => String(i.mes || claveMes(i.fecha)).startsWith(anio))
+    .reduce((s, i) => s + (Number(i.neto) || 0), 0));
+}
+
+/** Salidas de dinero de un mes (efectivo + movimientos salientes). */
+function salidasDelMes(mes) {
+  const ef = db.gastosEfectivo
+    .filter((g) => claveMes(g.fecha) === mes)
+    .reduce((s, g) => s + (Number(g.monto) || 0), 0);
+  const mv = db.movimientos
+    .filter((m) => claveMes(m.fecha) === mes && m.cuenta_origen && !m.cuenta_destino)
+    .reduce((s, m) => s + (Number(m.monto) || 0), 0);
+  const pagos = db.movimientos
+    .filter((m) => claveMes(m.fecha) === mes && m.tipo === 'Pago de tarjeta')
+    .reduce((s, m) => s + (Number(m.monto) || 0), 0);
+  return redondear(ef + mv + pagos);
+}
+
+function listaSimple(filas, mapear, vacio) {
+  if (!filas.length) return `<p class="vacio">${esc(vacio)}</p>`;
+  return `<ul class="lista">${filas.map((f) => {
+    const v = mapear(f);
+    /*
+     * Los botones van en su propia línea. Con todo en una sola, «Corregir» y
+     * «✕» dejaban al concepto entre 45 y 115 px de los 390 de la pantalla:
+     * «Sueld…» y una fecha cortada a «2025…». Bajándolos, el texto recupera
+     * el ancho entero y todas las filas siguen midiendo lo mismo, que es lo
+     * que hace legible una lista larga.
+     */
+    return `
+      <li class="con-acciones fila-plana">
+        <div class="principal">
+          <div class="titulo">${esc(v.titulo)}</div>
+          <div class="meta">${esc(v.meta)}</div>
+        </div>
+        <div class="monto ${v.signo}">${money(v.monto)}</div>
+        <div class="acciones">
+          ${marcaNota(v.nota)}
+          <button class="btn pequeno" data-corregir="${esc(v.id)}"
+                  data-coleccion="${esc(v.coleccion)}">Corregir</button>
+          <button class="btn pequeno peligro" data-borrar="${esc(v.id)}"
+                  data-coleccion="${esc(v.coleccion)}" aria-label="Eliminar">✕</button>
+        </div>
+        ${notaTexto(v.nota)}
+      </li>`;
+  }).join('')}</ul>`;
+}
+
+/** Número listo para escribir en un campo: con coma, como en el resto. */
+const paraEditar = (n) => (n === undefined || n === null || n === ''
+  ? '' : String(redondear(n)).replace('.', ','));
+
+/**
+ * Alta o edición de una cuenta (banco, efectivo o tarjeta).
+ *
+ * El formulario pide el SALDO DE HOY, no el de partida.
+ *
+ * El campo guardaba `saldo_inicial`, que es lo que había antes de todo lo
+ * registrado, pero nadie piensa en eso: uno mira el banco y ve una cifra. Con
+ * Pichincha la diferencia era enorme —tiene sueldos registrados y ningún pago
+ * de salida, así que escribir «18,21» mostraba casi siete mil. Ahora se escribe
+ * lo que dice el banco y la app despeja el saldo de partida restando lo que ya
+ * tiene apuntado.
+ */
+function formCuenta(id, alTerminar) {
+  const c = id ? cuenta(id) : null;
+  // Lo que aportan los movimientos ya registrados en esta cuenta: la diferencia
+  // entre lo que se muestra y el saldo de partida.
+  const movimiento = c ? redondear(saldoCuenta(c.id) - (Number(c.saldo_inicial) || 0)) : 0;
+
+  const cuerpo = `
+    <div class="filtros">
+      <div class="campo"><label for="cu-nombre">Nombre</label>
+        <input id="cu-nombre" name="nombre" required value="${esc(c?.nombre || '')}"></div>
+      <div class="campo"><label for="cu-tipo">Tipo</label>
+        <select id="cu-tipo" name="tipo">
+          ${['Banco', 'Efectivo', 'Tarjeta'].map((t) => `<option${c?.tipo === t ? ' selected' : ''}>${t}</option>`).join('')}
+        </select></div>
+    </div>
+    <div class="filtros">
+      <div class="campo"><label for="cu-banco">Banco</label>
+        <input id="cu-banco" name="banco" value="${esc(c?.banco || '')}"></div>
+      <div class="campo"><label for="cu-saldo">Saldo de hoy</label>
+        <input id="cu-saldo" name="saldo_hoy" type="text"
+               value="${paraEditar(c ? saldoCuenta(c.id) : 0)}" inputmode="decimal"></div>
+    </div>
+    ${movimiento ? `<p class="pista">Se pide el saldo que tiene la cuenta <strong>hoy</strong>,
+      no el de partida. La app ya tiene ${money(movimiento)} registrados de movimientos aquí,
+      así que resta esa parte sola: si escribes el saldo de tu banco, es el que verás.</p>` : ''}
+    <div class="filtros">
+      <div class="campo"><label for="cu-cupo">Cupo (solo tarjetas)</label>
+        <input id="cu-cupo" name="cupo" type="text"
+               value="${Number(c?.cupo) || 0}" inputmode="decimal"></div>
+      <div class="campo"><label for="cu-usuarios">Usuarios</label>
+        <input id="cu-usuarios" name="usuarios" value="${esc(c?.usuarios || 'J,C')}"></div>
+    </div>
+    <div class="filtros">
+      <div class="campo"><label for="cu-corte">Día de corte</label>
+        <input id="cu-corte" name="dia_corte" value="${esc(c?.dia_corte ?? '')}"
+               placeholder="3 o «fin»"></div>
+      <div class="campo"><label for="cu-pago">Día de pago</label>
+        <input id="cu-pago" name="dia_pago" type="number" min="1" max="31" value="${esc(c?.dia_pago ?? '')}"></div>
+    </div>
+    <p class="pista">Solo para tarjetas: escribe el día del corte (por ejemplo <strong>3</strong>)
+      o <strong>fin</strong> si cierra el último día del mes. Las compras posteriores al corte
+      entran en el estado del mes siguiente.</p>`;
+
+  modal({
+    titulo: c ? `Editar ${c.nombre}` : 'Nueva cuenta',
+    cuerpo,
+    alEnviar(d) {
+      // Lo que aportan los movimientos ya apuntados en esta cuenta. Se resta
+      // del saldo de hoy para despejar el de partida.
+      const aporte = c ? redondear(saldoCuenta(c.id) - (Number(c.saldo_inicial) || 0)) : 0;
+      const nuevoIdCuenta = c?.id || d.nombre.trim().toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '-').slice(0, 14);
+      upsert('cuentas', {
+        id: nuevoIdCuenta,
+        nombre: d.nombre.trim(),
+        tipo: d.tipo,
+        banco: d.banco.trim(),
+        saldo_inicial: redondear(aNumero(d.saldo_hoy) - aporte),
+        cupo: redondear(d.cupo),
+        usuarios: d.usuarios.trim(),
+        dia_corte: d.dia_corte,
+        dia_pago: d.dia_pago,
+        activa: c?.activa || 'Si',
+      });
+      brindis('Cuenta guardada');
+      alTerminar?.();
+    },
+  });
+}
+
+return { formCuenta, render };
+})();
+
 M["views/tarjetas"] = (function () {
 /** Vista «Tarjetas»: cupo, consumo del mes, diferidos vivos y movimientos. */
 
@@ -14058,6 +14684,7 @@ const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTar
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, aNumero, notaFila, marcaNota, notaTexto, centrarElegido} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
+const {formCuenta} = M["views/cuentas"];
 const estado = {
   tarjeta: null, usuario: 'ambos', mes: null, comprobando: false,
   /*
@@ -14237,6 +14864,8 @@ function render(raiz) {
           <div class="kpi"><div class="etq">Pendiente ${esc(u)}</div>
             <div class="valor">${money(v)}</div></div>`).join('')}
       </div>
+      <div class="sueldo-acciones">
+        <button class="btn pequeno" id="btn-editar-tarjeta">Cambiar cupo, corte o pago</button></div>
     </section>
 
     <section class="rejilla dos">
@@ -14291,6 +14920,9 @@ function render(raiz) {
   );
   $('#seg-mes-tarjeta', raiz).appendChild(barraMes);
   centrarElegido(barraMes);
+  // El cupo, el día de corte y el de pago viven en la ficha de la tarjeta, y
+  // la lista de Cuentas solo enseña bancos: sin este botón no había dónde.
+  $('#btn-editar-tarjeta', raiz).addEventListener('click', () => formCuenta(t.id, () => render(raiz)));
   $('#btn-nuevo', raiz).addEventListener('click', () => formGastoTarjeta((nuevo) => {
     irAlGasto(nuevo);
     render(raiz);
@@ -14807,389 +15439,6 @@ function render(raiz) {
 }
 
 return { render };
-})();
-
-M["views/cuentas"] = (function () {
-/** Vista «Cuentas»: saldos reales de banco y efectivo, y sus movimientos. */
-
-const {db, cuentasBancarias, eliminar, upsert, cuenta} = M["store"];
-const {money, moneyHTML, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes} = M["calc"];
-const {dona, linea, alRedimensionar} = M["charts"];
-const {esc, $, $$, confirmar, modal, brindis, aNumero, marcaNota, notaTexto, segmentado, centrarElegido} = M["ui"];
-const {formMovimiento, formIngreso, formGastoEfectivo} = M["forms"];
-/*
- * El mes de las listas de abajo. Vive fuera de render para que sobreviva a
- * corregir o borrar un registro sin volver al mes en curso. '' es «Todos».
- */
-let mesListas = null;
-
-/*
- * Los meses que se pueden elegir: el actual y los anteriores que tengan algo
- * en alguna de las tres listas, del más reciente al más antiguo. Los que aún
- * no llegan no: aquí no hay nada apuntado en el futuro.
- */
-function mesesConMovimientos() {
-  const hoy = mesActual();
-  const set = new Set([hoy]);
-  db.ingresos.forEach((i) => set.add(i.mes || claveMes(i.fecha)));
-  db.gastosEfectivo.forEach((g) => set.add(claveMes(g.fecha)));
-  db.movimientos.forEach((m) => set.add(claveMes(m.fecha)));
-  return [...set].filter((m) => /^\d{4}-\d{2}$/.test(m) && m <= hoy).sort().reverse();
-}
-
-function render(raiz) {
-  const cuentas = cuentasBancarias();
-  if (mesListas === null) mesListas = mesActual();
-  const mesKpi = mesListas || mesActual();
-  const ahorro = totalAhorrado();
-
-  raiz.innerHTML = `
-    <section class="panel">
-      <div class="panel-cab">
-        <div>
-          <span class="etiqueta">Total ahorrado</span>
-          <span class="cifra">${moneyHTML(ahorro)}</span>
-          <span class="nota">Suma de bancos y efectivo</span>
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-          <button class="btn pequeno" id="btn-mov">+ Movimiento</button>
-          <button class="btn primario pequeno" id="btn-ing">+ Ingreso</button>
-        </div>
-      </div>
-      <div class="panel-datos">
-        <div><div class="etq">Invertido</div><div class="val">${money(totalInvertido())}</div></div>
-        <div><div class="etq">Deuda tarjetas</div><div class="val">${money(deudaTotalTarjetas())}</div></div>
-        <div><div class="etq">Patrimonio neto</div><div class="val">${money(patrimonioNeto())}</div></div>
-      </div>
-    </section>
-
-    <section class="tarjeta">
-      <header><h2>Saldos por cuenta</h2>
-        <button class="btn pequeno" id="btn-cuenta">+ Cuenta</button></header>
-      <ul class="lista">${cuentas.map((c) => {
-    const saldo = saldoCuenta(c.id);
-    return `
-        <li>
-          <div class="principal">
-            <div class="titulo">${esc(c.nombre)}</div>
-            <div class="meta">${esc(c.tipo)}${c.banco ? ` · ${esc(c.banco)}` : ''} ·
-              saldo inicial ${money(c.saldo_inicial)}</div>
-          </div>
-          <div class="monto ${saldo < 0 ? 'neg' : 'pos'}">${money(saldo)}</div>
-          <button class="btn pequeno" data-editar="${esc(c.id)}">Editar</button>
-        </li>`;
-  }).join('')}</ul>
-    </section>
-
-    <section class="rejilla dos">
-      <div class="tarjeta">
-        <header><h2>Reparto del ahorro</h2><span class="pista">Por cuenta</span></header>
-        <div id="g-cuentas"></div>
-      </div>
-      <div class="tarjeta">
-        <header><h2>Evolución del ahorro</h2><span class="pista">Acumulado por mes</span></header>
-        <div id="g-evolucion"></div>
-      </div>
-    </section>
-
-    <div class="barra-accion barra-meses cuentas-mes">
-      <span class="pista">Ver el mes</span>
-      <div id="seg-mes-cuentas" class="barra-meses-seg"></div>
-    </div>
-
-    <section class="tarjeta">
-      <header><h2>Ingresos registrados</h2>
-        <button class="btn pequeno" id="btn-ing-2">+ Ingreso</button></header>
-      <div class="rejilla kpis">
-        <div class="kpi"><div class="etq">Ingresos de ${esc(nombreMes(mesKpi))}</div>
-          <div class="valor" id="kpi-ing-mes">${money(ingresoDelMes(mesKpi))}</div></div>
-        <div class="kpi"><div class="etq">Ingresos del año</div>
-          <div class="valor">${money(ingresosDelAnio())}</div></div>
-        <div class="kpi"><div class="etq">Histórico</div>
-          <div class="valor">${money(db.ingresos.reduce((s, i) => s + (Number(i.neto) || 0), 0))}</div>
-          <div class="delta">${db.ingresos.length} ${db.ingresos.length === 1 ? 'registro' : 'registros'}</div></div>
-      </div>
-      <div id="lista-ingresos"></div>
-    </section>
-
-    <section class="tarjeta">
-      <header><h2>Gastos en efectivo / débito</h2>
-        <button class="btn pequeno" id="btn-efectivo">+ Gasto en efectivo</button></header>
-      <div id="lista-efectivo"></div>
-    </section>
-
-    <section class="tarjeta">
-      <header><h2>Movimientos y transacciones</h2>
-        <span class="pista">Pagos y traspasos</span></header>
-      <div id="lista-movs"></div>
-    </section>`;
-
-  $('#btn-mov', raiz).addEventListener('click', () => formMovimiento(() => render(raiz)));
-  $('#btn-ing', raiz).addEventListener('click', () => formIngreso(() => render(raiz)));
-  $('#btn-ing-2', raiz).addEventListener('click', () => formIngreso(() => render(raiz)));
-  $('#btn-efectivo', raiz).addEventListener('click', () => formGastoEfectivo(() => render(raiz)));
-  $('#btn-cuenta', raiz).addEventListener('click', () => formCuenta(null, () => render(raiz)));
-  $$('[data-editar]', raiz).forEach((b) => b.addEventListener('click', () => {
-    formCuenta(b.dataset.editar, () => render(raiz));
-  }));
-
-  const pintar = () => {
-    dona($('#g-cuentas', raiz), cuentas
-      .map((c) => ({ nombre: c.nombre, valor: Math.max(0, saldoCuenta(c.id)) }))
-      .filter((x) => x.valor > 0), { titulo: 'Ahorro' });
-
-    const meses = rangoMeses(sumarMeses(mesActual(), -11), mesActual());
-    let acc = 0;
-    const serie = meses.map((m) => {
-      acc = redondear(acc + ingresoDelMes(m) - salidasDelMes(m));
-      return acc;
-    });
-    linea($('#g-evolucion', raiz), meses.map((m) => nombreMes(m, true)),
-      [{ nombre: 'Flujo acumulado', valores: serie }], { alto: 230 });
-  };
-  pintar();
-  alRedimensionar(pintar);
-
-  const meses = mesesConMovimientos();
-  if (mesListas && !meses.includes(mesListas)) mesListas = mesActual();
-  const barraMes = segmentado(
-    [...meses.map((m) => ({ valor: m, texto: nombreMes(m, true) })), { valor: '', texto: 'Todos' }],
-    mesListas,
-    (v) => {
-      mesListas = v;
-      const kpiMes = v || mesActual();
-      const etq = $('#kpi-ing-mes', raiz)?.previousElementSibling;
-      if (etq) etq.textContent = `Ingresos de ${nombreMes(kpiMes)}`;
-      $('#kpi-ing-mes', raiz).textContent = money(ingresoDelMes(kpiMes));
-      // Solo las listas: repintar la vista entera devolvería la pantalla arriba.
-      pintarListas(raiz);
-    },
-  );
-  $('#seg-mes-cuentas', raiz).appendChild(barraMes);
-  centrarElegido(barraMes);
-  pintarListas(raiz);
-}
-
-/** Las tres listas, filtradas por el mes elegido, con su recuento y su suma. */
-function pintarListas(raiz) {
-  const delMes = (fecha, mesFila) => !mesListas || (mesFila || claveMes(fecha)) === mesListas;
-  const cuando = mesListas ? `en ${nombreMes(mesListas).toLowerCase()}` : 'en total';
-  const recuento = (filas, campo, texto) => (filas.length ? `
-    <p class="pista cuentas-suma">${filas.length} ${filas.length === 1 ? 'registro' : 'registros'}
-      ${cuando} · <strong>${money(filas.reduce((s, f) => s + (Number(f[campo]) || 0), 0))}</strong>${
-  texto ? ` ${texto}` : ''}</p>` : '');
-
-  const ingresos = db.ingresos.filter((i) => delMes(i.fecha, i.mes))
-    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
-  $('#lista-ingresos', raiz).innerHTML = listaSimple(
-    ingresos,
-    (i) => ({
-      nota: i.notas,
-      titulo: `${i.concepto} · ${i.usuario}`,
-      meta: `${i.fecha} · bruto ${money(i.bruto)} − descuentos ${money(i.descuentos)} → ${cuenta(i.cuenta)?.nombre || i.cuenta}`,
-      monto: Number(i.neto) || 0,
-      signo: 'pos',
-      id: i.id,
-      coleccion: 'ingresos',
-    }),
-    mesListas ? `Sin ingresos ${cuando}.` : 'Sin ingresos registrados.',
-  ) + recuento(ingresos, 'neto', 'netos');
-
-  const efectivo = db.gastosEfectivo.filter((g) => delMes(g.fecha))
-    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
-  $('#lista-efectivo', raiz).innerHTML = listaSimple(
-    efectivo,
-    (g) => ({
-      titulo: `${g.detalle} · ${g.usuario}`,
-      meta: `${g.fecha} · ${g.categoria} · ${cuenta(g.cuenta)?.nombre || g.cuenta}`,
-      nota: g.proposito,
-      monto: Number(g.monto) || 0,
-      signo: 'neg',
-      id: g.id,
-      coleccion: 'gastosEfectivo',
-    }),
-    mesListas ? `Sin gastos en efectivo ${cuando}.` : 'Sin gastos en efectivo registrados.',
-  ) + recuento(efectivo, 'monto', '');
-
-  // Con «Todos», los cuarenta más recientes, como antes; con un mes, todos los suyos.
-  const movs = db.movimientos.filter((m) => delMes(m.fecha))
-    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
-  const movsVisibles = mesListas ? movs : movs.slice(0, 40);
-  $('#lista-movs', raiz).innerHTML = listaSimple(
-    movsVisibles,
-    (m) => ({
-      titulo: m.descripcion || m.tipo,
-      meta: `${m.fecha} · ${m.tipo} · ${cuenta(m.cuenta_origen)?.nombre || m.cuenta_origen || '—'}
-             → ${cuenta(m.cuenta_destino)?.nombre || m.cuenta_destino || '—'}`,
-      monto: Number(m.monto) || 0,
-      signo: 'neg',
-      id: m.id,
-      coleccion: 'movimientos',
-    }),
-    mesListas ? `Sin movimientos ${cuando}.` : 'Sin movimientos registrados.',
-  ) + (mesListas ? recuento(movs, 'monto', 'movidos') : (movs.length > 40
-    ? `<p class="pista cuentas-suma">Los 40 más recientes de ${movs.length}. Elige un mes para ver los suyos.</p>` : ''));
-
-  const FORMULARIOS = {
-    ingresos: formIngreso,
-    gastosEfectivo: formGastoEfectivo,
-    movimientos: formMovimiento,
-  };
-  $$('#lista-ingresos [data-corregir], #lista-efectivo [data-corregir], #lista-movs [data-corregir]', raiz)
-    .forEach((b) => b.addEventListener('click', () => {
-      const col = b.dataset.coleccion;
-      const fila = db[col].find((f) => f.id === b.dataset.corregir);
-      if (fila) FORMULARIOS[col](() => render(raiz), fila);
-    }));
-
-  $$('#lista-ingresos [data-borrar], #lista-efectivo [data-borrar], #lista-movs [data-borrar]', raiz)
-    .forEach((b) => b.addEventListener('click', () => {
-      confirmar('¿Eliminar este registro?', () => {
-        eliminar(b.dataset.coleccion, b.dataset.borrar);
-        render(raiz);
-      });
-    }));
-}
-
-/** Ingreso neto acumulado del año en curso. */
-function ingresosDelAnio() {
-  const anio = mesActual().slice(0, 4);
-  return redondear(db.ingresos
-    .filter((i) => String(i.mes || claveMes(i.fecha)).startsWith(anio))
-    .reduce((s, i) => s + (Number(i.neto) || 0), 0));
-}
-
-/** Salidas de dinero de un mes (efectivo + movimientos salientes). */
-function salidasDelMes(mes) {
-  const ef = db.gastosEfectivo
-    .filter((g) => claveMes(g.fecha) === mes)
-    .reduce((s, g) => s + (Number(g.monto) || 0), 0);
-  const mv = db.movimientos
-    .filter((m) => claveMes(m.fecha) === mes && m.cuenta_origen && !m.cuenta_destino)
-    .reduce((s, m) => s + (Number(m.monto) || 0), 0);
-  const pagos = db.movimientos
-    .filter((m) => claveMes(m.fecha) === mes && m.tipo === 'Pago de tarjeta')
-    .reduce((s, m) => s + (Number(m.monto) || 0), 0);
-  return redondear(ef + mv + pagos);
-}
-
-function listaSimple(filas, mapear, vacio) {
-  if (!filas.length) return `<p class="vacio">${esc(vacio)}</p>`;
-  return `<ul class="lista">${filas.map((f) => {
-    const v = mapear(f);
-    /*
-     * Los botones van en su propia línea. Con todo en una sola, «Corregir» y
-     * «✕» dejaban al concepto entre 45 y 115 px de los 390 de la pantalla:
-     * «Sueld…» y una fecha cortada a «2025…». Bajándolos, el texto recupera
-     * el ancho entero y todas las filas siguen midiendo lo mismo, que es lo
-     * que hace legible una lista larga.
-     */
-    return `
-      <li class="con-acciones fila-plana">
-        <div class="principal">
-          <div class="titulo">${esc(v.titulo)}</div>
-          <div class="meta">${esc(v.meta)}</div>
-        </div>
-        <div class="monto ${v.signo}">${money(v.monto)}</div>
-        <div class="acciones">
-          ${marcaNota(v.nota)}
-          <button class="btn pequeno" data-corregir="${esc(v.id)}"
-                  data-coleccion="${esc(v.coleccion)}">Corregir</button>
-          <button class="btn pequeno peligro" data-borrar="${esc(v.id)}"
-                  data-coleccion="${esc(v.coleccion)}" aria-label="Eliminar">✕</button>
-        </div>
-        ${notaTexto(v.nota)}
-      </li>`;
-  }).join('')}</ul>`;
-}
-
-/** Número listo para escribir en un campo: con coma, como en el resto. */
-const paraEditar = (n) => (n === undefined || n === null || n === ''
-  ? '' : String(redondear(n)).replace('.', ','));
-
-/**
- * Alta o edición de una cuenta (banco, efectivo o tarjeta).
- *
- * El formulario pide el SALDO DE HOY, no el de partida.
- *
- * El campo guardaba `saldo_inicial`, que es lo que había antes de todo lo
- * registrado, pero nadie piensa en eso: uno mira el banco y ve una cifra. Con
- * Pichincha la diferencia era enorme —tiene sueldos registrados y ningún pago
- * de salida, así que escribir «18,21» mostraba casi siete mil. Ahora se escribe
- * lo que dice el banco y la app despeja el saldo de partida restando lo que ya
- * tiene apuntado.
- */
-function formCuenta(id, alTerminar) {
-  const c = id ? cuenta(id) : null;
-  // Lo que aportan los movimientos ya registrados en esta cuenta: la diferencia
-  // entre lo que se muestra y el saldo de partida.
-  const movimiento = c ? redondear(saldoCuenta(c.id) - (Number(c.saldo_inicial) || 0)) : 0;
-
-  const cuerpo = `
-    <div class="filtros">
-      <div class="campo"><label for="cu-nombre">Nombre</label>
-        <input id="cu-nombre" name="nombre" required value="${esc(c?.nombre || '')}"></div>
-      <div class="campo"><label for="cu-tipo">Tipo</label>
-        <select id="cu-tipo" name="tipo">
-          ${['Banco', 'Efectivo', 'Tarjeta'].map((t) => `<option${c?.tipo === t ? ' selected' : ''}>${t}</option>`).join('')}
-        </select></div>
-    </div>
-    <div class="filtros">
-      <div class="campo"><label for="cu-banco">Banco</label>
-        <input id="cu-banco" name="banco" value="${esc(c?.banco || '')}"></div>
-      <div class="campo"><label for="cu-saldo">Saldo de hoy</label>
-        <input id="cu-saldo" name="saldo_hoy" type="text"
-               value="${paraEditar(c ? saldoCuenta(c.id) : 0)}" inputmode="decimal"></div>
-    </div>
-    ${movimiento ? `<p class="pista">Se pide el saldo que tiene la cuenta <strong>hoy</strong>,
-      no el de partida. La app ya tiene ${money(movimiento)} registrados de movimientos aquí,
-      así que resta esa parte sola: si escribes el saldo de tu banco, es el que verás.</p>` : ''}
-    <div class="filtros">
-      <div class="campo"><label for="cu-cupo">Cupo (solo tarjetas)</label>
-        <input id="cu-cupo" name="cupo" type="text"
-               value="${Number(c?.cupo) || 0}" inputmode="decimal"></div>
-      <div class="campo"><label for="cu-usuarios">Usuarios</label>
-        <input id="cu-usuarios" name="usuarios" value="${esc(c?.usuarios || 'J,C')}"></div>
-    </div>
-    <div class="filtros">
-      <div class="campo"><label for="cu-corte">Día de corte</label>
-        <input id="cu-corte" name="dia_corte" value="${esc(c?.dia_corte ?? '')}"
-               placeholder="3 o «fin»"></div>
-      <div class="campo"><label for="cu-pago">Día de pago</label>
-        <input id="cu-pago" name="dia_pago" type="number" min="1" max="31" value="${esc(c?.dia_pago ?? '')}"></div>
-    </div>
-    <p class="pista">Solo para tarjetas: escribe el día del corte (por ejemplo <strong>3</strong>)
-      o <strong>fin</strong> si cierra el último día del mes. Las compras posteriores al corte
-      entran en el estado del mes siguiente.</p>`;
-
-  modal({
-    titulo: c ? `Editar ${c.nombre}` : 'Nueva cuenta',
-    cuerpo,
-    alEnviar(d) {
-      // Lo que aportan los movimientos ya apuntados en esta cuenta. Se resta
-      // del saldo de hoy para despejar el de partida.
-      const aporte = c ? redondear(saldoCuenta(c.id) - (Number(c.saldo_inicial) || 0)) : 0;
-      const nuevoIdCuenta = c?.id || d.nombre.trim().toUpperCase()
-        .replace(/[^A-Z0-9]+/g, '-').slice(0, 14);
-      upsert('cuentas', {
-        id: nuevoIdCuenta,
-        nombre: d.nombre.trim(),
-        tipo: d.tipo,
-        banco: d.banco.trim(),
-        saldo_inicial: redondear(aNumero(d.saldo_hoy) - aporte),
-        cupo: redondear(d.cupo),
-        usuarios: d.usuarios.trim(),
-        dia_corte: d.dia_corte,
-        dia_pago: d.dia_pago,
-        activa: c?.activa || 'Si',
-      });
-      brindis('Cuenta guardada');
-      alTerminar?.();
-    },
-  });
-}
-
-return { formCuenta, render };
 })();
 
 M["views/datos"] = (function () {
@@ -18741,6 +18990,7 @@ const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta, hoyLocal} = M["ca
 const archivoExcel = M["archivo"];
 const {crearCajon} = M["cajon"];
 const {pedirClave, vigilar} = M["pantalla_llave"];
+const {ofrecerAlArrancar} = M["ajustes"];
 const {alRedimensionar, ocultarTooltip} = M["charts"];
 const {$, crear, esc, ICONOS, modal, brindis, descargar} = M["ui"];
 const {formGastoTarjeta, formGastoEfectivo, formIngreso, formInversion, formMovimiento} = M["forms"];
@@ -19121,6 +19371,8 @@ function arrancarApp(origen) {
   pintarEstadoSync();
   pintarAvisos();
   iniciarSync();
+  // Ajustes de datos pendientes: se ofrecen con los datos ya sincronizados.
+  ofrecerAlArrancar(() => irA(vistaActual));
 
   // Archivo de Excel vinculado: se readopta y se queda atento a las
   // ediciones hechas directamente en Excel.
