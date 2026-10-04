@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-7IJUA1xImGF0qYq8aFEvqNzS8SHevvlNtVML0MY8ezA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-aFkIbUBlWbZRBD2Z1IWogKacTa4TSWY4x3yv7zPWpfE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -16857,7 +16857,7 @@ M["views/plan"] = (function () {
 const {db, guardar, categoriasGasto, cuentasBancarias, tarjetas, upsert, nuevoId, capitalizar} = M["store"];
 const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes, hoyLocal} = M["calc"];
 const {columnasApiladas, alRedimensionar} = M["charts"];
-const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo} = M["ui"];
+const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo, confirmar} = M["ui"];
 const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago} = M["plan"];
 const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
 const vistaTarjetas = M["views/tarjetas"];
@@ -17191,6 +17191,24 @@ function render(raiz, { irA } = {}) {
   $$('[data-alternar]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => {
       const clave = btn.dataset.alternar;
+      /*
+       * Lo escrito a mano, al dejarlo fuera, se BORRA: es un gasto que uno
+       * decidió que no va a hacer, y apartado seguía en la lista y en la
+       * cuenta de alguna sección. Lo que deduce la app del historial no se
+       * puede borrar —el historial es real—, así que ese solo se aparta y se
+       * puede devolver.
+       */
+      const r = todas.find((x) => x.clave === clave);
+      if (r?.manual && !estaExcluida(clave)) {
+        confirmar(`¿Quitar «${r.detalle}» del presupuesto? Se borra y deja de contar en la previsión, en lo real y en el sueldo del mes.`, () => {
+          borrarManual(r.id);
+          guardarAjuste(clave, null);
+          guardar();
+          brindis(`«${r.detalle}» quitado del presupuesto`);
+          render(raiz, { irA });
+        }, { aceptar: 'Quitar' });
+        return;
+      }
       guardarAjuste(clave, { activo: estaExcluida(clave) });
       db.config[`plan_no_${clave}`] = '';
       guardar();
@@ -18036,7 +18054,7 @@ function formPagar(r, alTerminar, irA) {
           <input id="pg-cuotas" name="cuotas" type="number" inputmode="numeric"
                  min="2" max="48" step="1" value="${esc(String(r.cuotas > 1 ? r.cuotas : 6))}"></div>
         <div class="campo"><label for="pg-mes">Mes de la primera cuota</label>
-          <input id="pg-mes" name="mes_inicio" type="month" value="${esc(mes)}"></div>
+          <input id="pg-mes" name="mes_inicio" type="month" value="${esc(hoy.slice(0, 7))}"></div>
       </div>
 
       <div class="filtros">
@@ -18075,7 +18093,7 @@ function formPagar(r, alTerminar, irA) {
         mostrar(cajas.tarjeta, conTarjeta);
         mostrar(cajas.cuotas, diferido);
         pista.textContent = !conTarjeta
-          ? `Se apunta como gasto de ${nombreMes(mes)} y el importe sale del saldo `
+          ? 'Se apunta como gasto en la fecha elegida y el importe sale del saldo '
             + 'de la cuenta elegida.'
           : diferido
             ? 'Se registra como compra diferida de esa tarjeta: la app reparte las '
@@ -18103,7 +18121,12 @@ function formPagar(r, alTerminar, irA) {
           tipo: d.cargo,
           cuotas: d.cuotas,
           montoTotal: monto,
-          mesInicio: d.mes_inicio || mes,
+          /*
+           * La compra es de HOY (de la fecha que se ponga), no del mes que tenía
+           * en el presupuesto: la revisión de septiembre pagada el 4 de octubre
+           * se cargaba en septiembre, un estado de cuenta ya cerrado.
+           */
+          mesInicio: d.mes_inicio || String(d.fecha).slice(0, 7),
           notas: 'Pago registrado desde Presupuesto',
         });
       } else {
