@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-YRnVV9MhNLWvAx/eum+hlsgF0/FodLxV7JpUbfxti1c='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ujDgC8jijNbmjlKlXlAr7XDkJW4NAYKeNXsA/DDSxLE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -13123,7 +13123,7 @@ M["ajustes"] = (function () {
  *    descarta para siempre.
  */
 
-const {db, upsert, guardar, quitarCuotas, sepultar} = M["store"];
+const {db, upsert, guardar, quitarCuotas, sepultar, eliminar} = M["store"];
 const {alCambiarSync, configurado, estadoSync} = M["sync"];
 const {registrarGastoTarjeta} = M["forms"];
 const {money, nombreMes, sumarMeses, claveEstadoCuenta, redondear, esIngresoReal, textoFecha} = M["calc"];
@@ -13340,7 +13340,83 @@ const AJUSTES = [
       PASOS_PICH.forEach((p) => { if (p.revisar().estado === 'aplicar') p.aplicar(); });
     },
   },
+  {
+    /*
+     * Lo único que le faltaba a Pichincha en el teléfono (4 oct 2026): en
+     * septiembre la app tenía $1.361,54 y el banco $1.372,04. Diferidos
+     * ($456,39) y recurrentes ($32,53) cuadraban al centavo; las corrientes,
+     * $872,62 contra $883,12: $10,50, que es justo «C Nor Marisco» del 10 de
+     * septiembre. Se busca antes de añadirla, para no ponerla dos veces.
+     */
+    id: 'pichincha-c-nor-marisco',
+    revisar() {
+      if (!db.cuentas.some((c) => c.id === PI)) return { estado: 'nada' };
+      const r = marisco();
+      if (r.estado === 'ya') return { estado: 'ya', titulo: 'C Nor Marisco $10,50', texto: 'ya está en Pichincha, septiembre' };
+      return { estado: 'aplicar', titulo: 'Lo que le falta a Pichincha en septiembre: $10,50', texto: r.texto };
+    },
+    aplicar() { marisco().aplicar(); },
+  },
 ];
+
+/** C Nor Marisco $10,50 (10 sep, Pichincha): dónde está y qué hacer. */
+function marisco() {
+  const entre = (f) => String(f || '').slice(0, 10) >= '2026-09-04' && String(f || '').slice(0, 10) <= '2026-09-12';
+  const diez = (n) => Math.round((Number(n) || 0) * 100) === 1050;
+  const enPI = db.gastosTarjeta.find((g) => g.tarjeta === PI && g.tipo === 'Corriente' && diez(g.monto_total) && entre(g.fecha));
+  const pie = ' Con eso septiembre queda en $1.372,04, el cupo utilizado en $2.452,09 y el disponible en $6.547,91, como el banco.';
+  if (enPI && cuotasDe(enPI.id).every((c) => c.mes === PSEP)) return { estado: 'ya' };
+  if (enPI) {
+    return {
+      estado: 'aplicar',
+      texto: `«${esc(enPI.detalle)}» de $10,50 está en Pichincha pero en ${esc(nombreMes(cuotasDe(enPI.id)[0]?.mes || ''))}: pasa a <strong>septiembre</strong>.${pie}`,
+      aplicar: () => moverCompra(enPI, PSEP, PI),
+    };
+  }
+  const enOtra = db.gastosTarjeta.find((g) => g.tarjeta !== PI && g.tipo === 'Corriente' && diez(g.monto_total) && entre(g.fecha));
+  if (enOtra) {
+    const nombre = db.cuentas.find((c) => c.id === enOtra.tarjeta)?.nombre || enOtra.tarjeta;
+    return {
+      estado: 'aplicar',
+      texto: `«${esc(enOtra.detalle)}» de $10,50 (${esc(textoFecha(String(enOtra.fecha).slice(0, 10)))}) está en ${esc(nombre)}: el banco la
+        cobró en Pichincha (C Nor Marisco, 10 de septiembre). Pasa a <strong>Pichincha, septiembre</strong>.${pie}`,
+      aplicar: () => moverCompra(enOtra, PSEP, PI),
+    };
+  }
+  const enEfectivo = db.gastosEfectivo.find((g) => diez(g.monto) && entre(g.fecha));
+  if (enEfectivo) {
+    const cuenta = db.cuentas.find((c) => c.id === enEfectivo.cuenta)?.nombre || enEfectivo.cuenta;
+    return {
+      estado: 'aplicar',
+      texto: `«${esc(enEfectivo.detalle)}» de $10,50 (${esc(textoFecha(String(enEfectivo.fecha).slice(0, 10)))}) está apuntada como pago en
+        ${esc(cuenta)}, pero el banco la cobró con la tarjeta Pichincha (C Nor Marisco, 10 de septiembre). Pasa a
+        <strong>Pichincha, septiembre</strong>, y deja de restar del saldo de ${esc(cuenta)}.${pie}`,
+      aplicar: () => {
+        registrarGastoTarjeta({
+          id: `AJ-PICH-MARISCO-${enEfectivo.id}`, fecha: enEfectivo.fecha, tarjeta: PI, usuario: enEfectivo.usuario || 'J',
+          detalle: enEfectivo.detalle, proposito: enEfectivo.proposito || '', categoria: enEfectivo.categoria,
+          tipo: 'Corriente', cuotas: 1, montoTotal: 10.5, mesInicio: PSEP, notas: 'Pasada de efectivo: el banco la cobró en Pichincha',
+        });
+        eliminar('gastosEfectivo', enEfectivo.id);
+      },
+    };
+  }
+  return {
+    estado: 'aplicar',
+    texto: `No está apuntada en ningún sitio: se añade <strong>C Nor Marisco $10,50</strong> el 10 de septiembre en
+      Pichincha (Restaurantes, J; cámbialo si no es así).${pie}`,
+    aplicar: () => nuevaCompraEn(PI, {
+      id: 'AJ-PICH-MARISCO-2026-09-10', fecha: '2026-09-10', detalle: 'C nor marisco', categoria: 'Restaurantes',
+      montoTotal: 10.5, mesInicio: PSEP,
+    }),
+  };
+}
+
+/** Una compra nueva en una tarjeta concreta, con identificador fijo. */
+function nuevaCompraEn(tarjeta, datos) {
+  if (db.gastosTarjeta.some((g) => g.id === datos.id)) return;
+  registrarGastoTarjeta({ tarjeta, usuario: 'J', tipo: 'Corriente', cuotas: 1, ...datos });
+}
 
 /* --- Pichincha, estado de cuenta del 3 de octubre de 2026 ------------------- */
 
