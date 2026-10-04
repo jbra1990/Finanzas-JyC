@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-cjFsvgNqqUcU82R0iEyZj6aFoLP7hr4W7azEsDSBJr0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-EhlKTqjE4kfngg0w6e4/oWfrOOLYi3uw+E7gZ7dgdCk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3606,6 +3606,11 @@ body.velada .cabecera { filter: blur(18px); }
 .cuadre-veredicto { margin: 4px 0 0; font-size: 14px; font-weight: 600; }
 .cuadre .cuadre-bien { color: var(--ok-texto); }
 
+/* Posibles repetidos (Tarjetas). */
+.repetido { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-top: 1px solid var(--grid); }
+.repetido:first-of-type { border-top: 0; }
+.repetido .pista { margin: 0; font-size: 12.5px; }
+
 </style>
 </head>
 <body>
@@ -6982,7 +6987,119 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasParaMedir, lecturasRevisadas, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+/* --- Posibles repetidos -----------------------------------------------------
+ *
+ * El mismo gasto apuntado dos veces —desde los dos teléfonos, o una vez con
+ * la tarjeta y otra en efectivo— suma dos veces en todas partes: en el mes,
+ * en el cupo, en el sueldo. La app no puede saber con certeza cuál sobra, así
+ * que los señala y decide quien sabe.
+ *
+ * Qué se considera repetido:
+ *  - La misma tienda, la MISMA persona y el mismo importe, el mismo día o al
+ *    día siguiente, sea en dos tarjetas, en la misma o en tarjeta y efectivo.
+ *    Lo de J y C el mismo día NO: es una cuenta partida entre los dos
+ *    (Pedidos Ya $11,89 + $11,88), que se hace a menudo.
+ *  - Dos suscripciones iguales en la misma tarjeta cobrando el mismo mes lo
+ *    mismo (Anthropic dos veces en junio).
+ */
+const RELLENO_TIENDA = new Set(['de', 'la', 'el', 'los', 'las', 'del', 'pago', 'compra', 'estacion',
+  'servicio', 'servicios', 'supermercado', 'tienda', 'farmacia', 'farmacias', 'comercial', 'mi', 'bill', 'com']);
+function tiendaDe(texto) {
+  const palabras = (plano(texto).match(/[a-z0-9]+/g) || []).filter((w) => w.length > 2 && !RELLENO_TIENDA.has(w));
+  return palabras[0] || plano(texto);
+}
+const CLAVE_NO_REPETIDOS = 'no_repetidos';
+const parDe = (a, b) => [a, b].sort().join('|');
+
+function noSonRepetidos() {
+  try {
+    const l = JSON.parse(db.config[CLAVE_NO_REPETIDOS] || '[]');
+    return new Set(Array.isArray(l) ? l : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Dice «no son el mismo gasto» para que no se vuelva a señalar. */
+function marcarNoRepetidos(clave) {
+  const s = noSonRepetidos();
+  s.add(clave);
+  db.config[CLAVE_NO_REPETIDOS] = JSON.stringify([...s]);
+}
+
+/** Todas las compras sueltas (tarjeta no recurrente y efectivo) como filas comparables. */
+function comprasComparables() {
+  const nombre = (id) => db.cuentas.find((c) => c.id === id)?.nombre || id;
+  return [
+    ...db.gastosTarjeta.filter((g) => g.tipo !== 'Recurrente').map((g) => ({
+      clave: `T:${g.id}`, coleccion: 'gastosTarjeta', id: g.id, fecha: String(g.fecha || '').slice(0, 10),
+      monto: Number(g.monto_total) || 0, detalle: g.detalle, usuario: g.usuario, medio: nombre(g.tarjeta),
+    })),
+    ...db.gastosEfectivo.map((g) => ({
+      clave: `E:${g.id}`, coleccion: 'gastosEfectivo', id: g.id, fecha: String(g.fecha || '').slice(0, 10),
+      monto: Number(g.monto) || 0, detalle: g.detalle, usuario: g.usuario, medio: nombre(g.cuenta),
+    })),
+  ].filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) && x.monto > 0);
+}
+
+/** ¿Estas dos compras parecen la misma? */
+function mismaCompra(a, b) {
+  if (a.usuario !== b.usuario || tiendaDe(a.detalle) !== tiendaDe(b.detalle)) return false;
+  const dias = Math.abs(diasEntre(a.fecha, b.fecha));
+  if (dias > 1) return false;
+  const tolerancia = dias === 0 ? Math.max(0.02, Math.max(a.monto, b.monto) * 0.04) : 0.011;
+  return Math.abs(a.monto - b.monto) <= tolerancia;
+}
+
+/** Las parejas que parecen el mismo gasto dos veces, de la más reciente a la más antigua. */
+function posiblesRepetidos() {
+  const descartadas = noSonRepetidos();
+  const filas = comprasComparables().sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const pares = [];
+  for (let i = 0; i < filas.length; i += 1) {
+    for (let j = i + 1; j < filas.length; j += 1) {
+      if (diasEntre(filas[i].fecha, filas[j].fecha) > 1) break;
+      if (!mismaCompra(filas[i], filas[j])) continue;
+      const clave = parDe(filas[i].clave, filas[j].clave);
+      if (!descartadas.has(clave)) pares.push({ clave, tipo: 'compra', filas: [filas[i], filas[j]], fecha: filas[j].fecha });
+    }
+  }
+
+  // Suscripciones que se solapan.
+  const nombre = (id) => db.cuentas.find((c) => c.id === id)?.nombre || id;
+  const recurrentes = db.gastosTarjeta.filter((g) => g.tipo === 'Recurrente');
+  for (let i = 0; i < recurrentes.length; i += 1) {
+    for (let j = i + 1; j < recurrentes.length; j += 1) {
+      const a = recurrentes[i];
+      const b = recurrentes[j];
+      if (a.tarjeta !== b.tarjeta || tiendaDe(a.detalle) !== tiendaDe(b.detalle)) continue;
+      const deA = new Map(db.cuotas.filter((c) => c.gasto_id === a.id).map((c) => [c.mes, Number(c.monto)]));
+      const comunes = db.cuotas.filter((c) => c.gasto_id === b.id && deA.has(c.mes)
+        && Math.abs(deA.get(c.mes) - Number(c.monto)) < 0.011).map((c) => c.mes).sort();
+      if (!comunes.length) continue;
+      const clave = parDe(`T:${a.id}`, `T:${b.id}`);
+      if (descartadas.has(clave)) continue;
+      const fila = (g) => ({
+        clave: `T:${g.id}`, coleccion: 'gastosTarjeta', id: g.id, fecha: String(g.fecha || '').slice(0, 10),
+        monto: Number(g.monto_total) || 0, detalle: g.detalle, usuario: g.usuario, medio: nombre(g.tarjeta),
+        cuotas: Number(g.cuotas) || 0,
+      });
+      pares.push({ clave, tipo: 'suscripcion', meses: comunes, filas: [fila(a), fila(b)], fecha: `${comunes[comunes.length - 1]}-28` });
+    }
+  }
+  return pares.sort((x, y) => y.fecha.localeCompare(x.fecha));
+}
+
+/**
+ * Al apuntar un gasto: ¿ya hay uno igual? Devuelve el parecido o null.
+ * `excluir` es la clave del que se está corrigiendo, para no compararlo consigo.
+ */
+function yaApuntado({ fecha, monto, detalle, usuario, excluir = '' }) {
+  const nuevo = { fecha: String(fecha || '').slice(0, 10), monto: Number(monto) || 0, detalle, usuario };
+  return comprasComparables().find((x) => x.clave !== excluir && mismaCompra(nuevo, x)) || null;
+}
+
+return { CLAVE_NO_REPETIDOS, DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasParaMedir, lecturasRevisadas, marcarNoRepetidos, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, posiblesRepetidos, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso, yaApuntado };
 })();
 
 M["charts"] = (function () {
@@ -11732,9 +11849,25 @@ M["forms"] = (function () {
  */
 
 const {db, guardar, nuevoId, upsert, tocar, sepultar, cuentasBancarias, tarjetas, categoriasGasto, categoriasIngreso, usuarios, capitalizar} = M["store"];
-const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta, rangoMeses, topesDelMes, umbralAviso, TOPES, comprometidoEnMes, MANTENIMIENTOS, odometroHoy} = M["calc"];
+const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta, rangoMeses, topesDelMes, umbralAviso, TOPES, comprometidoEnMes, MANTENIMIENTOS, odometroHoy, yaApuntado} = M["calc"];
 const {modal, opciones, brindis, alarma, hoyISO, esc, $, aNumero, campoMonto, segmentado} = M["ui"];
 const selUsuarios = (sel) => opciones(usuarios(), sel);
+
+/**
+ * Si ya hay un gasto igual —misma tienda, misma persona, mismo importe, ese
+ * día o el anterior—, avisa y no guarda; pulsando otra vez, guarda. Así no se
+ * apunta dos veces lo mismo (desde los dos teléfonos, o con tarjeta y en
+ * efectivo) sin darse cuenta, y tampoco se impide apuntar dos compras iguales
+ * de verdad.
+ */
+function avisarSiRepetido(form, datos) {
+  const igual = yaApuntado(datos);
+  if (!igual || form.dataset.repetidoAvisado === igual.clave) return false;
+  form.dataset.repetidoAvisado = igual.clave;
+  alarma(`Ya está apuntado «${igual.detalle}» de ${money(igual.monto)} el ${textoFecha(igual.fecha)} `
+    + `(${igual.medio}, ${igual.usuario}). Si es otro gasto, pulsa otra vez para guardarlo.`);
+  return true;
+}
 const val = (form, sel) => aNumero($(sel, form).value);
 
 /*
@@ -12368,8 +12501,12 @@ function formGastoTarjeta(alTerminar, existente = null) {
       ['change', 'input'].forEach((ev) => form.addEventListener(ev, refrescar));
       refrescar();
     },
-    alEnviar(d) {
+    alEnviar(d, form) {
       if (!montoValido(d.monto_total)) return false;
+      if (avisarSiRepetido(form, {
+        fecha: d.fecha, monto: aNumero(d.monto_total), detalle: d.detalle, usuario: d.usuario,
+        excluir: g?.id ? `T:${g.id}` : '',
+      })) return false;
       // Cómo iba el mes ANTES de guardar, para saber si este gasto es el que
       // cruza el tope y no repetir el aviso en todos los siguientes.
       const topesAntes = topesDelMes();
@@ -12443,8 +12580,12 @@ function formGastoEfectivo(alTerminar, existente = null) {
       conectarCategoria(form, 'e-categoria');
       conectarKm(form, 'e-categoria', 'e-km');
     },
-    alEnviar(d) {
+    alEnviar(d, form) {
       if (!montoValido(d.monto)) return false;
+      if (avisarSiRepetido(form, {
+        fecha: d.fecha, monto: aNumero(d.monto), detalle: d.detalle, usuario: d.usuario,
+        excluir: g?.id ? `E:${g.id}` : '',
+      })) return false;
       const topesAntes = topesDelMes();
       upsert('gastosEfectivo', {
         id: g?.id || nuevoId('gastosEfectivo'),
@@ -15384,8 +15525,8 @@ return { formCuenta, render };
 M["views/tarjetas"] = (function () {
 /** Vista «Tarjetas»: cupo, consumo del mes, diferidos vivos y movimientos. */
 
-const {db, tarjetas, eliminar, guardar} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir, comprometidoProximos} = M["calc"];
+const {db, tarjetas, eliminar, guardar, quitarCuotas} = M["store"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir, comprometidoProximos, posiblesRepetidos, marcarNoRepetidos} = M["calc"];
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, aNumero, notaFila, marcaNota, notaTexto, centrarElegido, modal} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
@@ -15578,6 +15719,8 @@ function render(raiz) {
         <button class="btn pequeno" id="btn-editar-tarjeta">Cambiar cupo, corte o pago</button></div>
     </section>
 
+    <section class="tarjeta" id="repetidos" hidden></section>
+
     <section class="rejilla dos">
       <div class="tarjeta">
         <header><h2>Pagos por mes</h2><span class="pista">Últimos 12 meses</span></header>
@@ -15632,6 +15775,7 @@ function render(raiz) {
   centrarElegido(barraMes);
   // El cupo, el día de corte y el de pago viven en la ficha de la tarjeta, y
   // la lista de Cuentas solo enseña bancos: sin este botón no había dónde.
+  pintarRepetidos(raiz);
   $('#btn-cuadrar', raiz).addEventListener('click', () => formCuadrar(t, () => render(raiz)));
   $('#btn-editar-tarjeta', raiz).addEventListener('click', () => formCuenta(t.id, () => render(raiz)));
   $('#btn-nuevo', raiz).addEventListener('click', () => formGastoTarjeta((nuevo) => {
@@ -16099,6 +16243,66 @@ function formCuadrar(t, alTerminar) {
       alTerminar?.();
     },
   });
+}
+
+/* --- Posibles repetidos ------------------------------------------------------ */
+
+/**
+ * El mismo gasto apuntado dos veces suma dos veces en todo: el mes, el cupo y
+ * el sueldo. Aquí se enseñan las parejas sospechosas de TODAS las tarjetas (y
+ * del efectivo), y se decide: quitar el que sobra o decir que no lo es.
+ */
+function pintarRepetidos(raiz) {
+  const caja = $('#repetidos', raiz);
+  if (!caja) return;
+  const pares = posiblesRepetidos();
+  caja.hidden = !pares.length;
+  if (!pares.length) { caja.innerHTML = ''; return; }
+  const fila = (f, par) => `
+    <li>
+      <span>${esc(f.detalle || '')}
+        <small>${esc(textoFecha(f.fecha))} · ${esc(f.medio)} · ${esc(f.usuario || '')}${
+  par.tipo === 'suscripcion' ? ` · ${f.cuotas} ${f.cuotas === 1 ? 'mes' : 'meses'}` : ''}</small></span>
+      <strong>${money(f.monto)}</strong>
+      <button type="button" class="btn pequeno peligro" data-quitar-rep="${esc(par.clave)}" data-fila="${esc(f.clave)}">Quitar este</button>
+    </li>`;
+  caja.innerHTML = `
+    <header><h2>Posibles repetidos</h2><span class="pista">${pares.length} ${pares.length === 1 ? 'caso' : 'casos'}</span></header>
+    <p class="pista" style="margin-top:0">Parecen el mismo gasto apuntado dos veces: si lo son, suman de más
+      en el mes, en el cupo y en el sueldo. Quita el que sobra; si son dos gastos distintos, dilo y no
+      vuelven a salir.</p>
+    ${pares.map((par) => `
+      <div class="repetido">
+        <p class="pista">${par.tipo === 'suscripcion'
+    ? `Dos suscripciones iguales cobrando lo mismo en ${esc(par.meses.map((m) => nombreMes(m)).join(', '))}.
+            «Quitar este» quita solo esos meses de esa suscripción.`
+    : 'La misma compra, de la misma persona, por lo mismo.'}</p>
+        <ul class="cuadre-items">${par.filas.map((f) => fila(f, par)).join('')}</ul>
+        <div class="sueldo-acciones"><button type="button" class="btn pequeno" data-no-rep="${esc(par.clave)}">No es repetido</button></div>
+      </div>`).join('')}`;
+
+  $$('[data-no-rep]', caja).forEach((b) => b.addEventListener('click', () => {
+    marcarNoRepetidos(b.dataset.noRep);
+    guardar();
+    render(raiz);
+  }));
+  $$('[data-quitar-rep]', caja).forEach((b) => b.addEventListener('click', () => {
+    const par = pares.find((p) => p.clave === b.dataset.quitarRep);
+    const f = par?.filas.find((x) => x.clave === b.dataset.fila);
+    if (!f) return;
+    const texto = par.tipo === 'suscripcion'
+      ? `¿Quitar de «${f.detalle}» sus cobros de ${par.meses.map((m) => nombreMes(m)).join(', ')}?`
+      : `¿Quitar «${f.detalle}» de ${money(f.monto)} (${f.medio}, ${textoFecha(f.fecha)})? El otro se queda.`;
+    confirmar(texto, () => {
+      if (par.tipo === 'suscripcion') {
+        quitarCuotas(f.id, (c) => par.meses.includes(c.mes));
+        if (!db.cuotas.some((c) => c.gasto_id === f.id)) eliminar('gastosTarjeta', f.id);
+      } else {
+        eliminar(f.coleccion, f.id);
+      }
+      render(raiz);
+    }, { aceptar: 'Quitar' });
+  }));
 }
 
 return { enfocarGasto, render };
