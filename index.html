@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-S74trdXhwLgAkWq2iaq3QTfax96NYItlftMXQs6izUw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-7IJUA1xImGF0qYq8aFEvqNzS8SHevvlNtVML0MY8ezA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -5045,7 +5045,9 @@ function diferidosVigentes(mesRef = mesActual()) {
   for (const c of db.cuotas) {
     if (!cuotaPendiente(c, mesRef)) continue;
     const g = db.gastosTarjeta.find((x) => x.id === c.gasto_id);
-    if (!g || g.tipo === 'Corriente') continue;
+    // Una suscripción no es una deuda: el Disney de los próximos 20 meses no
+    // se debe hasta que se cobre, y el banco no lo cuenta como diferido.
+    if (!g || g.tipo === 'Corriente' || g.tipo === 'Recurrente') continue;
     const acc = porGasto.get(c.gasto_id) || {
       gasto: g, restante: 0, cuotasRestantes: 0, proxima: null,
     };
@@ -5061,29 +5063,38 @@ function diferidosVigentes(mesRef = mesActual()) {
 
 // --- Cuentas y patrimonio ----------------------------------------------------
 
-/** Saldo real de una cuenta bancaria o de efectivo. */
-function saldoCuenta(cuentaId) {
+/**
+ * Saldo real de una cuenta bancaria o de efectivo. Con `hasta` (AAAA-MM-DD),
+ * el que tenía al cerrar ese día: lo que dice la evolución del ahorro.
+ */
+function saldoCuenta(cuentaId, hasta = null) {
   const c = db.cuentas.find((x) => x.id === cuentaId);
   let saldo = Number(c?.saldo_inicial) || 0;
+  const vale = (fecha) => !hasta || String(fecha || '').slice(0, 10) <= hasta;
 
-  for (const i of db.ingresos) if (i.cuenta === cuentaId) saldo += Number(i.neto) || 0;
-  for (const g of db.gastosEfectivo) if (g.cuenta === cuentaId) saldo -= Number(g.monto) || 0;
+  for (const i of db.ingresos) if (i.cuenta === cuentaId && vale(i.fecha)) saldo += Number(i.neto) || 0;
+  for (const g of db.gastosEfectivo) if (g.cuenta === cuentaId && vale(g.fecha)) saldo -= Number(g.monto) || 0;
   for (const m of db.movimientos) {
+    if (!vale(m.fecha)) continue;
     if (m.cuenta_origen === cuentaId) saldo -= Number(m.monto) || 0;
     if (m.cuenta_destino === cuentaId) saldo += Number(m.monto) || 0;
   }
   for (const p of db.inversiones) {
-    if (p.estado !== 'Liquidada' && p.cuenta_origen === cuentaId) {
+    if (p.cuenta_origen === cuentaId && vale(p.fecha_inicio)) {
       saldo -= Number(p.capital) || 0;
     }
-    if (p.estado === 'Liquidada' && p.cuenta_destino === cuentaId) {
+    if (p.estado === 'Liquidada' && p.cuenta_destino === cuentaId && vale(p.fecha_vencimiento)) {
       saldo += Number(p.valor_final) || 0;
-    }
-    if (p.estado === 'Liquidada' && p.cuenta_origen === cuentaId) {
-      saldo -= Number(p.capital) || 0;
     }
   }
   return redondear(saldo);
+}
+
+/** Lo que había en bancos y efectivo al cerrar un día. */
+function ahorradoAl(hasta) {
+  return redondear(db.cuentas
+    .filter((c) => c.tipo !== 'Tarjeta')
+    .reduce((s, c) => s + saldoCuenta(c.id, hasta), 0));
 }
 
 function totalAhorrado() {
@@ -5362,9 +5373,21 @@ function totalPorUsuario(meses, filtros = {}) {
     .sort((a, b) => b.valor - a.valor);
 }
 
+/*
+ * Lo que entra a una cuenta sin ser un ingreso: el saldo con el que se dio de
+ * alta (o se corrigió) una cuenta. Suma al saldo de la cuenta, pero no es
+ * dinero ganado ese mes: contarlo como ingreso metía en agosto de 2026 los
+ * ahorros de toda la vida, y el balance del mes y el histórico salían con
+ * miles de dólares de superávit que no existían.
+ */
+const NO_ES_INGRESO = /saldo inicial|^\s*balance\s*$|^\s*ajuste/i;
+const esIngresoReal = (i) => !NO_ES_INGRESO.test(i?.concepto || '')
+  && !NO_ES_INGRESO.test(i?.categoria || '');
+
 /** Ingreso neto de un mes (opcionalmente filtrado por usuario). */
 function ingresoDelMes(mes, usuario = 'ambos') {
   return redondear(db.ingresos
+    .filter(esIngresoReal)
     .filter((i) => (i.mes || claveMes(i.fecha)) === mes)
     .filter((i) => usuario === 'ambos' || i.usuario === usuario)
     .reduce((s, i) => s + (Number(i.neto) || 0), 0));
@@ -6657,6 +6680,7 @@ function dondeRecortar({ usuario = 'ambos', meses = MESES_HABITO } = {}) {
       const ticket = redondear(medianaDe(tickets));
       const total = redondear(bruto);
       const alMes = redondear(total / n);
+      const crudo = bruto;
       const vecesMes = veces / n;
       const nivel = nivelDe(categoria);
 
@@ -6694,6 +6718,7 @@ function dondeRecortar({ usuario = 'ambos', meses = MESES_HABITO } = {}) {
         mio: nivelEsMio(categoria),
         total,
         alMes,
+        crudo,
         veces,
         vecesMes: redondear(vecesMes),
         ticket,
@@ -6712,8 +6737,13 @@ function dondeRecortar({ usuario = 'ambos', meses = MESES_HABITO } = {}) {
     return {
       ...x,
       cuantas: suyas.length,
-      total: redondear(suyas.reduce((s, f) => s + f.total, 0)),
-      alMes: redondear(suyas.reduce((s, f) => s + f.alMes, 0)),
+      total: redondear(suyas.reduce((s, f) => s + f.crudo, 0)),
+      /*
+       * De lo sumado sin redondear, y redondeado una sola vez: sumando las
+       * medias ya redondeadas de treinta categorías, los centavos se
+       * acumulaban y la media del mes no era la del año entre doce.
+       */
+      alMes: redondear(suyas.reduce((s, f) => s + f.crudo, 0) / n),
     };
   });
 
@@ -6888,7 +6918,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, TOPES, aPagarAhora, acumuladoHistorico, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasRevisadas, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+return { DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasRevisadas, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -9953,7 +9983,7 @@ M["plan"] = (function () {
  */
 
 const {db} = M["store"];
-const {claveMes, mesActual, redondear, sumarDias, diasEntre, sumarMeses, rangoMeses, nombreMes, hoyLocal} = M["calc"];
+const {claveMes, mesActual, redondear, sumarDias, diasEntre, sumarMeses, rangoMeses, nombreMes, hoyLocal, esIngresoReal} = M["calc"];
 /** Con menos de tres apariciones no hay periodicidad, hay casualidad. */
 const MIN_OCURRENCIAS = 3;
 
@@ -11006,7 +11036,8 @@ function guardarAjusteSueldo(usuario, { esperado, pct }) {
 /** El sueldo de un mes: lo cobrado con concepto de sueldo. */
 function sueldoCobrado(mes, usuario) {
   return redondear(db.ingresos
-    .filter((i) => (i.mes || claveMes(i.fecha)) === mes && i.usuario === usuario && ES_SUELDO.test(i.concepto || ''))
+    .filter((i) => (i.mes || claveMes(i.fecha)) === mes && i.usuario === usuario
+      && ES_SUELDO.test(i.concepto || '') && esIngresoReal(i))
     .reduce((s, i) => s + (Number(i.neto) || 0), 0));
 }
 
@@ -12530,6 +12561,7 @@ function formMovimiento(alTerminar, existente = null) {
       <div class="campo"><label for="m-origen">Sale de</label>
         <select id="m-origen" name="cuenta_origen">
           ${opciones(cuentas.map((c) => ({ valor: c.id, texto: c.nombre })), g?.cuenta_origen)}
+          <option value=""${g && !g.cuenta_origen ? ' selected' : ''}>— (entrada de dinero) —</option>
         </select></div>
       <div class="campo"><label for="m-destino">Entra a</label>
         <select id="m-destino" name="cuenta_destino">
@@ -12551,6 +12583,20 @@ function formMovimiento(alTerminar, existente = null) {
     aceptar: g?.id ? 'Guardar cambios' : 'Registrar',
     alEnviar(d) {
       if (!montoValido(d.monto)) return false;
+      /*
+       * «Sale de» era obligatorio, así que un depósito o un ajuste que SUMA a
+       * una cuenta no se podía apuntar: se elegía la cuenta como origen y el
+       * dinero, en vez de entrar, salía. Ahora puede faltar uno de los dos
+       * lados, pero no los dos, y no puede ser la misma cuenta.
+       */
+      if (!d.cuenta_origen && !d.cuenta_destino) {
+        alarma('Elige de qué cuenta sale o a cuál entra el dinero.');
+        return false;
+      }
+      if (d.cuenta_origen && d.cuenta_origen === d.cuenta_destino) {
+        alarma('El dinero no puede salir y entrar a la misma cuenta.');
+        return false;
+      }
       upsert('movimientos', {
         id: g?.id || nuevoId('movimientos'),
         fecha: d.fecha,
@@ -12799,7 +12845,7 @@ M["ajustes"] = (function () {
 const {db, upsert, guardar, quitarCuotas, sepultar} = M["store"];
 const {alCambiarSync, configurado, estadoSync} = M["sync"];
 const {registrarGastoTarjeta} = M["forms"];
-const {money, nombreMes, sumarMeses, claveEstadoCuenta, redondear} = M["calc"];
+const {money, nombreMes, sumarMeses, claveEstadoCuenta, redondear, esIngresoReal, textoFecha} = M["calc"];
 const {$, esc, modal, brindis} = M["ui"];
 const CLAVE = 'ajustes_hechos';
 /** Así lo escribe la gente —y así está en los datos—: «Anthropic» y «Antrhopic». */
@@ -12829,6 +12875,38 @@ function tarjetaBolivariano() {
 const CUPO = 6000;
 
 const AJUSTES = [
+  {
+    /*
+     * Saldos de cuenta apuntados como sueldo. Al dar de alta las cuentas, el
+     * 16 de agosto de 2026, el saldo de Pacífico 1 entró como un «Sueldo» de
+     * $12.962,37: diez sueldos de golpe, que inflaban los ingresos del mes, el
+     * balance histórico y el ahorro. Se reconoce por ser más del triple del
+     * sueldo normal. Pasa a «Saldo inicial»: sigue en el saldo de la cuenta,
+     * pero ya no cuenta como ingreso.
+     */
+    id: 'sueldos-que-son-saldos',
+    revisar() {
+      const raros = sueldosQueSonSaldos();
+      if (!raros.length) return { estado: 'nada' };
+      return {
+        estado: 'aplicar',
+        titulo: 'Saldos de cuenta apuntados como ingreso',
+        texto: `<ul class="ajustes-pasos">${raros.map(({ i, normal }) => `<li>«${esc(i.concepto)}» de
+          <strong>${money(i.neto)}</strong> del ${esc(textoFecha(i.fecha))} en ${esc(nombreCuenta(i.cuenta))}:
+          ${Math.round(i.neto / normal)} veces un sueldo normal (${money(normal)}).</li>`).join('')}</ul>
+          Parece el saldo con el que se dio de alta la cuenta. Pasa a «Saldo inicial»: sigue en el
+          saldo de la cuenta, pero deja de contar como ingreso del mes.`,
+      };
+    },
+    aplicar() {
+      sueldosQueSonSaldos().forEach(({ i }) => {
+        upsert('ingresos', { ...i, concepto: 'Saldo inicial', categoria: 'Saldo inicial' });
+      });
+      if (!db.categorias.some((c) => c.nombre === 'Saldo inicial')) {
+        upsert('categorias', { nombre: 'Saldo inicial', grupo: 'Ingresos', tipo: 'Ingreso', presupuesto: 0, activa: 'Si' });
+      }
+    },
+  },
   {
     /*
      * Cuotas que volvieron solas. Antes, al corregir una compra con menos
@@ -12940,6 +13018,23 @@ const AJUSTES = [
     },
   },
 ];
+
+const ES_SUELDO = /sueldo|quincena|fin de mes|salario|n[oó]mina|rol de pago/i;
+const nombreCuenta = (id) => db.cuentas.find((c) => c.id === id)?.nombre || id || 'la cuenta';
+
+/** Ingresos de «sueldo» que pasan del triple de lo normal: saldos, no sueldos. */
+function sueldosQueSonSaldos() {
+  const sueldos = db.ingresos.filter((i) => esIngresoReal(i) && ES_SUELDO.test(i.concepto || '')
+    && Number(i.neto) > 0);
+  const raros = [];
+  for (const i of sueldos) {
+    const otros = sueldos.filter((x) => x !== i && x.usuario === i.usuario).map((x) => Number(x.neto)).sort((a, b) => a - b);
+    if (otros.length < 3) continue;
+    const normal = otros[Math.floor(otros.length / 2)];
+    if (normal > 0 && Number(i.neto) > 3 * normal && Number(i.neto) > 3000) raros.push({ i, normal });
+  }
+  return raros;
+}
 
 /**
  * Cuotas de más: la compra tiene MÁS cuotas de las que dice, y sobran las de
@@ -13571,7 +13666,7 @@ function render(raiz, { irA }) {
       <div class="panel-datos">
         <div><div class="etq">Ingresos</div><div class="val">${money(ingreso)}</div></div>
         <div><div class="etq">Balance</div><div class="val">${money(balance)}</div></div>
-        <div><div class="etq">A pagar en tarjetas</div>
+        <div><div class="etq">Con tarjeta</div>
           <div class="val">${money(tarjetas().reduce((s, t) => s + pagoDelMes(t.id, mes, usuarioFiltro), 0))}</div></div>
       </div>
     </section>
@@ -14773,7 +14868,7 @@ M["views/cuentas"] = (function () {
 /** Vista «Cuentas»: saldos reales de banco y efectivo, y sus movimientos. */
 
 const {db, cuentasBancarias, eliminar, upsert, cuenta} = M["store"];
-const {money, moneyHTML, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes} = M["calc"];
+const {money, moneyHTML, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes, esIngresoReal, ahorradoAl, hoyLocal} = M["calc"];
 const {dona, linea, alRedimensionar} = M["charts"];
 const {esc, $, $$, confirmar, modal, brindis, aNumero, marcaNota, notaTexto, segmentado, centrarElegido} = M["ui"];
 const {formMovimiento, formIngreso, formGastoEfectivo} = M["forms"];
@@ -14847,7 +14942,7 @@ function render(raiz) {
         <div id="g-cuentas"></div>
       </div>
       <div class="tarjeta">
-        <header><h2>Evolución del ahorro</h2><span class="pista">Acumulado por mes</span></header>
+        <header><h2>Evolución del ahorro</h2><span class="pista">Saldo al cierre de cada mes</span></header>
         <div id="g-evolucion"></div>
       </div>
     </section>
@@ -14866,8 +14961,8 @@ function render(raiz) {
         <div class="kpi"><div class="etq">Ingresos del año</div>
           <div class="valor">${money(ingresosDelAnio())}</div></div>
         <div class="kpi"><div class="etq">Histórico</div>
-          <div class="valor">${money(db.ingresos.reduce((s, i) => s + (Number(i.neto) || 0), 0))}</div>
-          <div class="delta">${db.ingresos.length} ${db.ingresos.length === 1 ? 'registro' : 'registros'}</div></div>
+          <div class="valor">${money(db.ingresos.filter(esIngresoReal).reduce((s, i) => s + (Number(i.neto) || 0), 0))}</div>
+          <div class="delta">${db.ingresos.filter(esIngresoReal).length} ${db.ingresos.filter(esIngresoReal).length === 1 ? 'registro' : 'registros'}</div></div>
       </div>
       <div id="lista-ingresos"></div>
     </section>
@@ -14898,14 +14993,25 @@ function render(raiz) {
       .map((c) => ({ nombre: c.nombre, valor: Math.max(0, saldoCuenta(c.id)) }))
       .filter((x) => x.valor > 0), { titulo: 'Ahorro' });
 
-    const meses = rangoMeses(sumarMeses(mesActual(), -11), mesActual());
-    let acc = 0;
+    /*
+     * Lo que había de verdad en bancos y efectivo al cerrar cada mes; el del
+     * mes en curso, hoy. Antes era un flujo que empezaba en cero hace un año
+     * —ingresos menos salidas— y no coincidía con ningún saldo: el último
+     * punto no era el «Total ahorrado» de arriba.
+     */
+    // Desde que se llevan las cuentas —el primer movimiento entre ellas—: lo
+    // de antes son sueldos viejos sin sus gastos, y daba saldos que no hubo.
+    const primero = db.movimientos.map((m) => claveMes(m.fecha)).filter(Boolean).sort()[0];
+    const desde = [sumarMeses(mesActual(), -11), primero || ''].sort().pop();
+    const meses = rangoMeses(desde > mesActual() ? mesActual() : desde, mesActual());
+    const hoy = hoyLocal();
     const serie = meses.map((m) => {
-      acc = redondear(acc + ingresoDelMes(m) - salidasDelMes(m));
-      return acc;
+      const [y, mm] = m.split('-').map(Number);
+      const fin = `${m}-${String(new Date(y, mm, 0).getDate()).padStart(2, '0')}`;
+      return ahorradoAl(fin < hoy ? fin : hoy);
     });
     linea($('#g-evolucion', raiz), meses.map((m) => nombreMes(m, true)),
-      [{ nombre: 'Flujo acumulado', valores: serie }], { alto: 230 });
+      [{ nombre: 'Bancos y efectivo', valores: serie }], { alto: 230 });
   };
   pintar();
   alRedimensionar(pintar);
@@ -14934,9 +15040,9 @@ function render(raiz) {
 function pintarListas(raiz) {
   const delMes = (fecha, mesFila) => !mesListas || (mesFila || claveMes(fecha)) === mesListas;
   const cuando = mesListas ? `en ${nombreMes(mesListas).toLowerCase()}` : 'en total';
-  const recuento = (filas, campo, texto) => (filas.length ? `
+  const recuento = (filas, campo, texto, cuentan = () => true) => (filas.length ? `
     <p class="pista cuentas-suma">${filas.length} ${filas.length === 1 ? 'registro' : 'registros'}
-      ${cuando} · <strong>${money(filas.reduce((s, f) => s + (Number(f[campo]) || 0), 0))}</strong>${
+      ${cuando} · <strong>${money(filas.filter(cuentan).reduce((s, f) => s + (Number(f[campo]) || 0), 0))}</strong>${
   texto ? ` ${texto}` : ''}</p>` : '');
 
   const ingresos = db.ingresos.filter((i) => delMes(i.fecha, i.mes))
@@ -14945,7 +15051,7 @@ function pintarListas(raiz) {
     ingresos,
     (i) => ({
       nota: i.notas,
-      titulo: `${i.concepto} · ${i.usuario}`,
+      titulo: `${i.concepto} · ${i.usuario}${esIngresoReal(i) ? '' : ' · saldo de la cuenta, no es ingreso'}`,
       meta: `${i.fecha} · bruto ${money(i.bruto)} − descuentos ${money(i.descuentos)} → ${cuenta(i.cuenta)?.nombre || i.cuenta}`,
       monto: Number(i.neto) || 0,
       signo: 'pos',
@@ -14953,7 +15059,8 @@ function pintarListas(raiz) {
       coleccion: 'ingresos',
     }),
     mesListas ? `Sin ingresos ${cuando}.` : 'Sin ingresos registrados.',
-  ) + recuento(ingresos, 'neto', 'netos');
+  ) + recuento(ingresos, 'neto', ingresos.some((i) => !esIngresoReal(i))
+    ? 'netos (sin los saldos de cuenta, que no son ingresos)' : 'netos', esIngresoReal);
 
   const efectivo = db.gastosEfectivo.filter((g) => delMes(g.fecha))
     .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
@@ -14982,7 +15089,8 @@ function pintarListas(raiz) {
       meta: `${m.fecha} · ${m.tipo} · ${cuenta(m.cuenta_origen)?.nombre || m.cuenta_origen || '—'}
              → ${cuenta(m.cuenta_destino)?.nombre || m.cuenta_destino || '—'}`,
       monto: Number(m.monto) || 0,
-      signo: 'neg',
+      // Entre dos cuentas propias no se gana ni se pierde; sin origen, entra.
+      signo: !m.cuenta_origen ? 'pos' : (m.cuenta_destino ? '' : 'neg'),
       id: m.id,
       coleccion: 'movimientos',
     }),
@@ -15015,22 +15123,9 @@ function pintarListas(raiz) {
 function ingresosDelAnio() {
   const anio = mesActual().slice(0, 4);
   return redondear(db.ingresos
+    .filter(esIngresoReal)
     .filter((i) => String(i.mes || claveMes(i.fecha)).startsWith(anio))
     .reduce((s, i) => s + (Number(i.neto) || 0), 0));
-}
-
-/** Salidas de dinero de un mes (efectivo + movimientos salientes). */
-function salidasDelMes(mes) {
-  const ef = db.gastosEfectivo
-    .filter((g) => claveMes(g.fecha) === mes)
-    .reduce((s, g) => s + (Number(g.monto) || 0), 0);
-  const mv = db.movimientos
-    .filter((m) => claveMes(m.fecha) === mes && m.cuenta_origen && !m.cuenta_destino)
-    .reduce((s, m) => s + (Number(m.monto) || 0), 0);
-  const pagos = db.movimientos
-    .filter((m) => claveMes(m.fecha) === mes && m.tipo === 'Pago de tarjeta')
-    .reduce((s, m) => s + (Number(m.monto) || 0), 0);
-  return redondear(ef + mv + pagos);
 }
 
 function listaSimple(filas, mapear, vacio) {
