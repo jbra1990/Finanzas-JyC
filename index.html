@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-eKQaIrAWCjLFlx37zibMIR9T7Ggt07EFWBOx3YPz9hE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-JbP43wqQgOZsSrQj/G8YMeXr/rXRSUWd9atrt5yNzMQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4837,7 +4837,10 @@ function fechaPagoMes(mes, tarjetaId) {
 /** «el 18 de septiembre de 2026» a partir de 'YYYY-MM-DD'. */
 function textoFecha(fechaISO) {
   if (!fechaISO) return '';
-  const [y, m, d] = fechaISO.split('-').map(Number);
+  // Lo que no es una fecha («cuota 2 de 6», «pago único») se deja tal cual:
+  // antes rompía el desglose de la simulación al abrir un mes.
+  if (!/^\d{4}-\d{2}-\d{2}/.test(String(fechaISO))) return String(fechaISO);
+  const [y, m, d] = String(fechaISO).slice(0, 10).split('-').map(Number);
   return `${d} de ${NOMBRES_MES[m - 1].toLowerCase()} de ${y}`;
 }
 
@@ -8560,6 +8563,7 @@ function fusionar(local, remoto) {
  * viajan nunca.
  */
 const UNION = new Set(['ajustes_hechos']);
+const CLAVES_PROHIBIDAS = new Set(['__proto__', 'constructor', 'prototype']);
 function fusionarConfig(local, remoto) {
   const cl = local.config || {};
   const cr = remoto.config || {};
@@ -8569,7 +8573,9 @@ function fusionarConfig(local, remoto) {
   const marcas = {};
   const claves = new Set([...Object.keys(cl), ...Object.keys(cr), ...Object.keys(ml), ...Object.keys(mr)]);
   for (const k of claves) {
-    if (CONFIG_LOCAL.includes(k)) continue;
+    // Lo que viene de fuera no puede tocar la maquinaria de los objetos: una
+    // clave «__proto__» en la nube cambiaría de qué heredan los ajustes.
+    if (CONFIG_LOCAL.includes(k) || CLAVES_PROHIBIDAS.has(k)) continue;
     const tl = Number(ml[k]) || 0;
     const tr = Number(mr[k]) || 0;
     if (tl || tr) marcas[k] = Math.max(tl, tr);
@@ -10162,9 +10168,28 @@ function esDe(usuario, quien) {
   return !u || u === quien;
 }
 
+/*
+ * Los gastos que ya lleva un gasto ESCRITO A MANO: sus pagos.
+ *
+ * Al pagar desde Presupuesto, el pago queda como gasto real —en la tarjeta o
+ * en la cuenta—, que es lo que tiene que pasar. Pero lo deducido del historial
+ * agrupa los gastos reales por categoría, así que esos mismos pagos volvían a
+ * aparecer como un «fijo que deduce la app» (el crédito, cada mes en Intereses
+ * bancarios; la cuota del mantenimiento, en Mantenimiento) y se proyectaban
+ * OTRA VEZ en los meses que vienen, encima de lo escrito a mano. Se reconocen
+ * por la nota que deja «Pagar», o por llamarse igual que un gasto escrito a
+ * mano: lo escrito a mano manda sobre lo deducido.
+ */
+const NOTA_PAGO_PRESUPUESTO = 'Pago registrado desde Presupuesto';
+function cubiertosPorManuales() {
+  const nombres = new Set(fijosManuales().map((f) => claveGasto(f.detalle)).filter(Boolean));
+  return (g) => g.notas === NOTA_PAGO_PRESUPUESTO || nombres.has(claveGasto(g.detalle));
+}
+
 function recurrencias(quien = null) {
   const mios = ajustes();
   const grupos = new Map();
+  const cubierto = cubiertosPorManuales();
   /*
    * Se agrupa por CATEGORÍA, no por comercio.
    *
@@ -10215,7 +10240,7 @@ function recurrencias(quien = null) {
   });
 
   db.gastosTarjeta.forEach((g) => {
-    if (!esDe(g.usuario, quien)) return;
+    if (!esDe(g.usuario, quien) || cubierto(g)) return;
     if (g.tipo === 'Corriente') {
       anota(g.detalle, g.fecha, Number(g.monto_total) || 0, g.categoria, g.tarjeta);
     } else if (g.tipo === 'Recurrente') {
@@ -10225,7 +10250,7 @@ function recurrencias(quien = null) {
     }
   });
   db.gastosEfectivo.forEach((g) => {
-    if (!esDe(g.usuario, quien)) return;
+    if (!esDe(g.usuario, quien) || cubierto(g)) return;
     anota(g.detalle, g.fecha, Number(g.monto) || 0, g.categoria, g.cuenta);
   });
 
@@ -10589,12 +10614,14 @@ function ritmoDeCompra(quien = null) {
    * Solo COMPRAS, no cuotas: un diferido a seis meses se compró una vez. Esto
    * mide cada cuánto se repite el acto de comprar, no cada cuánto se paga.
    */
+  // Lo que ya está escrito a mano en el presupuesto no se vuelve a proponer.
+  const cubierto = cubiertosPorManuales();
   for (const g of db.gastosTarjeta) {
-    if (!esDe(g.usuario, quien)) continue;
+    if (!esDe(g.usuario, quien) || cubierto(g)) continue;
     anota(conceptoDe(g), g.fecha, Number(g.monto_total) || 0, g.categoria, g.tarjeta);
   }
   for (const g of db.gastosEfectivo) {
-    if (!esDe(g.usuario, quien)) continue;
+    if (!esDe(g.usuario, quien) || cubierto(g)) continue;
     anota(conceptoDe(g), g.fecha, Number(g.monto) || 0, g.categoria, g.cuenta);
   }
 
