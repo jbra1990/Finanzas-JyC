@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-JbP43wqQgOZsSrQj/G8YMeXr/rXRSUWd9atrt5yNzMQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-cjFsvgNqqUcU82R0iEyZj6aFoLP7hr4W7azEsDSBJr0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -5265,7 +5265,8 @@ function recorridoCombustible(filtros = {}) {
   }
 
   // Los km de cada mes, del odómetro.
-  const { buenas } = lecturasRevisadas();
+  const buenas = lecturasParaMedir();
+  const mesesConLectura = new Set(buenas.map((l) => claveMes(l.fecha)));
   let fuente = 'odometro';
   /*
    * El mes en curso —o el último con lecturas— no tiene todavía lectura del
@@ -5280,6 +5281,13 @@ function recorridoCombustible(filtros = {}) {
     const b = interpolarKm(buenas, `${sumarMeses(c.mes, 1)}-01`, { estricto: true });
     c.km = a !== null && b !== null && b > a ? Math.round(b - a) : 0;
     c.parcial = false;
+    /*
+     * Sin ninguna lectura DENTRO del mes, sus km son un reparto entre la
+     * lectura de antes y la de después (de abril a julio no hay ninguna: mayo
+     * y junio salen de dividir). Se enseña, pero como estimado, y no entra en
+     * el coste por km ni se compara con el mes anterior.
+     */
+    c.estimado = c.km > 0 && !mesesConLectura.has(c.mes);
     if (!c.km && a !== null && b === null && ultima && claveMes(ultima.fecha) === c.mes && ultima.km > a) {
       c.km = Math.round(ultima.km - a);
       c.parcial = true;
@@ -5303,20 +5311,30 @@ function recorridoCombustible(filtros = {}) {
     .sort((a, b) => a.mes.localeCompare(b.mes));
   // Un mes a medias no tiene coste por km: lo repostado va por delante de lo
   // recorrido, y la cifra saldría de cualquier cosa.
-  meses.forEach((m) => { m.porKm = m.km > 0 && !m.parcial ? redondear(m.gastoCarro / m.km) : 0; });
+  meses.forEach((m) => { m.porKm = m.km > 0 && !m.parcial && !m.estimado ? redondear(m.gastoCarro / m.km) : 0; });
 
-  const conKm = meses.filter((m) => m.km > 0 && !m.parcial);
-  const km = conKm.reduce((s, m) => s + m.km, 0);
+  // El coste por km, solo con los meses medidos de verdad: con lecturas dentro.
+  const conKm = meses.filter((m) => m.km > 0 && !m.parcial && !m.estimado);
+  const kmMedidos = conKm.reduce((s, m) => s + m.km, 0);
   const gastoMedido = redondear(conKm.reduce((s, m) => s + m.gastoCarro, 0));
+  /*
+   * Los km y el ritmo, los MISMOS que en Vehículo: de la primera lectura a la
+   * última de los dos últimos años. Antes Inicio sumaba los meses medidos
+   * (13.496 km, 900 al mes) y Vehículo medía de punta a punta (14.144 km,
+   * 872 al mes): dos cifras para la misma pregunta.
+   */
+  const ritmo = fuente === 'odometro' ? kmPorMes() : null;
+  const km = ritmo ? ritmo.recorrido : kmMedidos;
   return {
     meses,
     km,
     gasto: redondear(meses.reduce((s, m) => s + m.gasto, 0)),
     // Solo con el gasto de los meses que tienen kilómetros medidos.
-    porKm: km > 0 ? redondear(gastoMedido / km) : 0,
+    porKm: kmMedidos > 0 ? redondear(gastoMedido / kmMedidos) : 0,
     gastoMedido,
-    kmPorMes: conKm.length ? Math.round(km / conKm.length) : 0,
-    mesesMedidos: conKm.length,
+    kmMedidos,
+    kmPorMes: ritmo ? ritmo.kmMes : (conKm.length ? Math.round(kmMedidos / conKm.length) : 0),
+    mesesMedidos: ritmo ? Math.round(ritmo.meses) : conKm.length,
     fuente,
     // El mes que va a medias, si lo hay: se enseña aparte de las medias.
     enCurso: meses.find((m) => m.parcial) || null,
@@ -5595,6 +5613,49 @@ function recorridosQueNoEncajan() {
 }
 
 /** El kilometraje más alto que consta, que es el de hoy. */
+/**
+ * Las lecturas con las que se MIDEN distancias: de las que encajan, las que
+ * forman una escalera que nunca baja.
+ *
+ * `lecturasRevisadas` deja pasar diferencias de unos cientos de km (el taller
+ * apunta el kilometraje a su manera). Para contar cuánto se anduvo en un mes
+ * eso no vale: el taller apuntó 280.256 km el 1 de abril y el cuaderno
+ * 280.431 el 31 de marzo, y con las dos el odómetro «bajaba» y marzo salía con
+ * 538 km en vez de los 732 del cuaderno. Aquí se queda la escalera más larga,
+ * que deja fuera justo la lectura que contradice a las demás.
+ */
+const CONFIANZA = { recorrido: 0, tarjeta: 1, efectivo: 1, vehiculo: 2 };
+function lecturasParaMedir() {
+  const { buenas } = lecturasRevisadas();
+  /*
+   * Por orden de confianza: el cuaderno de recorridos (una cadena, cada día
+   * empieza donde acabó el anterior), luego lo que se escribe al repostar o
+   * pagar, y al final lo que apunta el taller, que pone el mismo kilometraje
+   * a cuatro visitas seguidas. Una lectura menos fiable solo entra si cabe
+   * entre las que ya están sin hacer bajar el odómetro.
+   */
+  const porNivel = [0, 1, 2].map((n) => buenas.filter((l) => (CONFIANZA[l.origen] ?? 2) === n));
+  const dentro = escaleraMasLarga(porNivel[0].map((l) => l.km));
+  let base = porNivel[0].filter((_, i) => dentro.has(i));
+  for (const nivel of porNivel.slice(1)) {
+    const fijas = base;
+    const caben = nivel.filter((l) => {
+      let antes = -Infinity;
+      let despues = Infinity;
+      for (const f of fijas) {
+        if (f.fecha < l.fecha && f.km > antes) antes = f.km;
+        if (f.fecha > l.fecha && f.km < despues) despues = f.km;
+      }
+      return l.km >= antes && l.km <= despues;
+    });
+    // Entre sí también tienen que subir.
+    const ok = escaleraMasLarga(caben.map((l) => l.km));
+    base = [...fijas, ...caben.filter((_, i) => ok.has(i))]
+      .sort((x, y) => x.fecha.localeCompare(y.fecha) || x.km - y.km);
+  }
+  return base;
+}
+
 function odometroHoy() {
   return lecturasRevisadas().buenas.reduce((mx, l) => Math.max(mx, l.km), 0);
 }
@@ -5737,7 +5798,7 @@ function buscarHistorial(termino, { usuario = 'ambos', limite = 80 } = {}) {
  * @returns {object|null} null si no hay dos lecturas separadas en el tiempo
  */
 function kmPorMes() {
-  const todas = lecturasRevisadas().buenas;
+  const todas = lecturasParaMedir();
   if (todas.length < 2) return null;
 
   const hoy = hoyLocal();
@@ -6921,7 +6982,7 @@ function presupuestoVsReal(mes, filtros = {}) {
     .sort((a, b) => b.uso - a.uso);
 }
 
-return { DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasRevisadas, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
+return { DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasParaMedir, lecturasRevisadas, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso };
 })();
 
 M["charts"] = (function () {
@@ -14363,13 +14424,14 @@ function seccionCombustible(filtros) {
       <div class="kpi"><div class="etq">Coste por kilómetro</div>
         <div class="valor">${money(r.porKm)}</div>
         <div class="delta">${money(r.gastoMedido)} de combustible entre
-          ${miles(r.km)} km</div></div>
+          ${miles(r.kmMedidos)} km de meses medidos</div></div>
     </div>
 
     <ul class="lista compacta">${meses.map((m, i) => {
     const previo = meses[i + 1];
     // Sin km en alguno de los dos meses no hay comparación: un mes a medias no «baja un 100 %».
     const dif = previo && previo.km > 0 && m.km > 0 && !m.parcial && !previo.parcial
+      && !m.estimado && !previo.estimado
       ? ((m.km - previo.km) / previo.km) * 100 : null;
     return `
       <li>
@@ -14381,10 +14443,11 @@ function seccionCombustible(filtros) {
           </div>
           <div class="meta">${money(m.gasto)}${m.parcial
     ? ` · en curso, hasta el ${esc(textoFecha(m.hasta).replace(/ de \d{4}$/, ''))}`
-    : m.km > 0 ? ` · ${money(m.porKm)}/km` : ''}${
+    : m.estimado ? ' · estimado: sin lecturas del odómetro en el mes'
+      : m.km > 0 ? ` · ${money(m.porKm)}/km` : ''}${
   dif === null ? '' : ` · ${dif >= 0 ? '↗' : '↘'} ${Math.abs(dif).toFixed(0)} % vs. mes previo`}</div>
         </div>
-        <div class="monto">${m.km > 0 ? miles(m.km) : '—'}<span class="pie">km</span></div>
+        <div class="monto">${m.km > 0 ? `${m.estimado ? '~' : ''}${miles(m.km)}` : '—'}<span class="pie">km</span></div>
       </li>`;
   }).join('')}</ul>`;
 }
