@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-aFkIbUBlWbZRBD2Z1IWogKacTa4TSWY4x3yv7zPWpfE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-eKQaIrAWCjLFlx37zibMIR9T7Ggt07EFWBOx3YPz9hE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -11041,14 +11041,52 @@ function sueldoCobrado(mes, usuario) {
     .reduce((s, i) => s + (Number(i.neto) || 0), 0));
 }
 
+const ES_QUINCENA = /quincena/i;
+
 /**
- * El sueldo que se espera cobrar en un mes. Lo puesto a mano manda; si no,
- * la MEDIANA de los últimos seis meses cerrados con sueldo, que un mes con
- * una liquidación o un bono no mueve.
+ * El sueldo oficial: la última QUINCENA más el último pago de FIN DE MES.
+ *
+ * El sueldo llega en dos partes. Antes se tomaba la mediana de lo cobrado en
+ * cada uno de los últimos seis meses, y un mes con solo una de las dos
+ * partes apuntada —el mes en curso, o agosto, que tenía el fin de mes y no la
+ * quincena— contaba como un sueldo entero de la mitad: la mediana se iba
+ * hacia abajo, y además arrastraba los sueldos de 2025. Ahora se suman las
+ * dos partes más recientes (de los últimos tres meses), cada una por su lado.
+ * El fin de mes es el último pago de sueldo que no es quincena; uno de menos
+ * de la mitad de la quincena no es un fin de mes, es otra cosa.
+ */
+function quincenaYFin(mes, usuario) {
+  const desde = sumarMeses(mes, -3);
+  const pagos = db.ingresos
+    .filter((i) => i.usuario === usuario && esIngresoReal(i) && ES_SUELDO.test(i.concepto || '')
+      && Number(i.neto) > 0)
+    .filter((i) => { const m = i.mes || claveMes(i.fecha); return m >= desde && m <= mes; })
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  const quincena = pagos.find((i) => ES_QUINCENA.test(i.concepto || ''));
+  if (!quincena) return null;
+  const fin = pagos.find((i) => !ES_QUINCENA.test(i.concepto || '')
+    && Number(i.neto) >= Number(quincena.neto) * 0.5);
+  if (!fin) return null;
+  const parte = (i) => ({ monto: redondear(Number(i.neto)), fecha: i.fecha, concepto: i.concepto });
+  return { quincena: parte(quincena), fin: parte(fin) };
+}
+
+/**
+ * El sueldo que se espera cobrar en un mes. Lo puesto a mano manda; si no, la
+ * última quincena más el último fin de mes; y si no hay quincenas apuntadas,
+ * la MEDIANA de los últimos seis meses con sueldo.
  */
 function sueldoEsperado(mes, usuario = 'J') {
   const mio = Number(db.config[claveSueldo(usuario)]);
   if (mio > 0) return { monto: redondear(mio), base: 'mio' };
+  const partes = quincenaYFin(mes, usuario);
+  if (partes) {
+    return {
+      monto: redondear(partes.quincena.monto + partes.fin.monto),
+      base: 'quincena',
+      ...partes,
+    };
+  }
   const previos = [];
   for (let i = 1; i <= 24 && previos.length < 6; i += 1) {
     const v = sueldoCobrado(sumarMeses(mes, -i), usuario);
@@ -13916,6 +13954,10 @@ function seccionSueldo(mes, usuario) {
       </ul>
       <p class="pista">${c.esperado.base === 'mio'
     ? `Sueldo esperado: ${money(c.esperado.monto)}, puesto por ti.`
+    : c.esperado.base === 'quincena'
+      ? `Sueldo esperado: ${money(c.esperado.monto)} = quincena de ${money(c.esperado.quincena.monto)}
+        (${esc(textoFecha(c.esperado.quincena.fecha))}) + fin de mes de ${money(c.esperado.fin.monto)}
+        (${esc(textoFecha(c.esperado.fin.fecha))}), los últimos cobrados.`
     : c.esperado.base === 'mediana'
       ? `Sueldo esperado: ${money(c.esperado.monto)}, la mediana de tus últimos ${c.esperado.meses} meses con sueldo. Si no es, cámbialo.`
       : 'Sin sueldo esperado: se usa solo lo cobrado.'}
@@ -13937,7 +13979,9 @@ function formSueldo(mes, usuario, alTerminar) {
     etiqueta: 'Sueldo que cobras al mes (neto)',
     valor: mio ? String(mio).replace('.', ',') : '',
   })}
-      <p class="pista" style="margin-top:4px">${mio ? '' : esperado.monto > 0
+      <p class="pista" style="margin-top:4px">${mio ? '' : esperado.base === 'quincena'
+    ? `En blanco, la app usa ${money(esperado.monto)}: tu última quincena (${money(esperado.quincena.monto)}) más tu último fin de mes (${money(esperado.fin.monto)}).`
+    : esperado.monto > 0
     ? `En blanco, la app usa ${money(esperado.monto)}, la mediana de tus últimos meses.`
     : 'En blanco, la app usa solo lo cobrado.'}</p>
       <div class="campo"><label for="sa-pct">Cuánto ahorrar</label>
