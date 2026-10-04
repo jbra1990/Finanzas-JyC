@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-MbmnFYLY+O7qXKjA4Gzbs9Y0myzO5uqZokn59lyP8nc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-TKznk10GVnAhvtRCzg+nVXfWM4tBncSAaevKhYSWUNE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -10004,11 +10004,13 @@ function guardarManual(fila) {
  * —el importe pasa de «previsto» a «apuntado»— y que quede constancia de qué
  * cuotas del préstamo van saldadas.
  */
-function marcarPago(id, mes, pagado = true) {
+function marcarPago(id, mes, pagado = true, enOrden = null) {
   const lista = fijosManuales();
   const f = lista.find((x) => x.id === id);
   if (!f) return;
-  const pagos = new Set(f.pagos || []);
+  // En un gasto a plazos se parte de las marcas ya puestas en orden (ver
+  // `recurrencias`), y así se guardan: una marca mal rotulada se corrige sola.
+  const pagos = new Set(enOrden || f.pagos || []);
   if (pagado) pagos.add(mes); else pagos.delete(mes);
   f.pagos = [...pagos].sort();
   db.config[CLAVE_MANUALES] = JSON.stringify(lista);
@@ -10307,14 +10309,36 @@ function recurrencias(quien = null) {
           for (let i = 0; i < cuotas; i += 1) if (sumarMeses(desde, i) < mesHoy) k += 1;
           return k;
         };
-        const inicio = Math.max(0, Math.min(cuotas, f.pagadasInicio === undefined
-          ? transcurridas() : Math.round(Number(f.pagadasInicio) || 0)));
-        // Las marcadas con el botón cuentan solo a partir de ahí: si no, una
-        // cuota vieja marcada a mano se sumaría dos veces.
-        let hechas = inicio;
-        for (let i = inicio; i < cuotas; i += 1) {
-          if (pagos.has(sumarMeses(desde, i))) hechas += 1;
-        }
+        // Cuántos meses van de la primera cuota a `mes` (0 = la primera).
+        const indice = (mes) => (Number(mes.slice(0, 4)) - Number(desde.slice(0, 4))) * 12
+          + Number(mes.slice(5, 7)) - Number(desde.slice(5, 7));
+        const marcas = [...pagos].filter((m) => /^\d{4}-\d{2}$/.test(m)).sort();
+        let inicio = f.pagadasInicio === undefined
+          ? transcurridas() : Math.round(Number(f.pagadasInicio) || 0);
+        /*
+         * En las filas antiguas el calendario daba por pagado todo mes pasado.
+         * Eso no puede seguir corriendo una vez que se empezó a usar «Pagar»:
+         * la letra de septiembre se paga en octubre, el calendario ya la daba
+         * por pagada, el botón marcaba octubre, y el contador iba una letra
+         * por delante (10 de 120 con 9 pagadas). Desde la primera marca solo
+         * cuentan las marcas.
+         */
+        if (f.pagadasInicio === undefined && marcas.length) inicio = Math.min(inicio, indice(marcas[0]));
+        inicio = Math.max(0, Math.min(cuotas, inicio));
+        /*
+         * Las marcadas con el botón cuentan solo a partir de ahí (si no, una
+         * cuota vieja marcada a mano se sumaría dos veces), y cuentan como
+         * CUÁNTAS, no por su mes: cada «Pagar» salda la siguiente letra. Por
+         * eso se vuelven a rotular en orden; una marca puesta en octubre que
+         * pagaba septiembre pasa a ser la de septiembre, y octubre queda
+         * pendiente, que es lo que es.
+         */
+        const enCurso = marcas.filter((m) => indice(m) >= inicio).length;
+        const hechas = Math.min(cuotas, inicio + enCurso);
+        const pagosEnOrden = [
+          ...marcas.filter((m) => indice(m) < inicio),
+          ...Array.from({ length: hechas - inicio }, (_, k) => sumarMeses(desde, inicio + k)),
+        ];
 
         /*
          * El total manda, y las cuotas salen de dividirlo. Repartir $1.000 en 6
@@ -10353,7 +10377,7 @@ function recurrencias(quien = null) {
           tipoAuto: 'Fijo',
           reparto: { [f.medio || 'Préstamo']: 1 },
           fiable: true,
-          pagos: f.pagos || [],
+          pagos: pagosEnOrden,
           pagadas: hechas,
           pagadasInicio: inicio,
           /*
@@ -10364,7 +10388,7 @@ function recurrencias(quien = null) {
            */
           mesSiguiente: sumarMeses(desde, Math.min(hechas, cuotas - 1)),
           // Las marcadas a mano, para saber si toca el botón de este mes.
-          marcadas: pagos.size,
+          marcadas: pagosEnOrden.length,
           vigente: f.activo !== false && hasta >= mesHoy,
           mensual: true,
           monto: cuota,
@@ -17358,7 +17382,7 @@ function formFijo(r, alTerminar) {
       <div class="campo ancho"><label for="pf-pagadas">Cuotas ya pagadas</label>
         <input id="pf-pagadas" name="pagadasInicio" type="number" inputmode="numeric"
                min="0" max="120" step="1"
-               value="${esc(String(r?.pagadasInicio ?? 0))}"></div>
+               value="${esc(String(r?.pagadas ?? r?.pagadasInicio ?? 0))}"></div>
     </div>
     <p class="pista" data-solo="plazos" hidden>Cuántas van cobradas <strong>de
       verdad</strong>. Si es un gasto que todavía estás pensando, déjalo en 0: a
@@ -17571,21 +17595,32 @@ function formFijo(r, alTerminar) {
           tipo: 'Fijo',
           cadencia: 0,
         }),
-        plazos: () => ({
-          clase: 'plazos',
-          // Se guarda el total, que es el dato exacto; la cuota se deriva de él
-          // cada vez. Guardar solo la cuota perdería los centavos del reparto.
-          total: redondear(aNumero(d.total) || aNumero(d.cuota)
-            * Math.max(1, Math.round(Number(d.cuotas) || 1))),
-          monto: redondear(aNumero(d.cuota)),
-          cuotas: Math.max(1, Math.round(Number(d.cuotas) || 1)),
-          desdeMes: d.desdeMes || mesHoy,
-          // Cuántas van cobradas de verdad. Se guarda siempre, aunque sea 0:
-          // es lo que distingue un préstamo en marcha de uno que se piensa.
-          pagadasInicio: Math.max(0, Math.round(Number(d.pagadasInicio) || 0)),
-          tipo: 'Fijo',
-          cadencia: 30,
-        }),
+        plazos: () => {
+          const cuotas = Math.max(1, Math.round(Number(d.cuotas) || 1));
+          const desdeMes = d.desdeMes || mesHoy;
+          const pagadas = Math.min(cuotas, Math.max(0, Math.round(Number(d.pagadasInicio) || 0)));
+          return {
+            clase: 'plazos',
+            // Se guarda el total, que es el dato exacto; la cuota se deriva de él
+            // cada vez. Guardar solo la cuota perdería los centavos del reparto.
+            total: redondear(aNumero(d.total) || aNumero(d.cuota)
+              * Math.max(1, Math.round(Number(d.cuotas) || 1))),
+            monto: redondear(aNumero(d.cuota)),
+            cuotas,
+            desdeMes,
+            /*
+             * Cuántas van cobradas de verdad, en total. Se guarda siempre, aunque
+             * sea 0: es lo que distingue un préstamo en marcha de uno que se
+             * piensa. Lo escrito aquí manda sobre las marcas de «Pagar», que se
+             * rehacen a juego: solo quedan las de este mes en adelante ya
+             * pagadas, para que la previsión no las vuelva a contar.
+             */
+            pagadasInicio: pagadas,
+            pagos: Array.from({ length: pagadas }, (_, i) => sumarMeses(desdeMes, i)).filter((m) => m >= mesHoy),
+            tipo: 'Fijo',
+            cadencia: 30,
+          };
+        },
         periodico: () => ({
           clase: 'periodico',
           monto: redondear(aNumero(d.monto)),
@@ -17711,7 +17746,7 @@ function formPagar(r, alTerminar, irA) {
         equivocaste, bórralo desde Cuentas.</p>`,
       aceptar: 'Quitar la marca',
       alEnviar() {
-        marcarPago(r.clave, mes, false);
+        marcarPago(r.clave, mes, false, r.clase === 'plazos' ? r.pagos : null);
         guardar();
         brindis('Marca quitada');
         alTerminar?.();
@@ -17851,7 +17886,7 @@ function formPagar(r, alTerminar, irA) {
        * se borra: solo se marca ese mes, porque el mes que viene vuelve.
        */
       if (r.clase === 'unico') borrarManual(r.id);
-      else marcarPago(r.clave, mes, true);
+      else marcarPago(r.clave, mes, true, r.clase === 'plazos' ? r.pagos : null);
       guardar();
 
       const conTarjeta = d.medio === 'Tarjeta';
