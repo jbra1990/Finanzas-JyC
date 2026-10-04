@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-vnO2E659DQQVT4OeaZTccy8aaGKZuaUTTcyDXVtxMuE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-YRnVV9MhNLWvAx/eum+hlsgF0/FodLxV7JpUbfxti1c='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -13314,7 +13314,8 @@ const AJUSTES = [
       const despues = redondear(suma(PSEP) + r.reduce((t, x) => t + (x.estado === 'aplicar' ? (x.masSep || 0) : 0), 0));
       const dif = redondear(TOTAL_PICH - despues);
       const rev = revisarContraBanco();
-      const faltan = rev.faltan;
+      // Las cuotas que faltan las pone este mismo ajuste: aquí, solo las compras.
+      const faltan = rev.faltan.filter((f) => f.tipo === 'compra');
       const otros = rev.otroMes.length ? `<p class="pista">Están apuntadas, pero en otro mes que septiembre:</p>
           <ul class="ajustes-pasos">${rev.otroMes.map((o) => `<li>${esc(o.gasto.detalle)} ${money(o.gasto.monto_total)}:
           está en ${esc(nombreMes(o.mes))}</li>`).join('')}</ul>` : '';
@@ -13363,6 +13364,14 @@ const BANCO_PICH = [
   ['2026-09-30', 'Mall del Pacífico', 1.00], ['2026-09-30', 'Manta Imagen (Grupo Skm)', 209.00], ['2026-10-01', 'Sime Manta', 10.00],
 ].map(([fecha, detalle, monto]) => ({ fecha, detalle, monto }));
 
+/** Las cuotas y cargos fijos del mismo estado de cuenta, facturados el 3 de octubre. */
+const BANCO_CUOTAS_PICH = [
+  ['Dif con nacional online 1/3 (refinanciación)', 29.02], ['Metalhierro 2/6', 74.76], ['Mycase 3/3', 35.79],
+  ['Dacar Collision Center 2/3', 37.53], ['Descuentos Jomas 11/12', 29.55], ['Gnc 2/3', 33.52], ['T Ventas 3/6', 14.95],
+  ['Gerardo Ortiz e Hijos 2/3', 34.90], ['Autorepuestos del Chino 2/3', 22.58], ['Dif con internacional online 9/12', 173.34],
+  ['Contribución Solca', 0.11], ['Sdp plan deuda protegida (29 sep)', 2.98],
+].map(([detalle, monto]) => ({ fecha: '2026-10-03', detalle, monto }));
+
 /**
  * Las líneas del banco que no encuentro en la app: por importe (con hasta
  * 25 centavos de diferencia) y con la compra entre seis días antes y uno
@@ -13370,7 +13379,7 @@ const BANCO_PICH = [
  * Comisariato $261,27 + $101,27) vale como una.
  */
 function faltanDelBanco() {
-  return revisarContraBanco().faltan;
+  return revisarContraBanco().faltan.filter((f) => f.tipo === 'compra');
 }
 
 /**
@@ -13381,36 +13390,82 @@ function faltanDelBanco() {
  */
 function revisarContraBanco() {
   const dia = (iso, n) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const cent = (n) => Math.round((Number(n) || 0) * 100);
+  const gastos = new Map(db.gastosTarjeta.map((g) => [g.id, g]));
   // Pedidos Ya cuenta aunque siga en Bolivariano: este mismo ajuste lo trae.
   const pedidoYa = pedidos();
+  const mesDe = (id) => cuotasDe(id)[0]?.mes;
+
+  // 1. Las compras del banco contra las compras de un pago de la app.
   const app = db.gastosTarjeta.filter((g) => (g.tarjeta === PI || g === pedidoYa) && g.tipo === 'Corriente'
     && g.fecha >= '2026-08-28' && g.fecha <= '2026-10-03')
     .map((g) => ({ id: g.id, gasto: g, fecha: String(g.fecha).slice(0, 10), monto: Number(g.monto_total) || 0 }));
   const usadas = new Set();
   const faltan = [];
   const otroMes = [];
-  const fuera = (a, b) => {
-    const mes = cuotasDe(a.id)[0]?.mes;
-    if (mes && mes !== PSEP) otroMes.push({ banco: b, gasto: a.gasto, mes });
+  const difImporte = [];
+  const anotar = (lista, b) => {
+    lista.forEach((a) => {
+      const mes = mesDe(a.id);
+      if (mes && mes !== PSEP) otroMes.push({ banco: b, gasto: a.gasto, mes });
+    });
+    const enSep = lista.filter((a) => mesDe(a.id) === PSEP);
+    const suma = enSep.reduce((t, a) => t + a.monto, 0);
+    if (enSep.length === lista.length && cent(suma) !== cent(b.monto)) {
+      difImporte.push({ banco: b, gasto: enSep[0].gasto, app: redondear(suma), dif: redondear(b.monto - suma) });
+    }
   };
   for (const b of BANCO_PICH) {
     const desde = dia(b.fecha, -6);
     const hasta = dia(b.fecha, 1);
     const libres = app.filter((a) => !usadas.has(a.id) && a.fecha >= desde && a.fecha <= hasta);
-    // Primero entre las de septiembre: si hay dos parecidas, la del mes bueno.
-    const una = libres.find((a) => Math.abs(a.monto - b.monto) <= 0.25 && cuotasDe(a.id)[0]?.mes === PSEP)
-      || libres.find((a) => Math.abs(a.monto - b.monto) <= 0.25);
-    if (una) { usadas.add(una.id); fuera(una, b); continue; }
+    // Primero el importe exacto, luego con margen; y entre iguales, la de septiembre.
+    const cerca25 = (a) => Math.abs(a.monto - b.monto) <= 0.25;
+    const una = libres.find((a) => cent(a.monto) === cent(b.monto) && mesDe(a.id) === PSEP)
+      || libres.find((a) => cent(a.monto) === cent(b.monto))
+      || libres.find((a) => cerca25(a) && mesDe(a.id) === PSEP)
+      || libres.find(cerca25);
+    if (una) { usadas.add(una.id); anotar([una], b); continue; }
     let par = null;
     for (let i = 0; i < libres.length && !par; i += 1) {
       for (let j = i + 1; j < libres.length && !par; j += 1) {
         if (libres[i].fecha === libres[j].fecha && Math.abs(libres[i].monto + libres[j].monto - b.monto) <= 0.02) par = [libres[i], libres[j]];
       }
     }
-    if (par) { par.forEach((a) => { usadas.add(a.id); fuera(a, b); }); continue; }
-    faltan.push(b);
+    if (par) { par.forEach((a) => usadas.add(a.id)); anotar(par, b); continue; }
+    faltan.push({ ...b, tipo: 'compra' });
   }
-  return { faltan, otroMes, tarjeta: PI, mes: PSEP, total: TOTAL_PICH };
+
+  // 2. Las cuotas del banco contra lo que queda de septiembre en la app.
+  const sep = db.cuotas.filter((c) => c.tarjeta === PI && c.mes === PSEP)
+    .map((c) => ({ c, g: gastos.get(c.gasto_id), monto: Number(c.monto) || 0 }));
+  const cuotaLibre = sep.filter((x) => !usadas.has(x.c.gasto_id));
+  const tomadas = new Set();
+  for (const b of BANCO_CUOTAS_PICH) {
+    const libres = cuotaLibre.filter((x) => !tomadas.has(x));
+    const una = libres.find((x) => cent(x.monto) === cent(b.monto));
+    if (una) { tomadas.add(una); continue; }
+    let par = null;
+    for (let i = 0; i < libres.length && !par; i += 1) {
+      for (let j = i + 1; j < libres.length && !par; j += 1) {
+        if (cent(libres[i].monto + libres[j].monto) === cent(b.monto)) par = [libres[i], libres[j]];
+      }
+    }
+    if (par) { par.forEach((x) => tomadas.add(x)); continue; }
+    // Con unos centavos de diferencia: la cuota está, pero por otro importe.
+    const casi = libres.filter((x) => x.g?.tipo !== 'Corriente' && Math.abs(x.monto - b.monto) <= Math.max(0.5, b.monto * 0.02))
+      .sort((x, y) => Math.abs(x.monto - b.monto) - Math.abs(y.monto - b.monto))[0];
+    if (casi) { tomadas.add(casi); difImporte.push({ banco: b, gasto: casi.g, app: casi.monto, dif: redondear(b.monto - casi.monto) }); continue; }
+    faltan.push({ ...b, tipo: 'cuota' });
+  }
+
+  // 3. Lo que la app tiene en septiembre y el banco no.
+  const sobran = cuotaLibre.filter((x) => !tomadas.has(x)).map((x) => ({ gasto: x.g, cuota: x.c, monto: x.monto }));
+  const appTotal = redondear(sep.reduce((t, x) => t + x.monto, 0));
+  return {
+    faltan, otroMes, sobran, difImporte, appTotal,
+    tarjeta: PI, mes: PSEP, total: TOTAL_PICH,
+  };
 }
 
 /** Pasa una compra de Pichincha al mes del estado de cuenta (septiembre). */
@@ -13769,6 +13824,27 @@ function proyeccionSeptiembre(r) {
     Revísalo en Tarjetas → Bolivariano → Septiembre.</p>`;
 }
 
+/**
+ * Un ajuste concreto, aunque se haya descartado o ya se aplicara: lo que
+ * haría ahora mismo (null si no queda nada por hacer).
+ */
+function ajusteConCambios(id) {
+  const a = AJUSTES.find((x) => x.id === id);
+  if (!a) return null;
+  const estado = a.revisar();
+  return estado.estado === 'aplicar' ? estado : null;
+}
+
+/** Aplica un ajuste concreto desde otra pantalla, con la misma regla: solo lo que falte. */
+function aplicarAjuste(id) {
+  const a = AJUSTES.find((x) => x.id === id);
+  if (!a || a.revisar().estado !== 'aplicar') return false;
+  a.aplicar({});
+  marcar(id, 'aplicado');
+  guardar();
+  return true;
+}
+
 /** Los que están por ofrecer: no aplicados ni descartados, y con algo que hacer. */
 function pendientes() {
   const hechos = marcados();
@@ -13874,7 +13950,7 @@ function ofrecerAlArrancar(alTerminar) {
   setTimeout(() => { dejar(); una(); }, 6000);
 }
 
-return { aplicarTodos, ofrecerAjustes, ofrecerAlArrancar, pasarASeptiembre, pendientes, revisarContraBanco };
+return { ajusteConCambios, aplicarAjuste, aplicarTodos, ofrecerAjustes, ofrecerAlArrancar, pasarASeptiembre, pendientes, revisarContraBanco };
 })();
 
 M["pantalla_llave"] = (function () {
@@ -15789,7 +15865,7 @@ const {medidor, columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, aNumero, notaFila, marcaNota, notaTexto, centrarElegido, modal} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
 const {formCuenta} = M["views/cuentas"];
-const {revisarContraBanco, pasarASeptiembre} = M["ajustes"];
+const {revisarContraBanco, pasarASeptiembre, ajusteConCambios, aplicarAjuste} = M["ajustes"];
 const estado = {
   tarjeta: null, usuario: 'ambos', mes: null, comprobando: false,
   /*
@@ -16578,29 +16654,71 @@ function pintarContraBanco(raiz, t, mes) {
   const caja = $('#contra-banco', raiz);
   if (!caja) return;
   const rev = revisarContraBanco();
-  const comp = comprobacionDelMes(t.id, rev.mes);
-  const toca = t.id === rev.tarjeta && mes === rev.mes && (rev.faltan.length || rev.otroMes.length);
+  const pendiente = t.id === rev.tarjeta && ajusteConCambios('pichincha-estado-2026-10');
+  const dif = redondear(rev.total - rev.appTotal);
+  const hayAlgo = rev.faltan.length || rev.otroMes.length || rev.sobran.length || rev.difImporte.length;
+  const toca = t.id === rev.tarjeta && mes === rev.mes && (Math.abs(dif) >= 0.005 || hayAlgo);
   caja.hidden = !toca;
   if (!toca) { caja.innerHTML = ''; return; }
-  const dif = redondear(rev.total - comp.total);
+  const suma = (l, f) => redondear(l.reduce((s, x) => s + f(x), 0));
+  const sFaltan = suma(rev.faltan, (x) => x.monto);
+  const sOtro = suma(rev.otroMes, (x) => Number(x.gasto.monto_total) || 0);
+  const sSobran = suma(rev.sobran, (x) => x.monto);
+  const sDif = suma(rev.difImporte, (x) => x.dif);
+  const linea = (rotulo, v, signo) => (Math.abs(v) >= 0.005
+    ? `<li><span>${rotulo}</span><b>${signo}${money(Math.abs(v))}</b></li>` : '');
+  const nombre = (g) => esc(g?.detalle || '');
   caja.innerHTML = `
     <header><h2>Contra el estado de cuenta</h2><span class="pista">Corte del 3 oct</span></header>
-    <p class="pista" style="margin-top:0">El banco dice <strong>${money(rev.total)}</strong> y la app
-      <strong>${money(comp.total)}</strong>${Math.abs(dif) >= 0.005 ? ` (${dif > 0 ? 'faltan' : 'sobran'} ${money(Math.abs(dif))})` : ''}.
-      Esto es lo que encuentro comparando línea por línea:</p>
+    ${pendiente ? `
+      <div class="aviso alerta"><span class="icono">!</span><span class="crece">El ajuste de este estado de cuenta
+        (refinanciación, Solca, cuotas de Corla, seguro) no está aplicado.</span>
+        <button type="button" class="btn pequeno primario" id="cb-ajuste">Aplicar</button></div>` : ''}
+    <p class="pista" style="margin-top:0">Septiembre en la app: <strong>${money(rev.appTotal)}</strong>; el banco:
+      <strong>${money(rev.total)}</strong>${Math.abs(dif) >= 0.005 ? ` (${dif > 0 ? 'faltan' : 'sobran'} ${money(Math.abs(dif))})` : ''}.
+      Comparado línea por línea, en los dos sentidos:</p>
+    <ul class="cuadre-suma">
+      <li><span>La app tiene</span><b>${money(rev.appTotal)}</b></li>
+      ${linea('Sobran (el banco no las tiene)', sSobran, '− ')}
+      ${linea('Faltan (están en el banco, no en la app)', sFaltan, '+ ')}
+      ${linea('Apuntadas en otro mes', sOtro, '+ ')}
+      ${linea('Importes distintos', sDif, sDif > 0 ? '+ ' : '− ')}
+      <li class="total"><span>= El banco</span><b>${money(redondear(rev.appTotal - sSobran + sFaltan + sOtro + sDif))}</b></li>
+    </ul>
+    ${rev.sobran.length ? `
+      <p class="pista">Sobran: están en septiembre en la app y no en este estado de cuenta (repetidas, de otra
+        tarjeta, de antes del corte del 3 de septiembre o de después del 3 de octubre):</p>
+      <ul class="cuadre-items">${rev.sobran.map((x, i) => `
+        <li><span>${nombre(x.gasto)}<small>${esc(textoFecha(String(x.gasto?.fecha || '').slice(0, 10)))} · ${esc(x.gasto?.usuario || '')}${
+  x.gasto?.tipo !== 'Corriente' ? ` · cuota ${x.cuota.n_cuota} de ${x.gasto?.cuotas}` : ''}</small></span>
+          <strong>${money(x.monto)}</strong>
+          <button type="button" class="btn pequeno" data-abrir-sobra="${i}">Abrir</button></li>`).join('')}</ul>` : ''}
+    ${rev.difImporte.length ? `
+      <p class="pista">Importes distintos: la app y el banco tienen la línea, pero no por lo mismo:</p>
+      <ul class="cuadre-items">${rev.difImporte.map((x, i) => `
+        <li><span>${nombre(x.gasto)}<small>app ${money(x.app)} · banco ${money(x.banco.monto)} (${esc(x.banco.detalle)})</small></span>
+          <strong>${x.dif > 0 ? '+' : '−'}${money(Math.abs(x.dif))}</strong>
+          <button type="button" class="btn pequeno" data-abrir-dif="${i}">Abrir</button></li>`).join('')}</ul>` : ''}
     ${rev.otroMes.length ? `
       <p class="pista">Apuntadas en otro mes, no suman a septiembre:</p>
       <ul class="cuadre-items">${rev.otroMes.map((o, i) => `
-        <li><span>${esc(o.gasto.detalle)}<small>${esc(textoFecha(String(o.gasto.fecha).slice(0, 10)))} · está en ${esc(nombreMes(o.mes))}</small></span>
+        <li><span>${nombre(o.gasto)}<small>${esc(textoFecha(String(o.gasto.fecha).slice(0, 10)))} · está en ${esc(nombreMes(o.mes))}</small></span>
           <strong>${money(o.gasto.monto_total)}</strong>
           <button type="button" class="btn pequeno" data-a-sep="${i}">Pasar a septiembre</button></li>`).join('')}</ul>` : ''}
     ${rev.faltan.length ? `
-      <p class="pista">Del estado de cuenta, no están en la app:</p>
+      <p class="pista">Faltan: están en el estado de cuenta y no en la app:</p>
       <ul class="cuadre-items">${rev.faltan.map((f, i) => `
-        <li><span>${esc(f.detalle)}<small>${esc(textoFecha(f.fecha))} en el banco</small></span>
+        <li><span>${esc(f.detalle)}<small>${f.tipo === 'cuota' ? 'cuota facturada el 3 de octubre' : `${esc(textoFecha(f.fecha))} en el banco`}</small></span>
           <strong>${money(f.monto)}</strong>
-          <button type="button" class="btn pequeno primario" data-apuntar="${i}">Apuntar</button></li>`).join('')}</ul>` : ''}`;
+          ${f.tipo === 'compra' ? `<button type="button" class="btn pequeno primario" data-apuntar="${i}">Apuntar</button>` : ''}</li>`).join('')}</ul>` : ''}`;
 
+  $('#cb-ajuste', caja)?.addEventListener('click', () => {
+    aplicarAjuste('pichincha-estado-2026-10');
+    render(raiz);
+  });
+  const abrir = (g) => { if (g) formGastoTarjeta(() => render(raiz), g); };
+  $$('[data-abrir-sobra]', caja).forEach((b) => b.addEventListener('click', () => abrir(rev.sobran[Number(b.dataset.abrirSobra)]?.gasto)));
+  $$('[data-abrir-dif]', caja).forEach((b) => b.addEventListener('click', () => abrir(rev.difImporte[Number(b.dataset.abrirDif)]?.gasto)));
   $$('[data-a-sep]', caja).forEach((b) => b.addEventListener('click', () => {
     const o = rev.otroMes[Number(b.dataset.aSep)];
     if (!o) return;
