@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-TKznk10GVnAhvtRCzg+nVXfWM4tBncSAaevKhYSWUNE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-S74trdXhwLgAkWq2iaq3QTfax96NYItlftMXQs6izUw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3870,6 +3870,14 @@ const db = {
   version: 2,
   config: { ...CONFIG_POR_DEFECTO },
   configTs: 0,
+  /*
+   * Cuándo cambió cada ajuste: { clave: ms }. Con esto la sincronización
+   * decide ajuste por ajuste qué teléfono tiene lo último. Antes había una
+   * sola marca para todo (`configTs`) que nunca se actualizaba, así que cada
+   * teléfono se quedaba con lo suyo: una letra marcada como pagada en uno no
+   * llegaba al otro.
+   */
+  configMarcas: {},
   borrados: [],
   ...Object.fromEntries(COLECCIONES.map((c) => [c, []])),
 };
@@ -3914,6 +3922,27 @@ function sellarNuevos() {
   for (const col of COLECCIONES) {
     for (const fila of db[col]) if (!fila._ts) fila._ts = ahora;
   }
+  sellarConfig(ahora);
+}
+
+/*
+ * Los ajustes tal como se vieron la última vez que se guardaron o cargaron.
+ * Al guardar se compara con esto y solo se sella lo que cambió de verdad; lo
+ * que se arregla en memoria durante la carga (las migraciones) no se sella.
+ */
+let configVista = {};
+const fotoConfig = () => Object.fromEntries(Object.entries(db.config)
+  .filter(([k]) => !CONFIG_LOCAL.includes(k))
+  .map(([k, v]) => [k, JSON.stringify(v ?? null)]));
+
+function sellarConfig(ahora = Date.now()) {
+  const actual = fotoConfig();
+  if (!db.configMarcas || typeof db.configMarcas !== 'object') db.configMarcas = {};
+  const claves = new Set([...Object.keys(actual), ...Object.keys(configVista)]);
+  for (const k of claves) {
+    if (actual[k] !== configVista[k]) db.configMarcas[k] = ahora;
+  }
+  configVista = actual;
 }
 
 /**
@@ -4089,11 +4118,13 @@ function adoptar(datos) {
   db.version = datos.version || 1;
   db.config = { ...CONFIG_POR_DEFECTO, ...(datos.config || {}) };
   db.configTs = Number(datos.configTs) || 0;
+  db.configMarcas = datos.configMarcas && typeof datos.configMarcas === 'object' ? { ...datos.configMarcas } : {};
   db.borrados = Array.isArray(datos.borrados) ? datos.borrados : [];
   for (const col of COLECCIONES) {
     db[col] = Array.isArray(datos[col]) ? datos[col] : [];
   }
   migrarEsquema();
+  configVista = fotoConfig();
 }
 
 /**
@@ -4493,7 +4524,7 @@ function usuarios() {
     .filter(Boolean);
 }
 
-return { CLAVES, COLECCIONES, CONFIG_LOCAL, abrirCerradura, alCambiar, almacenamiento, capitalizar, cargar, categoriasGasto, categoriasIngreso, cerraduraAbierta, codigoDispositivo, comprobarAlmacenamiento, cuenta, cuentasBancarias, db, echarLlave, eliminar, escrituraPendiente, estaCifrada, guardar, instantanea, instantaneaSinSecretos, limpiarTodo, nuevoId, ponerCerradura, quitarCerradura, quitarCuotas, recolocar, reemplazar, tarjetas, tocar, upsert, usuarios };
+return { CLAVES, COLECCIONES, CONFIG_LOCAL, abrirCerradura, alCambiar, almacenamiento, capitalizar, cargar, categoriasGasto, categoriasIngreso, cerraduraAbierta, codigoDispositivo, comprobarAlmacenamiento, cuenta, cuentasBancarias, db, echarLlave, eliminar, escrituraPendiente, estaCifrada, guardar, instantanea, instantaneaSinSecretos, limpiarTodo, nuevoId, ponerCerradura, quitarCerradura, quitarCuotas, recolocar, reemplazar, sepultar, tarjetas, tocar, upsert, usuarios };
 })();
 
 M["calc"] = (function () {
@@ -8482,18 +8513,55 @@ function fusionar(local, remoto) {
     salida[col] = [...fusion.values()];
   }
 
-  // Los ajustes generales van por documento; los del dispositivo no viajan.
-  const remotoGana = (remoto.configTs || 0) > (local.configTs || 0);
-  salida.config = { ...(remotoGana ? local.config : remoto.config),
-    ...(remotoGana ? remoto.config : local.config) };
-  CONFIG_LOCAL.forEach((k) => { salida.config[k] = local.config?.[k] ?? ''; });
-  salida.configTs = Math.max(local.configTs || 0, remoto.configTs || 0);
+  Object.assign(salida, fusionarConfig(local, remoto));
 
   // Las lápidas viejas ya no aportan: se conservan 90 días.
   const corte = Date.now() - 90 * 86400000;
   salida.borrados = [...lapidas.values()].filter((t) => t.t > corte);
 
   return salida;
+}
+
+/*
+ * Los ajustes, uno por uno: gana el que se cambió más tarde (`configMarcas`).
+ * Un ajuste sin marca en ninguno de los dos lados —lo anterior a este
+ * cambio— sigue la regla de antes: se queda el de este teléfono y, si no lo
+ * tiene, se toma el de fuera. Los del dispositivo (tema, sincronización) no
+ * viajan nunca.
+ */
+const UNION = new Set(['ajustes_hechos']);
+function fusionarConfig(local, remoto) {
+  const cl = local.config || {};
+  const cr = remoto.config || {};
+  const ml = local.configMarcas || {};
+  const mr = remoto.configMarcas || {};
+  const config = {};
+  const marcas = {};
+  const claves = new Set([...Object.keys(cl), ...Object.keys(cr), ...Object.keys(ml), ...Object.keys(mr)]);
+  for (const k of claves) {
+    if (CONFIG_LOCAL.includes(k)) continue;
+    const tl = Number(ml[k]) || 0;
+    const tr = Number(mr[k]) || 0;
+    if (tl || tr) marcas[k] = Math.max(tl, tr);
+    let origen;
+    if (tr > tl) origen = cr;
+    else if (tl > tr) origen = cl;
+    else origen = k in cl ? cl : cr;
+    if (k in origen) config[k] = origen[k];
+    // Las marcas de ajustes aplicados se suman: aplicado en un teléfono es
+    // aplicado en los dos, aunque cada uno lo anotara por su lado.
+    if (UNION.has(k) && (k in cl || k in cr)) {
+      const leer = (t) => { try { const o = JSON.parse(t || '{}'); return o && typeof o === 'object' ? o : {}; } catch { return {}; } };
+      const otro = origen === cl ? cr : cl;
+      config[k] = JSON.stringify({ ...leer(otro[k]), ...leer(origen[k]) });
+    }
+  }
+  CONFIG_LOCAL.forEach((k) => { config[k] = cl[k] ?? ''; });
+  return {
+    config,
+    configMarcas: marcas,
+    configTs: Math.max(local.configTs || 0, remoto.configTs || 0),
+  };
 }
 
 /** Lo que se sube: la base sin los ajustes propios del dispositivo. */
@@ -11506,7 +11574,7 @@ M["forms"] = (function () {
  * coma y punto al enviar.
  */
 
-const {db, guardar, nuevoId, upsert, tocar, cuentasBancarias, tarjetas, categoriasGasto, categoriasIngreso, usuarios, capitalizar} = M["store"];
+const {db, guardar, nuevoId, upsert, tocar, sepultar, cuentasBancarias, tarjetas, categoriasGasto, categoriasIngreso, usuarios, capitalizar} = M["store"];
 const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta, rangoMeses, topesDelMes, umbralAviso, TOPES, comprometidoEnMes, MANTENIMIENTOS, odometroHoy} = M["calc"];
 const {modal, opciones, brindis, alarma, hoyISO, esc, $, aNumero, campoMonto, segmentado} = M["ui"];
 const selUsuarios = (sel) => opciones(usuarios(), sel);
@@ -11976,6 +12044,15 @@ function registrarGastoTarjeta({
   const comprobados = new Set(db.cuotas
     .filter((c) => c.gasto_id === id && c.conciliado === 'Si')
     .map((c) => c.mes));
+  /*
+   * Las cuotas que sobran del cronograma anterior (pasar de 3 cuotas a 1)
+   * dejan lápida. Sin ella, la copia de la nube aún las tiene, y en la
+   * siguiente sincronización volvían: las cifras cambiaban al abrir la app
+   * sin haber tocado nada.
+   */
+  const siguen = new Set(plan.cuotas.map((c) => Number(c.n_cuota)));
+  db.cuotas.filter((c) => c.gasto_id === id && !siguen.has(Number(c.n_cuota)))
+    .forEach((c) => sepultar('cuotas', c));
   db.cuotas = db.cuotas.filter((c) => c.gasto_id !== id);
 
   const i = db.gastosTarjeta.findIndex((x) => x.id === id);
@@ -12567,7 +12644,10 @@ function formDiferir(gasto, alTerminar) {
       const cuota = redondear(aNumero(d.monto));
       if (cuota <= 0) return false;
 
-      // Fuera el pago único, dentro el plan.
+      // Fuera el pago único, dentro el plan. Lo que no vuelve a existir deja
+      // lápida, para que la sincronización no lo traiga de vuelta.
+      db.cuotas.filter((c) => c.gasto_id === gasto.id && Number(c.n_cuota) > n)
+        .forEach((c) => sepultar('cuotas', c));
       db.cuotas = db.cuotas.filter((c) => c.gasto_id !== gasto.id);
       for (let i = 0; i < n; i += 1) {
         db.cuotas.push(tocar({
@@ -12716,7 +12796,7 @@ M["ajustes"] = (function () {
  *    descarta para siempre.
  */
 
-const {db, upsert, guardar, quitarCuotas} = M["store"];
+const {db, upsert, guardar, quitarCuotas, sepultar} = M["store"];
 const {alCambiarSync, configurado, estadoSync} = M["sync"];
 const {registrarGastoTarjeta} = M["forms"];
 const {money, nombreMes, sumarMeses, claveEstadoCuenta, redondear} = M["calc"];
@@ -12749,6 +12829,42 @@ function tarjetaBolivariano() {
 const CUPO = 6000;
 
 const AJUSTES = [
+  {
+    /*
+     * Cuotas que volvieron solas. Antes, al corregir una compra con menos
+     * cuotas (de 3 a 1), las que sobraban se borraban sin dejar lápida y la
+     * sincronización las traía de vuelta de la nube: la compra decía 1 cuota
+     * y tenía 3. Se reconocen sin duda porque su número pasa del total que
+     * dice la propia compra. Se revisa en cada apertura y, si no hay, no se
+     * enseña ni se anota.
+     */
+    id: 'cuotas-fantasma',
+    revisar() {
+      const sobran = cuotasFantasma();
+      if (!sobran.length) return { estado: 'nada' };
+      const porCompra = new Map();
+      sobran.forEach(({ c, g }) => {
+        if (!porCompra.has(g.id)) porCompra.set(g.id, { g, cuotas: [] });
+        porCompra.get(g.id).cuotas.push(c);
+      });
+      const total = sobran.reduce((s, x) => s + (Number(x.c.monto) || 0), 0);
+      const lineas = [...porCompra.values()].slice(0, 8).map(({ g, cuotas }) => `<li>${esc(g.detalle || g.id)}
+        (${esc(nombreMes(cuotas[0].mes))}): dice ${Number(g.cuotas)} ${Number(g.cuotas) === 1 ? 'cuota' : 'cuotas'}
+        y tiene ${cuotas.length} de más, ${money(cuotas.reduce((s, c) => s + (Number(c.monto) || 0), 0))}</li>`).join('');
+      return {
+        estado: 'aplicar',
+        titulo: 'Cuotas que volvieron solas al sincronizar',
+        texto: `<ul class="ajustes-pasos">${lineas}${porCompra.size > 8 ? `<li>y ${porCompra.size - 8} compras más</li>` : ''}</ul>
+          Son restos de compras que corregiste con menos cuotas. Se quitan
+          ${money(total)} que no se deben; las compras no se tocan.`,
+      };
+    },
+    aplicar() {
+      const sobran = cuotasFantasma().map((x) => x.c);
+      sobran.forEach((c) => sepultar('cuotas', c));
+      db.cuotas = db.cuotas.filter((c) => !sobran.includes(c));
+    },
+  },
   {
     id: 'cupo-bolivariano-6000',
     /** @returns {{estado: 'aplicar'|'ya'|'falta', texto: string}} */
@@ -12824,6 +12940,28 @@ const AJUSTES = [
     },
   },
 ];
+
+/**
+ * Cuotas de más: la compra tiene MÁS cuotas de las que dice, y sobran las de
+ * número por encima de ese total. Las dos condiciones hacen falta: una
+ * compra a la que se le quitó una cuota del medio (Anthropic de septiembre)
+ * queda con la numeración salteada —1, 2, 3, 5…— pero con las que dice.
+ */
+function cuotasFantasma() {
+  const porCompra = new Map();
+  db.cuotas.forEach((c) => {
+    if (!porCompra.has(c.gasto_id)) porCompra.set(c.gasto_id, []);
+    porCompra.get(c.gasto_id).push(c);
+  });
+  const sobran = [];
+  for (const g of db.gastosTarjeta) {
+    const dice = Number(g.cuotas);
+    const tiene = porCompra.get(g.id) || [];
+    if (!(dice >= 1) || tiene.length <= dice) continue;
+    tiene.filter((c) => Number(c.n_cuota) > dice).forEach((c) => sobran.push({ c, g }));
+  }
+  return sobran;
+}
 
 /* --- Los pasos del estado de cuenta de Bolivariano ------------------------ */
 
@@ -16065,11 +16203,18 @@ function aplicarImportacion(conv, modo) {
       .filter((g) => g.notas === NOTA)
       .map((g) => g.id));
     const ahora = Date.now();
+    // Lo que el libro vuelve a traer no se entierra: se sobrescribe. Si se
+    // enterrara, la lápida y la fila nueva podían llevar la misma hora y la
+    // sincronización borraría la fila recién importada.
+    const vuelven = new Set([
+      ...conv.gastosTarjeta.map((g) => `g#${g.id}`),
+      ...conv.cuotas.map((c) => `c#${c.gasto_id}#${c.n_cuota}`),
+    ]);
     db.gastosTarjeta
-      .filter((g) => fuera.has(g.id))
+      .filter((g) => fuera.has(g.id) && !vuelven.has(`g#${g.id}`))
       .forEach((g) => db.borrados.push({ c: 'gastosTarjeta', k: g.id, t: ahora }));
     db.cuotas
-      .filter((c) => fuera.has(c.gasto_id))
+      .filter((c) => fuera.has(c.gasto_id) && !vuelven.has(`c#${c.gasto_id}#${c.n_cuota}`))
       .forEach((c) => db.borrados.push({ c: 'cuotas', k: `${c.gasto_id}#${c.n_cuota}`, t: ahora }));
 
     db.gastosTarjeta = db.gastosTarjeta.filter((g) => !fuera.has(g.id));
