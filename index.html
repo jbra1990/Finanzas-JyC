@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-MulVrHXEwBCGr7avuIvO3n3HbraNKq8WL9lbHnJV7I0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-vnO2E659DQQVT4OeaZTccy8aaGKZuaUTTcyDXVtxMuE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -12377,6 +12377,9 @@ function registrarGastoTarjeta({
 
 function formGastoTarjeta(alTerminar, existente = null) {
   const g = existente;
+  // Un gasto sin id es uno NUEVO que llega ya rellenado (por ejemplo, una
+  // línea del estado de cuenta que falta): se registra, no se corrige.
+  const corrige = Boolean(g?.id);
   const cuerpo = `
     <div class="filtros">
       <div class="campo"><label for="f-fecha">Fecha</label>
@@ -12418,7 +12421,7 @@ function formGastoTarjeta(alTerminar, existente = null) {
                value="${g && g.cuotas > 1 ? g.cuotas : 3}" inputmode="numeric"></div>
       <div class="campo" id="caja-dia" hidden><label for="f-dia">Día de cobro</label>
         <input id="f-dia" name="dia_cobro" type="number" min="1" max="31" step="1"
-               value="${esc(g?.dia_cobro || '')}" placeholder="${g ? '1' : 'el de la fecha'}" inputmode="numeric"></div>
+               value="${esc(g?.dia_cobro || '')}" placeholder="${corrige ? '1' : 'el de la fecha'}" inputmode="numeric"></div>
     </div>
     <div class="filtros">
       <div class="campo"><label for="f-mes">Mes de la primera cuota</label>
@@ -12432,9 +12435,9 @@ function formGastoTarjeta(alTerminar, existente = null) {
     <div class="previsualizacion" id="preview"></div>`;
 
   modal({
-    titulo: g ? 'Corregir gasto' : 'Nuevo gasto con tarjeta',
+    titulo: corrige ? 'Corregir gasto' : 'Nuevo gasto con tarjeta',
     cuerpo,
-    aceptar: g ? 'Guardar cambios' : 'Registrar gasto',
+    aceptar: corrige ? 'Guardar cambios' : 'Registrar gasto',
     alAbrir(form) {
       const tipo = $('#f-tipo', form);
       const cajaCuotas = $('#caja-cuotas', form);
@@ -12443,7 +12446,7 @@ function formGastoTarjeta(alTerminar, existente = null) {
       const selMes = $('#f-mes', form);
       const nota = $('#nota-corte', form);
       // Al corregir se respeta el mes que ya tenía; al crear, sigue a la fecha.
-      let mesManual = Boolean(g);
+      let mesManual = Boolean(g?.mes_inicio);
       selMes.addEventListener('change', () => { mesManual = true; });
 
       /*
@@ -12537,9 +12540,9 @@ function formGastoTarjeta(alTerminar, existente = null) {
         notas: g?.notas || '',
         km: d.km,
         // Una suscripción nueva sin día de cobro se cobra el día de la fecha.
-        diaCobro: d.dia_cobro || (g ? '' : String(d.fecha || '').slice(8, 10)),
+        diaCobro: d.dia_cobro || (corrige ? '' : String(d.fecha || '').slice(8, 10)),
       });
-      brindis(g
+      brindis(corrige
         ? `Gasto corregido · ${money(plan.totalPagado)}`
         : `Gasto registrado · ${money(plan.totalPagado)} en ${n} ${n === 1 ? 'pago' : 'cuotas'}`);
       avisarSiCruza(topesAntes, plan.cuotas[0]?.mes || d.mes_inicio);
@@ -13310,12 +13313,16 @@ const AJUSTES = [
       const suma = (mes) => redondear(db.cuotas.filter((c) => c.tarjeta === PI && c.mes === mes).reduce((t, c) => t + c.monto, 0));
       const despues = redondear(suma(PSEP) + r.reduce((t, x) => t + (x.estado === 'aplicar' ? (x.masSep || 0) : 0), 0));
       const dif = redondear(TOTAL_PICH - despues);
-      const faltan = faltanDelBanco();
-      const lista = faltan.length ? `<p class="pista">Del estado de cuenta no encuentro en la app
+      const rev = revisarContraBanco();
+      const faltan = rev.faltan;
+      const otros = rev.otroMes.length ? `<p class="pista">Están apuntadas, pero en otro mes que septiembre:</p>
+          <ul class="ajustes-pasos">${rev.otroMes.map((o) => `<li>${esc(o.gasto.detalle)} ${money(o.gasto.monto_total)}:
+          está en ${esc(nombreMes(o.mes))}</li>`).join('')}</ul>` : '';
+      const lista = otros + (faltan.length ? `<p class="pista">Del estado de cuenta no encuentro en la app
           ${faltan.length === 1 ? 'esta compra' : `estas ${faltan.length} compras`}
           (${money(faltan.reduce((t, f) => t + f.monto, 0))}):</p>
           <ul class="ajustes-pasos">${faltan.map((f) => `<li>${esc(textoFecha(f.fecha))}: ${esc(f.detalle)} <strong>${money(f.monto)}</strong></li>`).join('')}</ul>
-          <p class="pista">Apúntalas en Pichincha (en septiembre) y el mes cuadrará.</p>` : '';
+          <p class="pista">Apúntalas en Pichincha (en septiembre) y el mes cuadrará.</p>` : '');
       return {
         estado: 'aplicar',
         titulo: 'Pichincha según el estado de cuenta del 3 de octubre',
@@ -13363,30 +13370,52 @@ const BANCO_PICH = [
  * Comisariato $261,27 + $101,27) vale como una.
  */
 function faltanDelBanco() {
+  return revisarContraBanco().faltan;
+}
+
+/**
+ * Las compras del estado de cuenta del 3 de octubre de Pichincha, contra la
+ * app: las que no encuentra (`faltan`) y las que encuentra pero en otro mes
+ * que septiembre (`otroMes`), que no suman al mes del estado. Se enseña en
+ * Tarjetas mientras septiembre de Pichincha no cuadre.
+ */
+function revisarContraBanco() {
   const dia = (iso, n) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
   // Pedidos Ya cuenta aunque siga en Bolivariano: este mismo ajuste lo trae.
   const pedidoYa = pedidos();
   const app = db.gastosTarjeta.filter((g) => (g.tarjeta === PI || g === pedidoYa) && g.tipo === 'Corriente'
     && g.fecha >= '2026-08-28' && g.fecha <= '2026-10-03')
-    .map((g) => ({ id: g.id, fecha: String(g.fecha).slice(0, 10), monto: Number(g.monto_total) || 0 }));
+    .map((g) => ({ id: g.id, gasto: g, fecha: String(g.fecha).slice(0, 10), monto: Number(g.monto_total) || 0 }));
   const usadas = new Set();
   const faltan = [];
+  const otroMes = [];
+  const fuera = (a, b) => {
+    const mes = cuotasDe(a.id)[0]?.mes;
+    if (mes && mes !== PSEP) otroMes.push({ banco: b, gasto: a.gasto, mes });
+  };
   for (const b of BANCO_PICH) {
     const desde = dia(b.fecha, -6);
     const hasta = dia(b.fecha, 1);
     const libres = app.filter((a) => !usadas.has(a.id) && a.fecha >= desde && a.fecha <= hasta);
-    const una = libres.find((a) => Math.abs(a.monto - b.monto) <= 0.25);
-    if (una) { usadas.add(una.id); continue; }
+    // Primero entre las de septiembre: si hay dos parecidas, la del mes bueno.
+    const una = libres.find((a) => Math.abs(a.monto - b.monto) <= 0.25 && cuotasDe(a.id)[0]?.mes === PSEP)
+      || libres.find((a) => Math.abs(a.monto - b.monto) <= 0.25);
+    if (una) { usadas.add(una.id); fuera(una, b); continue; }
     let par = null;
     for (let i = 0; i < libres.length && !par; i += 1) {
       for (let j = i + 1; j < libres.length && !par; j += 1) {
         if (libres[i].fecha === libres[j].fecha && Math.abs(libres[i].monto + libres[j].monto - b.monto) <= 0.02) par = [libres[i], libres[j]];
       }
     }
-    if (par) { par.forEach((a) => usadas.add(a.id)); continue; }
+    if (par) { par.forEach((a) => { usadas.add(a.id); fuera(a, b); }); continue; }
     faltan.push(b);
   }
-  return faltan;
+  return { faltan, otroMes, tarjeta: PI, mes: PSEP, total: TOTAL_PICH };
+}
+
+/** Pasa una compra de Pichincha al mes del estado de cuenta (septiembre). */
+function pasarASeptiembre(gasto) {
+  moverCompra(gasto, PSEP, PI);
 }
 const PSEP = '2026-09';
 const TOTAL_PICH = 1372.04;
@@ -13845,7 +13874,7 @@ function ofrecerAlArrancar(alTerminar) {
   setTimeout(() => { dejar(); una(); }, 6000);
 }
 
-return { aplicarTodos, ofrecerAjustes, ofrecerAlArrancar, pendientes };
+return { aplicarTodos, ofrecerAjustes, ofrecerAlArrancar, pasarASeptiembre, pendientes, revisarContraBanco };
 })();
 
 M["pantalla_llave"] = (function () {
@@ -15760,6 +15789,7 @@ const {medidor, columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, aNumero, notaFila, marcaNota, notaTexto, centrarElegido, modal} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
 const {formCuenta} = M["views/cuentas"];
+const {revisarContraBanco, pasarASeptiembre} = M["ajustes"];
 const estado = {
   tarjeta: null, usuario: 'ambos', mes: null, comprobando: false,
   /*
@@ -15948,6 +15978,8 @@ function render(raiz) {
         <button class="btn pequeno" id="btn-editar-tarjeta">Cambiar cupo, corte o pago</button></div>
     </section>
 
+    <section class="tarjeta" id="contra-banco" hidden></section>
+
     <section class="tarjeta" id="repetidos" hidden></section>
 
     <section class="rejilla dos">
@@ -16005,6 +16037,7 @@ function render(raiz) {
   // El cupo, el día de corte y el de pago viven en la ficha de la tarjeta, y
   // la lista de Cuentas solo enseña bancos: sin este botón no había dónde.
   pintarRepetidos(raiz);
+  pintarContraBanco(raiz, t, mes);
   $('#btn-cuadrar', raiz).addEventListener('click', () => formCuadrar(t, () => render(raiz)));
   $('#btn-editar-tarjeta', raiz).addEventListener('click', () => formCuenta(t.id, () => render(raiz)));
   $('#btn-nuevo', raiz).addEventListener('click', () => formGastoTarjeta((nuevo) => {
@@ -16531,6 +16564,58 @@ function pintarRepetidos(raiz) {
       }
       render(raiz);
     }, { aceptar: 'Quitar' });
+  }));
+}
+
+/* --- Contra el estado de cuenta ---------------------------------------------- */
+
+/**
+ * Mientras el mes de un estado de cuenta conocido no cuadre, qué líneas del
+ * banco no están en la app y cuáles están en otro mes, con el arreglo a un
+ * toque. Hoy: Pichincha, corte del 3 de octubre de 2026 (septiembre).
+ */
+function pintarContraBanco(raiz, t, mes) {
+  const caja = $('#contra-banco', raiz);
+  if (!caja) return;
+  const rev = revisarContraBanco();
+  const comp = comprobacionDelMes(t.id, rev.mes);
+  const toca = t.id === rev.tarjeta && mes === rev.mes && (rev.faltan.length || rev.otroMes.length);
+  caja.hidden = !toca;
+  if (!toca) { caja.innerHTML = ''; return; }
+  const dif = redondear(rev.total - comp.total);
+  caja.innerHTML = `
+    <header><h2>Contra el estado de cuenta</h2><span class="pista">Corte del 3 oct</span></header>
+    <p class="pista" style="margin-top:0">El banco dice <strong>${money(rev.total)}</strong> y la app
+      <strong>${money(comp.total)}</strong>${Math.abs(dif) >= 0.005 ? ` (${dif > 0 ? 'faltan' : 'sobran'} ${money(Math.abs(dif))})` : ''}.
+      Esto es lo que encuentro comparando línea por línea:</p>
+    ${rev.otroMes.length ? `
+      <p class="pista">Apuntadas en otro mes, no suman a septiembre:</p>
+      <ul class="cuadre-items">${rev.otroMes.map((o, i) => `
+        <li><span>${esc(o.gasto.detalle)}<small>${esc(textoFecha(String(o.gasto.fecha).slice(0, 10)))} · está en ${esc(nombreMes(o.mes))}</small></span>
+          <strong>${money(o.gasto.monto_total)}</strong>
+          <button type="button" class="btn pequeno" data-a-sep="${i}">Pasar a septiembre</button></li>`).join('')}</ul>` : ''}
+    ${rev.faltan.length ? `
+      <p class="pista">Del estado de cuenta, no están en la app:</p>
+      <ul class="cuadre-items">${rev.faltan.map((f, i) => `
+        <li><span>${esc(f.detalle)}<small>${esc(textoFecha(f.fecha))} en el banco</small></span>
+          <strong>${money(f.monto)}</strong>
+          <button type="button" class="btn pequeno primario" data-apuntar="${i}">Apuntar</button></li>`).join('')}</ul>` : ''}`;
+
+  $$('[data-a-sep]', caja).forEach((b) => b.addEventListener('click', () => {
+    const o = rev.otroMes[Number(b.dataset.aSep)];
+    if (!o) return;
+    pasarASeptiembre(o.gasto);
+    render(raiz);
+  }));
+  $$('[data-apuntar]', caja).forEach((b) => b.addEventListener('click', () => {
+    const f = rev.faltan[Number(b.dataset.apuntar)];
+    if (!f) return;
+    // Rellenado con la línea del banco; la fecha es la del banco, que suele ir
+    // uno o dos días detrás de la compra: se puede cambiar.
+    formGastoTarjeta(() => render(raiz), {
+      fecha: f.fecha, tarjeta: rev.tarjeta, usuario: 'J', detalle: f.detalle,
+      monto_total: f.monto, tipo: 'Corriente', mes_inicio: rev.mes,
+    });
   }));
 }
 
