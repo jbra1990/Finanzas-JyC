@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-EhlKTqjE4kfngg0w6e4/oWfrOOLYi3uw+E7gZ7dgdCk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-MulVrHXEwBCGr7avuIvO3n3HbraNKq8WL9lbHnJV7I0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -5145,6 +5145,16 @@ const pasaUsuario = (f, u) => !f.usuario || f.usuario === 'ambos' || f.usuario =
 const pasaTarjeta = (f, t) => !f.tarjeta || f.tarjeta === 'todas' || f.tarjeta === t;
 const pasaCategoria = (f, c) => !f.categorias?.length || f.categorias.includes(c);
 
+/*
+ * Cuotas que la tarjeta cobra pero que NO son gasto nuevo: refinanciar parte
+ * de un estado de cuenta (Pichincha, $84,85 de agosto en 3 cuotas de $29,02)
+ * pasa a cuotas un consumo que ya está contado en su mes. Cuentan en la
+ * tarjeta y en el cupo —el banco las cobra—, pero no en lo gastado, que lo
+ * contaría dos veces.
+ */
+const ES_FINANCIACION = /^refinanciaci[oó]n de tarjeta$/i;
+const esFinanciacion = (c) => ES_FINANCIACION.test(String(c?.categoria || '').trim());
+
 /** Gastos del periodo desglosados fila a fila (tarjeta + efectivo). */
 function gastosEnMeses(meses, filtros = {}) {
   const set = new Set(meses);
@@ -5152,7 +5162,7 @@ function gastosEnMeses(meses, filtros = {}) {
 
   if (filtros.incluirTarjeta !== false) {
     for (const c of db.cuotas) {
-      if (!set.has(c.mes)) continue;
+      if (!set.has(c.mes) || esFinanciacion(c)) continue;
       if (!pasaUsuario(filtros, c.usuario) || !pasaTarjeta(filtros, c.tarjeta)) continue;
       if (!pasaCategoria(filtros, c.categoria)) continue;
       out.push({
@@ -7099,7 +7109,7 @@ function yaApuntado({ fecha, monto, detalle, usuario, excluir = '' }) {
   return comprasComparables().find((x) => x.clave !== excluir && mismaCompra(nuevo, x)) || null;
 }
 
-return { CLAVE_NO_REPETIDOS, DESVIO_GRAVE, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasParaMedir, lecturasRevisadas, marcarNoRepetidos, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, posiblesRepetidos, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso, yaApuntado };
+return { CLAVE_NO_REPETIDOS, DESVIO_GRAVE, ES_FINANCIACION, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, esFinanciacion, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasParaMedir, lecturasRevisadas, marcarNoRepetidos, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, posiblesRepetidos, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso, yaApuntado };
 })();
 
 M["charts"] = (function () {
@@ -10167,7 +10177,7 @@ M["plan"] = (function () {
  */
 
 const {db} = M["store"];
-const {claveMes, mesActual, redondear, sumarDias, diasEntre, sumarMeses, rangoMeses, nombreMes, hoyLocal, esIngresoReal} = M["calc"];
+const {claveMes, mesActual, redondear, sumarDias, diasEntre, sumarMeses, rangoMeses, nombreMes, hoyLocal, esIngresoReal, esFinanciacion} = M["calc"];
 /** Con menos de tres apariciones no hay periodicidad, hay casualidad. */
 const MIN_OCURRENCIAS = 3;
 
@@ -10942,7 +10952,8 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
 
   for (const c of db.cuotas) {
     const m = porMes.get(c.mes);
-    if (!m || !esDe(c.usuario, quien)) continue;
+    // Una refinanciación no es gasto nuevo (ver `esFinanciacion`).
+    if (!m || !esDe(c.usuario, quien) || esFinanciacion(c)) continue;
     const compra = db.gastosTarjeta.find((g) => g.id === c.gasto_id);
     const enCuotas = Number(compra?.cuotas) > 1;
     apuntar(m, 'Tarjeta', Number(c.monto) || 0,
@@ -11137,7 +11148,7 @@ function presupuestoSugerido() {
     const c = categoria || 'Sin categoría';
     gastado.set(c, (gastado.get(c) || 0) + (Number(monto) || 0));
   };
-  db.cuotas.forEach((c) => suma(c.categoria, c.mes, c.monto));
+  db.cuotas.forEach((c) => { if (!esFinanciacion(c)) suma(c.categoria, c.mes, c.monto); });
   db.gastosEfectivo.forEach((g) => suma(g.categoria, claveMes(g.fecha), g.monto));
 
   const periodico = new Map();
@@ -13283,6 +13294,224 @@ const AJUSTES = [
         if (g && Number(g.dia_cobro) !== dia) upsert('gastosTarjeta', { ...g, dia_cobro: dia });
       });
     },
+  },
+  {
+    /*
+     * Pichincha según el estado de cuenta que cortó el 3 de octubre de 2026:
+     * $1.372,04 a pagar (compras del 4 sep al 3 oct $885,99 + cuotas $486,05)
+     * y $2.452,09 de cupo utilizado (más $1.080,05 de cuotas por venir).
+     */
+    id: 'pichincha-estado-2026-10',
+    revisar() {
+      if (!db.cuentas.some((c) => c.id === PI)) return { estado: 'nada' };
+      const r = PASOS_PICH.map((p) => p.revisar());
+      const hay = r.some((x) => x.estado === 'aplicar');
+      if (!hay) return { estado: 'ya', titulo: 'Pichincha según el estado de cuenta', texto: 'ya coincide: no se toca' };
+      const suma = (mes) => redondear(db.cuotas.filter((c) => c.tarjeta === PI && c.mes === mes).reduce((t, c) => t + c.monto, 0));
+      const despues = redondear(suma(PSEP) + r.reduce((t, x) => t + (x.estado === 'aplicar' ? (x.masSep || 0) : 0), 0));
+      const dif = redondear(TOTAL_PICH - despues);
+      const faltan = faltanDelBanco();
+      const lista = faltan.length ? `<p class="pista">Del estado de cuenta no encuentro en la app
+          ${faltan.length === 1 ? 'esta compra' : `estas ${faltan.length} compras`}
+          (${money(faltan.reduce((t, f) => t + f.monto, 0))}):</p>
+          <ul class="ajustes-pasos">${faltan.map((f) => `<li>${esc(textoFecha(f.fecha))}: ${esc(f.detalle)} <strong>${money(f.monto)}</strong></li>`).join('')}</ul>
+          <p class="pista">Apúntalas en Pichincha (en septiembre) y el mes cuadrará.</p>` : '';
+      return {
+        estado: 'aplicar',
+        titulo: 'Pichincha según el estado de cuenta del 3 de octubre',
+        texto: `<ul class="ajustes-pasos">${r.map((x) => `<li class="${x.estado}">${x.texto}</li>`).join('')}</ul>
+          <p class="pista">Septiembre de Pichincha quedará en <strong>${money(despues)}</strong>; el banco dice
+          ${money(TOTAL_PICH)} (se paga hasta el 19 de octubre). Cupo: $9.000 − $2.452,09 usados = $6.547,91 libres.
+          Lo que queda en cuotas, sin contar compras nuevas: 3 nov ${money(450.15)} · 3 dic ${money(292.07)} ·
+          3 ene ${money(263.05)} · 3 feb ${money(74.76)}, más el seguro de $2,98 cada mes.${Math.abs(dif) < 0.005 ? ' Cuadra.' : dif > 0
+    ? ` Faltan ${money(dif)}: compras del 12 de septiembre al 3 de octubre que aún no estén apuntadas. Compruébalo con «✓ Comprobar» en Tarjetas.`
+    : ` Sobran ${money(-dif)}: algo apuntado en septiembre que el banco no tiene. Compruébalo con «✓ Comprobar» en Tarjetas.`}</p>${lista}`,
+      };
+    },
+    aplicar() {
+      PASOS_PICH.forEach((p) => { if (p.revisar().estado === 'aplicar') p.aplicar(); });
+    },
+  },
+];
+
+/* --- Pichincha, estado de cuenta del 3 de octubre de 2026 ------------------- */
+
+const PI = 'TC-PICH';
+/*
+ * Las compras del estado de cuenta (4 sep – 3 oct), con la gasolina junta con
+ * su IVA y su tarifa (+0,23), que es como se apuntan. El banco las fecha
+ * cuando las carga, dos o tres días después de la compra.
+ */
+const BANCO_PICH = [
+  ['2026-09-04', 'Menestras del Negro', 15.47], ['2026-09-07', 'Picantería Génesis', 16.64],
+  ['2026-09-07', 'Farmacias San Gregorio', 13.49], ['2026-09-08', 'Mi Comisariato', 362.54],
+  ['2026-09-09', 'Fuel Marina', 15.23], ['2026-09-09', 'Listo', 4.15], ['2026-09-09', 'Pedidos Ya (pizza + propina)', 23.07],
+  ['2026-09-10', 'Estación de servicios Rom', 10.23], ['2026-09-10', 'C Nor Marisco', 10.50], ['2026-09-10', 'Juan Valdez', 14.00],
+  ['2026-09-11', 'Listo', 2.35], ['2026-09-15', 'Gloria Saltos', 5.35], ['2026-09-15', 'Estación de servicios Rom', 10.23],
+  ['2026-09-18', 'Estación de servicios Rom', 6.08], ['2026-09-18', 'Estación de servicios Rom', 10.23],
+  ['2026-09-21', 'Pedidos Ya', 21.88], ['2026-09-21', 'Juan Valdez', 18.18], ['2026-09-23', 'Market Marina', 3.35],
+  ['2026-09-23', 'Sime Manta', 10.00], ['2026-09-23', 'Estación de servicios Rom', 15.23], ['2026-09-24', 'Krug Restaurante', 23.92],
+  ['2026-09-24', 'Tropi Burger', 6.25], ['2026-09-25', 'Juan Valdez', 9.61], ['2026-09-28', 'Estación de servicios Rom', 5.23],
+  ['2026-09-29', 'Listo', 7.35], ['2026-09-29', 'Farmacias San Gregorio', 7.22], ['2026-09-29', 'Estación de servicios Rom', 15.23],
+  ['2026-09-30', 'Mall del Pacífico', 1.00], ['2026-09-30', 'Manta Imagen (Grupo Skm)', 209.00], ['2026-10-01', 'Sime Manta', 10.00],
+].map(([fecha, detalle, monto]) => ({ fecha, detalle, monto }));
+
+/**
+ * Las líneas del banco que no encuentro en la app: por importe (con hasta
+ * 25 centavos de diferencia) y con la compra entre seis días antes y uno
+ * después de la fecha del banco. Una compra partida entre J y C (Mi
+ * Comisariato $261,27 + $101,27) vale como una.
+ */
+function faltanDelBanco() {
+  const dia = (iso, n) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  // Pedidos Ya cuenta aunque siga en Bolivariano: este mismo ajuste lo trae.
+  const pedidoYa = pedidos();
+  const app = db.gastosTarjeta.filter((g) => (g.tarjeta === PI || g === pedidoYa) && g.tipo === 'Corriente'
+    && g.fecha >= '2026-08-28' && g.fecha <= '2026-10-03')
+    .map((g) => ({ id: g.id, fecha: String(g.fecha).slice(0, 10), monto: Number(g.monto_total) || 0 }));
+  const usadas = new Set();
+  const faltan = [];
+  for (const b of BANCO_PICH) {
+    const desde = dia(b.fecha, -6);
+    const hasta = dia(b.fecha, 1);
+    const libres = app.filter((a) => !usadas.has(a.id) && a.fecha >= desde && a.fecha <= hasta);
+    const una = libres.find((a) => Math.abs(a.monto - b.monto) <= 0.25);
+    if (una) { usadas.add(una.id); continue; }
+    let par = null;
+    for (let i = 0; i < libres.length && !par; i += 1) {
+      for (let j = i + 1; j < libres.length && !par; j += 1) {
+        if (libres[i].fecha === libres[j].fecha && Math.abs(libres[i].monto + libres[j].monto - b.monto) <= 0.02) par = [libres[i], libres[j]];
+      }
+    }
+    if (par) { par.forEach((a) => usadas.add(a.id)); continue; }
+    faltan.push(b);
+  }
+  return faltan;
+}
+const PSEP = '2026-09';
+const TOTAL_PICH = 1372.04;
+const CAT_REFI = 'Refinanciación de tarjeta';
+
+/** Una compra puesta tal cual (con sus cuotas), con identificador fijo. */
+function compraDirecta(gasto, cuotas) {
+  if (db.gastosTarjeta.some((g) => g.id === gasto.id)) return;
+  upsert('gastosTarjeta', {
+    tarjeta: PI, usuario: 'J', proposito: '', tasa_interes: 0, notas: 'Según el estado de cuenta de Pichincha', km: '',
+    ...gasto, cuotas: cuotas.length, monto_total: redondear(cuotas.reduce((t, c) => t + c.monto, 0)),
+  });
+  cuotas.forEach((c, i) => upsert('cuotas', {
+    gasto_id: gasto.id, n_cuota: i + 1, mes: c.mes, monto: c.monto, tarjeta: PI,
+    usuario: gasto.usuario || 'J', categoria: gasto.categoria, pagado: '', conciliado: '',
+  }));
+}
+const deCategoria = (nombre) => {
+  if (!db.categorias.some((c) => c.nombre === nombre)) {
+    upsert('categorias', { nombre, grupo: 'Otros', tipo: 'Gasto', presupuesto: 0, activa: 'Si' });
+  }
+};
+
+const PASOS_PICH = [
+  {
+    // El banco lo cargó en Pichincha el 9 de septiembre: pizza $21,88 + propina $1,19.
+    revisar() {
+      const g = pedidos();
+      if (!g) return { estado: 'ya', texto: 'Pedidos Ya $23,07: no está apuntado' };
+      if (g.tarjeta === PI && cuotasDe(g.id).every((c) => c.mes === PSEP)) {
+        return { estado: 'ya', texto: 'Pedidos Ya $23,07: ya está en Pichincha, septiembre' };
+      }
+      const nombre = db.cuentas.find((c) => c.id === g.tarjeta)?.nombre || g.tarjeta;
+      const meses = [...new Set(cuotasDe(g.id).map((c) => nombreMes(c.mes).split(' ')[0].toLowerCase()))].join(', ');
+      return {
+        estado: 'aplicar',
+        masSep: g.tarjeta === PI && enMes(g, PSEP) ? 0 : redondear(Number(g.monto_total) || 0),
+        texto: g.tarjeta === PI
+          ? `Pedidos Ya $23,07 (${esc(g.usuario || '')}): ya está en Pichincha; de ${esc(meses)} a <strong>septiembre</strong>,
+            el estado en que lo cobró el banco (9 de septiembre).`
+          : `Pedidos Ya $23,07 (${esc(g.usuario || '')}): de ${esc(nombre)} a <strong>Pichincha, septiembre</strong>.
+            El banco lo cargó ahí el 9 de septiembre ($21,88 + propina $1,19); en ${esc(nombre)} sobraba.`,
+      };
+    },
+    aplicar() { const g = pedidos(); if (g) moverCompra(g, PSEP, PI); },
+  },
+  {
+    // De los $1.071,70 de agosto se pagaron $986,85 y $84,85 se refinanciaron
+    // en 3 cuotas de $29,02 («Dif con nacional online»). El consumo ya está en
+    // agosto: las cuotas cuentan en la tarjeta y en el cupo, pero no como gasto
+    // (categoría «Refinanciación de tarjeta», ver `esFinanciacion`).
+    revisar() {
+      const ya = db.gastosTarjeta.some((g) => g.tarjeta === PI && (/refinanc/i.test(g.detalle || '')
+        || cuotasDe(g.id).some((c) => c.mes >= PSEP && cerca(c.monto, 29.02))));
+      if (ya) return { estado: 'ya', texto: 'Refinanciación de $84,85: ya está' };
+      return {
+        estado: 'aplicar',
+        masSep: 29.02,
+        texto: `Refinanciación: <strong>3 cuotas de $29,02</strong> (septiembre a noviembre), como «Dif con nacional
+          online». Del saldo de agosto ($1.071,70) se pagaron $986,85 y $84,85 se pasaron a cuotas. Cuentan en la
+          tarjeta y en el cupo, pero no como gasto nuevo: lo comprado ya está en agosto.`,
+      };
+    },
+    aplicar() {
+      deCategoria(CAT_REFI);
+      compraDirecta({ id: 'AJ-PICH-REFI-2026-09-15', fecha: '2026-09-15', tipo: 'Diferido', detalle: 'Dif con nacional online (refinanciación)',
+        categoria: CAT_REFI, mes_inicio: PSEP }, ['2026-09', '2026-10', '2026-11'].map((mes) => ({ mes, monto: 29.02 })));
+    },
+  },
+  {
+    // El banco cobra las cuotas de Corla («Gerardo Ortiz e hijos») a $34,90; la
+    // app las repartió en 34,89 + 34,89 + 34,91.
+    revisar() {
+      const g = db.gastosTarjeta.find((x) => x.tarjeta === PI && /corla|gerardo/i.test(x.detalle || '') && cerca(x.monto_total, 104.69));
+      const cs = g ? cuotasDe(g.id).filter((c) => c.mes >= PSEP && Math.round(c.monto * 100) !== 3490) : [];
+      if (!cs.length) return { estado: 'ya', texto: 'Cuotas de Corla: ya a $34,90' };
+      return {
+        estado: 'aplicar',
+        masSep: redondear(cs.filter((c) => c.mes === PSEP).reduce((t, c) => t + (34.90 - c.monto), 0)),
+        texto: `Corla («Gerardo Ortiz e hijos» en el banco): sus cuotas desde septiembre a <strong>$34,90</strong>, como las cobra el banco`,
+      };
+    },
+    aplicar() {
+      const g = db.gastosTarjeta.find((x) => x.tarjeta === PI && /corla|gerardo/i.test(x.detalle || '') && cerca(x.monto_total, 104.69));
+      if (!g) return;
+      cuotasDe(g.id).filter((c) => c.mes >= PSEP).forEach((c) => upsert('cuotas', { ...c, monto: 34.90 }));
+      upsert('gastosTarjeta', { ...g, monto_total: redondear(cuotasDe(g.id).reduce((t, c) => t + c.monto, 0)) });
+    },
+  },
+  {
+    // «Sdp plan deuda protegida» es un seguro que el banco cobra cada mes (el
+    // 29 de septiembre, $2,98), no un diferido: como diferido, sus cuotas de
+    // los meses que vienen ocupaban cupo ($8,94) que el banco no cuenta.
+    revisar() {
+      const g = db.gastosTarjeta.find((x) => x.tarjeta === PI && /deuda protegida/i.test(x.detalle || ''));
+      if (!g || (g.tipo === 'Recurrente' && Number(g.dia_cobro) === 29)) return { estado: 'ya', texto: 'Seguro «deuda protegida»: ya es cobro mensual' };
+      return {
+        estado: 'aplicar',
+        texto: `«${esc(g.detalle)}» ($2,98): es un <strong>cobro mensual</strong> (seguro, el día 29), no un diferido.
+          Sus meses que vienen dejan de ocupar cupo, como en el banco.`,
+      };
+    },
+    aplicar() {
+      const g = db.gastosTarjeta.find((x) => x.tarjeta === PI && /deuda protegida/i.test(x.detalle || ''));
+      if (g) upsert('gastosTarjeta', { ...g, tipo: 'Recurrente', tasa_interes: 0, dia_cobro: 29 });
+    },
+  },
+  {
+    revisar() {
+      const ya = db.gastosTarjeta.some((g) => g.tarjeta === PI && /solca/i.test(g.detalle || '') && cerca(g.monto_total, 0.11));
+      if (ya) return { estado: 'ya', texto: 'Contribución Solca $0,11: ya está' };
+      return { estado: 'aplicar', masSep: 0.11, texto: 'Contribución Solca del 3 de octubre: se añade <strong>$0,11</strong>' };
+    },
+    aplicar() {
+      compraDirecta({ id: 'AJ-PICH-SOLCA-2026-10-03', fecha: '2026-10-03', tipo: 'Corriente', detalle: 'Contribución solca',
+        categoria: 'Intereses bancarios', mes_inicio: PSEP }, [{ mes: PSEP, monto: 0.11 }]);
+    },
+  },
+  {
+    revisar() {
+      const clave = claveEstadoCuenta(PI, PSEP);
+      if (cerca(db.config[clave], TOTAL_PICH)) return { estado: 'ya', texto: 'Estado de cuenta: ya anotado' };
+      return { estado: 'aplicar', texto: `Se anota el estado de cuenta: <strong>${money(TOTAL_PICH)}</strong>, para comprobar septiembre línea por línea` };
+    },
+    aplicar() { db.config[claveEstadoCuenta(PI, PSEP)] = String(TOTAL_PICH); },
   },
 ];
 
