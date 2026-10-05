@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ujDgC8jijNbmjlKlXlAr7XDkJW4NAYKeNXsA/DDSxLE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-OCyFrDNJKXq/u/Zzdd5jpP/3+H4f8k0844DHSO6ATGU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -10742,7 +10742,41 @@ function recurrencias(quien = null) {
         manual: true,
       };
     }))
+    // Lo escrito a mano que ya está comprado con tarjeta no se cuenta dos veces.
+    .map((r) => (r.manual ? { ...r, cubierto: compraQueLoCubre(r) } : r))
     .sort((a, b) => b.porMes - a.porMes);
+}
+
+/*
+ * Un gasto escrito a mano que YA se compró con tarjeta.
+ *
+ * Se apunta en Presupuesto lo que se piensa hacer —«Mantenimiento nissan, 3
+ * cuotas de $34,50»— y luego se hace de verdad con la tarjeta —Dacar,
+ * diferido en 3 de $37,53—. Las dos cosas son el mismo gasto: la del
+ * presupuesto se quedaba «por pagar» y la de la tarjeta ya contaba, y el mes
+ * lo cargaba dos veces (en Presupuesto y en el sueldo). Se reconocen por ser
+ * de la misma persona, con tarjeta, con las mismas cuotas desde el mismo mes
+ * (o el mismo mes, si es de un pago), parecidas en nombre o categoría, y por
+ * un importe parecido (el diferido lleva interés).
+ */
+const palabras = (t) => new Set((claveGasto(t).toLowerCase().match(/[a-z0-9]+/g) || []).filter((w) => w.length > 3));
+function compraQueLoCubre(r) {
+  if (r.medio !== 'Tarjeta' || (r.clase !== 'plazos' && r.clase !== 'unico')) return null;
+  const total = Number(r.total) || (Number(r.monto) || 0) * (Number(r.cuotas) || 1);
+  if (!(total > 0)) return null;
+  const suyas = palabras(r.detalle);
+  const mesDe = (g) => db.cuotas.filter((c) => c.gasto_id === g.id).map((c) => c.mes).sort()[0];
+  return db.gastosTarjeta.find((g) => {
+    if (r.usuario && g.usuario !== r.usuario) return false;
+    if (g.notas === NOTA_PAGO_PRESUPUESTO) return false;
+    const n = Number(g.cuotas) || 1;
+    if (r.clase === 'plazos' ? (g.tipo !== 'Diferido' || n !== Number(r.cuotas) || mesDe(g) !== r.desdeMes)
+      : (n !== 1 || mesDe(g) !== r.mes)) return false;
+    const importe = Number(g.monto_total) || 0;
+    if (Math.abs(importe - total) > total * 0.15) return false;
+    const comunes = [...palabras(`${g.detalle} ${g.proposito || ''}`)].some((w) => suyas.has(w));
+    return comunes || (r.categoria && g.categoria === r.categoria);
+  }) || null;
 }
 
 /**
@@ -10974,7 +11008,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
 
   const usadas = [];
   for (const r of recurrencias(quien)) {
-    if (!r.fiable || !r.vigente || fuera.has(r.clave)) continue;
+    if (!r.fiable || !r.vigente || fuera.has(r.clave) || r.cubierto) continue;
     let aporta = false;
 
     const pagados = new Set(r.pagos || []);
@@ -11369,7 +11403,7 @@ function cuentaDelSueldo(mes = mesActual(), usuario = 'J') {
   };
 }
 
-return { ES_SUELDO, MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, cuentaDelSueldo, estaExcluida, fijosManuales, guardarAjuste, guardarAjusteSueldo, guardarManual, marcarPago, medioDe, mesesProyectados, porcentajeAhorro, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra, sueldoEsperado };
+return { ES_SUELDO, MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, compraQueLoCubre, cuentaDelSueldo, estaExcluida, fijosManuales, guardarAjuste, guardarAjusteSueldo, guardarManual, marcarPago, medioDe, mesesProyectados, porcentajeAhorro, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra, sueldoEsperado };
 })();
 
 M["pdf"] = (function () {
@@ -13126,6 +13160,7 @@ M["ajustes"] = (function () {
 const {db, upsert, guardar, quitarCuotas, sepultar, eliminar} = M["store"];
 const {alCambiarSync, configurado, estadoSync} = M["sync"];
 const {registrarGastoTarjeta} = M["forms"];
+const {fijosManuales, borrarManual, compraQueLoCubre} = M["plan"];
 const {money, nombreMes, sumarMeses, claveEstadoCuenta, redondear, esIngresoReal, textoFecha} = M["calc"];
 const {$, esc, modal, brindis} = M["ui"];
 const CLAVE = 'ajustes_hechos';
@@ -13156,6 +13191,35 @@ function tarjetaBolivariano() {
 const CUPO = 6000;
 
 const AJUSTES = [
+  {
+    /*
+     * Gastos escritos a mano en Presupuesto que luego se compraron con
+     * tarjeta: «Mantenimiento nissan» (3 × $34,50) es la compra Dacar (3 ×
+     * $37,53, «Mantenimento nissan») de Pichincha. La cuota de octubre se
+     * contaba en «Tarjeta» y otra vez en «Por pagar». Se quitan de
+     * Presupuesto; la compra de la tarjeta es la que cuenta. Se revisa en
+     * cada apertura.
+     */
+    id: 'manuales-ya-comprados',
+    revisar() {
+      const dobles = fijosManuales().map((f) => ({ f, g: compraQueLoCubre(f) })).filter((x) => x.g);
+      if (!dobles.length) return { estado: 'nada' };
+      return {
+        estado: 'aplicar',
+        titulo: 'En Presupuesto, gastos que ya se compraron con tarjeta',
+        texto: `<ul class="ajustes-pasos">${dobles.map(({ f, g }) => `<li>«${esc(f.detalle)}»
+          (${f.clase === 'plazos' ? `${f.cuotas} × ${money(f.monto)}` : money(f.monto)}) es la compra
+          «${esc(g.detalle)}»${g.proposito ? ` (${esc(g.proposito)})` : ''} de
+          ${esc(db.cuentas.find((c) => c.id === g.tarjeta)?.nombre || g.tarjeta)}
+          (${Number(g.cuotas) > 1 ? `${g.cuotas} × ${money(redondear(g.monto_total / g.cuotas))}` : money(g.monto_total)}).</li>`).join('')}</ul>
+          Se contaban dos veces: en la tarjeta y otra vez «por pagar» en Presupuesto y en el sueldo. Se quitan de
+          Presupuesto; queda la compra de la tarjeta, que ya sale en la simulación y en lo real.`,
+      };
+    },
+    aplicar() {
+      fijosManuales().filter((f) => compraQueLoCubre(f)).forEach((f) => borrarManual(f.id));
+    },
+  },
   {
     /*
      * Saldos de cuenta apuntados como sueldo. Al dar de alta las cuentas, el
@@ -17784,7 +17848,8 @@ function render(raiz, { irA } = {}) {
    * vuelve no está en ninguna de las dos: eso es el gasto real y se apunta
    * como siempre.
    */
-  const suma = (lista) => redondear(lista.reduce((t, r) => t + r.porMes, 0));
+  // Lo que ya está comprado con tarjeta (r.cubierto) no suma: ya cuenta allí.
+  const suma = (lista) => redondear(lista.filter((r) => !r.cubierto).reduce((t, r) => t + r.porMes, 0));
 
   // Para los totales de arriba da igual de dónde salga cada gasto.
   const totalFijos = suma(fiables.filter((r) => r.tipo === 'Fijo'));
@@ -18001,6 +18066,18 @@ function render(raiz, { irA } = {}) {
     });
   });
 
+  $$('[data-quitar-cubierto]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const r = todas.find((x) => x.clave === btn.dataset.quitarCubierto);
+      if (!r) return;
+      borrarManual(r.id);
+      guardarAjuste(r.clave, null);
+      guardar();
+      brindis(`«${r.detalle}» quitado: queda la compra de la tarjeta`);
+      render(raiz, { irA });
+    });
+  });
+
   // Dentro / fuera del presupuesto.
   $$('[data-pagar]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -18114,6 +18191,15 @@ const mesDePago = (r) => {
   return mesActual();
 };
 const hecho = (r) => (r.pagos || []).includes(mesDePago(r));
+/*
+ * Lo que se «ejecuta» en vez de pagarse cuota a cuota: lo que se escribió en
+ * Presupuesto para ver cómo pesaría —un pago de una vez, o algo que se piensa
+ * diferir con la tarjeta—. Al hacerse real se registra ENTERO donde va (la
+ * tarjeta, diferido en sus cuotas, o la cuenta) y sale de Presupuesto, para
+ * que no se cuente dos veces. Un préstamo o algo que se paga en efectivo mes
+ * a mes sigue con «Pagar» cada mes, y sale de Presupuesto con la última cuota.
+ */
+const seEjecuta = (r) => r.clase === 'unico' || (r.clase === 'plazos' && r.medio === 'Tarjeta');
 
 function listaRecurrencias(filas, fuera) {
   if (!filas.length) return '<p class="vacio">Nada por aquí.</p>';
@@ -18125,7 +18211,12 @@ function listaRecurrencias(filas, fuera) {
           ${r.manual ? '<span class="chip">a mano</span>' : ''}
           ${r.clase === 'unico' && !r.vigente
     ? `<span class="chip">${r.hecho ? 'ya pagado' : 'su mes ya pasó'}</span>` : ''}
-          ${r.ajustado && !r.manual ? '<span class="chip">corregido</span>' : ''}</div>
+          ${r.ajustado && !r.manual ? '<span class="chip">corregido</span>' : ''}
+          ${r.cubierto ? '<span class="chip">ya está en Tarjetas</span>' : ''}</div>
+        ${r.cubierto ? `<div class="meta">Ya se compró con tarjeta: «${esc(r.cubierto.detalle)}»${
+  r.cubierto.proposito ? ` (${esc(r.cubierto.proposito)})` : ''}, ${esc(textoFecha(String(r.cubierto.fecha).slice(0, 10)))},
+          ${Number(r.cubierto.cuotas) > 1 ? `${Number(r.cubierto.cuotas)} cuotas de ${money(redondear(Number(r.cubierto.monto_total) / Number(r.cubierto.cuotas)))}` : money(r.cubierto.monto_total)}.
+          Esa compra es la que cuenta; esta línea ya no suma en ningún sitio.</div>` : ''}
         <div class="meta">${esc(r.cadenciaTexto)}${r.manual ? '' : ` · ${r.veces} veces · ${
   r.diasDesde >= 0
     ? `última hace ${r.diasDesde} días`
@@ -18152,7 +18243,9 @@ function listaRecurrencias(filas, fuera) {
       ${r.clase === 'plazos' ? contadorPlazos(r) : ''}
       ${fuera === null ? '' : `
         <div class="acciones">
-          ${r.manual ? `<button class="btn pequeno${
+          ${r.cubierto ? `<button class="btn pequeno primario" data-quitar-cubierto="${esc(r.clave)}">Quitar de aquí</button>`
+    : r.manual && seEjecuta(r) ? `<button class="btn pequeno primario" data-pagar="${esc(r.clave)}">Ejecutar</button>`
+      : r.manual ? `<button class="btn pequeno${
   hecho(r) ? '' : ' primario'}" data-pagar="${esc(r.clave)}">
             ${hecho(r) ? 'Pagado ✓' : 'Pagar'}</button>` : ''}
           <button class="btn pequeno" data-editar="${esc(r.clave)}">Editar</button>
@@ -18864,13 +18957,17 @@ function formPagar(r, alTerminar, irA) {
     ? (r.ultimaCuota ?? r.monto) : r.monto;
   const misTarjetas = tarjetas();
   const hoy = hoyLocal();
+  const ejecuta = seEjecuta(r);
+  // Al ejecutar algo a plazos se registra lo que falta, en las cuotas que faltan.
+  const restantes = r.clase === 'plazos' ? Math.max(1, r.cuotas - (r.pagadas || 0)) : 1;
+  const importe = ejecuta && r.clase === 'plazos' ? (r.restante ?? r.total) : cuotaAhora;
 
   modal({
-    titulo: `Pagar ${r.detalle}`,
+    titulo: `${ejecuta ? 'Ejecutar' : 'Pagar'} ${r.detalle}`,
     cuerpo: `
       <div class="filtros">
         ${campoMonto('pg-monto', 'monto', {
-    etiqueta: 'Importe', valor: String(cuotaAhora).replace('.', ','), requerido: true,
+    etiqueta: ejecuta && restantes > 1 ? 'Importe total' : 'Importe', valor: String(importe).replace('.', ','), requerido: true,
   })}
         <div class="campo"><label for="pg-medio">Cómo se paga</label>
           <select id="pg-medio" name="medio">${opciones([
@@ -18893,12 +18990,12 @@ function formPagar(r, alTerminar, irA) {
           <select id="pg-cargo" name="cargo">${opciones([
     { valor: 'Corriente', texto: 'Corriente (1 pago)' },
     { valor: 'Diferido', texto: 'Diferido en cuotas' },
-  ], r.cargo || 'Corriente')}</select></div>
+  ], ejecuta && restantes > 1 ? 'Diferido' : (r.cargo || 'Corriente'))}</select></div>
       </div>
       <div class="filtros" id="pg-caja-cuotas" hidden>
         <div class="campo"><label for="pg-cuotas">Nº de cuotas</label>
           <input id="pg-cuotas" name="cuotas" type="number" inputmode="numeric"
-                 min="2" max="48" step="1" value="${esc(String(r.cuotas > 1 ? r.cuotas : 6))}"></div>
+                 min="2" max="48" step="1" value="${esc(String(ejecuta && restantes > 1 ? restantes : (r.cuotas > 1 ? r.cuotas : 6)))}"></div>
         <div class="campo"><label for="pg-mes">Mes de la primera cuota</label>
           <input id="pg-mes" name="mes_inicio" type="month" value="${esc(hoy.slice(0, 7))}"></div>
       </div>
@@ -18910,10 +19007,14 @@ function formPagar(r, alTerminar, irA) {
           <select id="pg-usuario" name="usuario">${
   opciones(['J', 'C'], r.usuario || 'J')}</select></div>
       </div>
-      ${r.clase === 'plazos' ? `<p class="pista">Salda la cuota <strong>${
-  (r.pagadas || 0) + 1} de ${r.cuotas}</strong>, la de ${esc(nombreMes(mes))}.</p>` : ''}
+      ${ejecuta ? `<p class="pista">Se registra <strong>entero</strong>${restantes > 1
+    ? ` —${restantes} cuotas, ${money(importe)}—` : ''} donde lo pagues y <strong>sale de Presupuesto</strong>:
+        desde ahora cuenta en la tarjeta o en la cuenta, una sola vez.</p>`
+    : r.clase === 'plazos' ? `<p class="pista">Salda la cuota <strong>${
+  (r.pagadas || 0) + 1} de ${r.cuotas}</strong>, la de ${esc(nombreMes(mes))}.${
+  (r.pagadas || 0) + 1 >= r.cuotas ? ' Es la última: después sale de Presupuesto.' : ''}</p>` : ''}
       <p class="pista" id="pg-pista"></p>`,
-    aceptar: 'Registrar el pago',
+    aceptar: ejecuta ? 'Ejecutar' : 'Registrar el pago',
     alAbrir(form) {
       /*
        * Lo que se pregunta depende de por dónde va a salir el dinero, y los
@@ -18961,7 +19062,7 @@ function formPagar(r, alTerminar, irA) {
           tarjeta: d.tarjeta,
           usuario: d.usuario,
           detalle: r.detalle,
-          proposito: r.clase === 'plazos'
+          proposito: ejecuta ? 'Ejecutado desde el presupuesto' : r.clase === 'plazos'
             ? `Cuota ${(r.pagadas || 0) + 1} de ${r.cuotas}` : 'Previsto en el presupuesto',
           categoria: r.categoria,
           tipo: d.cargo,
@@ -18994,8 +19095,12 @@ function formPagar(r, alTerminar, irA) {
        * sitios. Se borra de aquí. Lo que se repite —un préstamo, una cuota— NO
        * se borra: solo se marca ese mes, porque el mes que viene vuelve.
        */
-      if (r.clase === 'unico') borrarManual(r.id);
-      else marcarPago(r.clave, mes, true, r.clase === 'plazos' ? r.pagos : null);
+      // Lo ejecutado sale de Presupuesto; un préstamo, con su última cuota.
+      const ultima = r.clase === 'plazos' && (r.pagadas || 0) + 1 >= r.cuotas;
+      if (ejecuta || ultima) {
+        borrarManual(r.id);
+        guardarAjuste(r.clave, null);
+      } else marcarPago(r.clave, mes, true, r.clase === 'plazos' ? r.pagos : null);
       guardar();
 
       const conTarjeta = d.medio === 'Tarjeta';
