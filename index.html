@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-OCyFrDNJKXq/u/Zzdd5jpP/3+H4f8k0844DHSO6ATGU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-VY7QQOXri5gb+cXlBP5ddGa4qDYXqjCF0HFHNxbYZdc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3611,6 +3611,14 @@ body.velada .cabecera { filter: blur(18px); }
 .repetido:first-of-type { border-top: 0; }
 .repetido .pista { margin: 0; font-size: 12.5px; }
 
+/* Aviso de versión nueva. */
+.aviso-version {
+  position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 60; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 14px; border-radius: 14px; background: var(--panel-plano); color: var(--panel-tinta);
+  box-shadow: var(--sombra-panel); font-size: 14px;
+}
+
 </style>
 </head>
 <body>
@@ -3643,6 +3651,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
+window.__VERSION_APP__ = 'baaaab48f3';
 
 M["cerradura"] = (function () {
 /**
@@ -14009,6 +14018,18 @@ function aplicarTodos({ meses } = {}) {
   return hechos;
 }
 
+/** Los que ya se enseñaron desde que se abrió la app. */
+const enseñados = new Set();
+
+/** Abre la ventana solo si hay alguno que todavía no se enseñó en esta sesión. */
+function ofrecerNuevos(alTerminar) {
+  const nuevos = pendientes().filter((p) => p.estado.estado === 'aplicar' && !enseñados.has(p.ajuste.id));
+  return nuevos.length ? ofrecerAjustes(alTerminar) : null;
+}
+
+/** ¿Cuántos quedan por aplicar? (para el botón de Datos) */
+const cuantosPendientes = () => pendientes().filter((p) => p.estado.estado === 'aplicar').length;
+
 /** La ventana que los ofrece. */
 function ofrecerAjustes(alTerminar) {
   const todos = pendientes();
@@ -14018,6 +14039,7 @@ function ofrecerAjustes(alTerminar) {
   if (yaEstaba.length) guardar();
   const porHacer = todos.filter((p) => p.estado.estado === 'aplicar');
   if (!porHacer.length) return null;
+  porHacer.forEach((p) => enseñados.add(p.ajuste.id));
 
   const pideMeses = porHacer.some((p) => p.estado.pideMeses);
   const meses0 = porHacer.find((p) => p.estado.pideMeses)?.ajuste.mesesPorDefecto || 12;
@@ -14090,7 +14112,7 @@ function ofrecerAlArrancar(alTerminar) {
   setTimeout(() => { dejar(); una(); }, 6000);
 }
 
-return { ajusteConCambios, aplicarAjuste, aplicarTodos, ofrecerAjustes, ofrecerAlArrancar, pasarASeptiembre, pendientes, revisarContraBanco };
+return { ajusteConCambios, aplicarAjuste, aplicarTodos, cuantosPendientes, ofrecerAjustes, ofrecerAlArrancar, ofrecerNuevos, pasarASeptiembre, pendientes, revisarContraBanco };
 })();
 
 M["pantalla_llave"] = (function () {
@@ -17082,6 +17104,7 @@ const {formTopes} = M["forms"];
 const {escribirLibro, leerLibro} = M["xlsx"];
 const {ESQUEMA, construirLibro, libroADatos} = M["esquema"];
 const archivoExcel = M["archivo"];
+const {ofrecerAjustes, cuantosPendientes} = M["ajustes"];
 const {libroTarjetasAEntidades, esLibroDeTarjetas, NOTA_IMPORTADO: NOTA} = M["importar_libro"];
 const {estadoSync, configurado, sincronizar, probarConexion, iniciarSync, SQL_TABLA, idNuevo} = M["sync"];
 // --- Excel -------------------------------------------------------------------
@@ -17302,7 +17325,18 @@ function render(raiz) {
 
   const arch = archivoExcel.archivo;
 
+  const pendientesAj = cuantosPendientes();
   raiz.innerHTML = `
+    <section class="tarjeta">
+      <header><h2>Ajustes de datos</h2>
+        <span class="pista">Versión ${esc(window.__VERSION_APP__ || 'en desarrollo')}</span></header>
+      <p class="pista" style="margin:0 0 10px">${pendientesAj
+    ? `Hay <strong>${pendientesAj}</strong> ${pendientesAj === 1 ? 'ajuste' : 'ajustes'} de datos por revisar. No se toca nada hasta que pulses «Aplicar».`
+    : 'No hay ajustes de datos pendientes.'}</p>
+      <div class="filtros"><button class="btn${pendientesAj ? ' primario' : ''}" id="btn-ajustes-datos"${pendientesAj ? '' : ' disabled'}>
+        Ver ajustes pendientes</button></div>
+    </section>
+
     <section class="tarjeta">
       <header><h2>Archivo de Excel vinculado</h2>
         <span class="pista">${esc(archivoExcel.textoEstado())}</span></header>
@@ -17540,6 +17574,7 @@ function render(raiz) {
     render(raiz);
   };
 
+  $('#btn-ajustes-datos', raiz)?.addEventListener('click', () => ofrecerAjustes(() => render(raiz)));
   $('#btn-ar-crear', raiz)?.addEventListener('click', () => conArchivo(
     () => archivoExcel.crearYVincular(), 'Archivo creado y vinculado'));
   $('#btn-ar-vincular', raiz)?.addEventListener('click', () => conArchivo(
@@ -20698,7 +20733,7 @@ const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta, hoyLocal} = M["ca
 const archivoExcel = M["archivo"];
 const {crearCajon} = M["cajon"];
 const {pedirClave, vigilar} = M["pantalla_llave"];
-const {ofrecerAlArrancar} = M["ajustes"];
+const {ofrecerAlArrancar, ofrecerNuevos} = M["ajustes"];
 const {alRedimensionar, ocultarTooltip} = M["charts"];
 const {$, crear, esc, ICONOS, modal, brindis, descargar} = M["ui"];
 const {formGastoTarjeta, formGastoEfectivo, formIngreso, formInversion, formMovimiento} = M["forms"];
@@ -21081,6 +21116,7 @@ function arrancarApp(origen) {
   iniciarSync();
   // Ajustes de datos pendientes: se ofrecen con los datos ya sincronizados.
   ofrecerAlArrancar(() => irA(vistaActual));
+  vigilarVersion();
 
   // Archivo de Excel vinculado: se readopta y se queda atento a las
   // ediciones hechas directamente en Excel.
@@ -21108,7 +21144,45 @@ function arrancarApp(origen) {
 
 iniciar();
 
-return {  };
+
+/*
+ * ¿Hay una versión nueva publicada?
+ *
+ * En el iPhone, la app de la pantalla de inicio se queda en memoria y la
+ * página publicada tarda en refrescarse: un arreglo subido no llegaba hasta
+ * cerrar la app del todo, y a veces ni así. Al abrir y cada vez que se vuelve
+ * a la app se mira la página publicada (sin caché) y, si su versión no es la
+ * de esta, se ofrece actualizar con un toque.
+ */
+const VERSION_APP = window.__VERSION_APP__ || '';
+let avisoVersion = null;
+async function buscarVersionNueva() {
+  if (!VERSION_APP || !location.protocol.startsWith('http') || avisoVersion) return;
+  try {
+    const resp = await fetch(`${location.pathname}?v=${Date.now()}`, { cache: 'no-store' });
+    if (!resp.ok) return;
+    const m = /__VERSION_APP__ = '([0-9a-f]+)'/.exec(await resp.text());
+    if (!m || m[1] === VERSION_APP) return;
+    avisoVersion = crear(`
+      <div class="aviso-version" role="status">
+        <span>Hay una versión nueva de la app.</span>
+        <button type="button" class="btn pequeno primario">Actualizar</button>
+      </div>`);
+    avisoVersion.querySelector('button').addEventListener('click', () => location.reload());
+    document.body.appendChild(avisoVersion);
+  } catch { /* sin red: se mira la próxima vez */ }
+}
+function vigilarVersion() {
+  setTimeout(buscarVersionNueva, 4000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    buscarVersionNueva();
+    // Al volver a la app, los ajustes que salieron después de abrirla.
+    setTimeout(() => { if (!document.querySelector('dialog[open]')) ofrecerNuevos(() => irA(vistaActual)); }, 1500);
+  });
+}
+
+return { VERSION_APP };
 })();
 
 </script>
