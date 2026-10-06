@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-zaXJanqlcoXZAwVxfg0Cp9kd85vB6b5YhWXtHHzp8xo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-hx7VfnVofdrn427PMFYJrYFxAd6TXCFFrGi5tkO0nm8='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3210,11 +3210,10 @@ body.con-cajon { overflow: hidden; }
 .aviso .icono { flex: none; font-size: 15px; line-height: 1.4; }
 
 /*
- * Aviso informativo plegable: cerrado no es más que un círculo con «i», y el
- * texto entero solo aparece al tocarlo. El `.aviso` de arriba se queda para
- * los estados —cuadra, no cuadra, hay un error—, que hay que poder ver sin
- * tocar nada; esto es para la explicación de fondo, que se lee una vez y
- * después solo estorba.
+ * Aviso plegable: cerrado no es más que un círculo con «i», y el texto entero
+ * solo aparece al tocarlo. Los `.aviso` de las secciones también se pliegan
+ * así (`plegarMensajes` en ui.js); su círculo lleva el color del aviso para
+ * que lo que pide atención se note sin abrirlo.
  */
 .aviso-info { margin: 10px 0; }
 .aviso-info > summary {
@@ -3247,6 +3246,25 @@ body.con-cajon { overflow: hidden; }
   color: var(--tinta-2);
 }
 .aviso-info[open] .aviso-marca { color: var(--acento); }
+
+/* Un mensaje de sección plegado: lo de dentro es el `.aviso` de siempre. */
+.mensaje-plegado > :not(summary) { margin: 8px 0 0; }
+.mensaje-plegado .aviso-marca { font-style: normal; }
+.mensaje-plegado.nivel-info .aviso-marca { font-style: italic; }
+.mensaje-plegado.nivel-alerta > summary {
+  border-color: color-mix(in srgb, var(--alerta) 60%, transparent);
+  background: color-mix(in srgb, var(--alerta) 14%, var(--superficie-2));
+}
+.mensaje-plegado.nivel-alerta .aviso-marca { color: var(--alerta); }
+.mensaje-plegado.nivel-critico > summary {
+  border-color: color-mix(in srgb, var(--critico) 60%, transparent);
+  background: color-mix(in srgb, var(--critico) 14%, var(--superficie-2));
+}
+.mensaje-plegado.nivel-critico .aviso-marca { color: var(--critico); }
+.mensaje-plegado.nivel-ok > summary { border-color: color-mix(in srgb, var(--ok) 50%, transparent); }
+.mensaje-plegado.nivel-ok .aviso-marca { color: var(--ok); }
+/* Dentro de una barra de topes, el círculo más cerca de su línea. */
+.tope .mensaje-plegado { margin: 6px 0 0; }
 .aviso-info .aviso-texto {
   margin-top: 8px;
   padding: 12px 14px;
@@ -3662,7 +3680,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'da89c926a7';
+window.__VERSION_APP__ = 'ca3a715739';
 
 M["cerradura"] = (function () {
 /**
@@ -8258,6 +8276,41 @@ function avisoInfo(html) {
   </details>`;
 }
 
+/*
+ * Todos los mensajes de las secciones, plegados detrás de un círculo: «i» si
+ * es una explicación, «!» si hay algo que mirar, «✓» si está todo bien. Así
+ * se lee la cifra sin párrafos en medio y el mensaje se abre cuando se quiere.
+ *
+ * Se hace sobre lo ya pintado, no en cada plantilla: las vistas siguen
+ * escribiendo su `.aviso` como siempre (y lo actualizan por id dentro del
+ * plegable), y lo que pinten mañana también sale plegado. Fuera quedan las
+ * ventanas (lo que se avisa al apuntar algo hay que verlo antes de guardar) y
+ * el aviso de «los datos no se están guardando» (`role="alert"`).
+ */
+const MENSAJES = 'div.aviso, p.tope-realismo, .tope-comprometido';
+const MARCAS = { critico: '!', alerta: '!', ok: '✓', info: 'i' };
+
+function plegarMensajes(raiz) {
+  raiz.querySelectorAll(MENSAJES).forEach((m) => {
+    if (m.closest('.mensaje-plegado, dialog') || m.matches('[role="alert"]')) return;
+    const nivel = ['critico', 'alerta', 'ok'].find((n) => m.classList.contains(n)) || 'info';
+    const plegado = document.createElement('details');
+    plegado.className = `aviso-info mensaje-plegado nivel-${nivel}`;
+    plegado.innerHTML = `<summary aria-label="${nivel === 'info' ? 'Más información' : 'Ver aviso'}">`
+      + `<span class="aviso-marca" aria-hidden="true">${MARCAS[nivel]}</span></summary>`;
+    m.replaceWith(plegado);
+    plegado.append(m);
+  });
+}
+
+/** Pliega lo que haya y lo que se pinte después dentro de `raiz`. */
+function vigilarMensajes(raiz) {
+  plegarMensajes(raiz);
+  // Plegar también es un cambio, pero la segunda pasada no encuentra nada
+  // suelto y ahí se para.
+  new MutationObserver(() => plegarMensajes(raiz)).observe(raiz, { childList: true, subtree: true });
+}
+
 /** Descarga un Blob con el nombre indicado. */
 function descargar(blob, nombre) {
   const url = URL.createObjectURL(blob);
@@ -8295,7 +8348,7 @@ const ICONOS = {
   datos: '<path d="M12 7c4.4 0 8-1.1 8-2.5S16.4 2 12 2 4 3.1 4 4.5 7.6 7 12 7Zm8-2.5v15c0 1.4-3.6 2.5-8 2.5s-8-1.1-8-2.5v-15" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M20 12c0 1.4-3.6 2.5-8 2.5S4 13.4 4 12" fill="none" stroke="currentColor" stroke-width="1.8"/>',
 };
 
-return { $, $$, ICONOS, aNumero, alarma, avisoInfo, brindis, campoMonto, centrarElegido, confirmar, crear, descargar, esc, filaMovimiento, hoyISO, marcaNota, modal, notaFila, notaTexto, opciones, pedirArchivo, segmentado };
+return { $, $$, ICONOS, aNumero, alarma, avisoInfo, brindis, campoMonto, centrarElegido, confirmar, crear, descargar, esc, filaMovimiento, hoyISO, marcaNota, modal, notaFila, notaTexto, opciones, pedirArchivo, plegarMensajes, segmentado, vigilarMensajes };
 })();
 
 M["xlsx"] = (function () {
@@ -20752,7 +20805,7 @@ const {crearCajon} = M["cajon"];
 const {pedirClave, vigilar} = M["pantalla_llave"];
 const {ofrecerAlArrancar, ofrecerNuevos} = M["ajustes"];
 const {alRedimensionar, ocultarTooltip} = M["charts"];
-const {$, crear, esc, ICONOS, modal, brindis, descargar} = M["ui"];
+const {$, crear, esc, ICONOS, modal, brindis, descargar, vigilarMensajes} = M["ui"];
 const {formGastoTarjeta, formGastoEfectivo, formIngreso, formInversion, formMovimiento} = M["forms"];
 const resumen = M["views/resumen"];
 const mensual = M["views/mensual"];
@@ -21094,7 +21147,9 @@ function arrancarApp(origen) {
   pintarNav();
   // Autobloqueo y velo: solo hacen algo si hay cerradura puesta.
   vigilar($('#vista'));
-  cajon = crearCajon({ etiqueta: 'Menú de Finanzas J y C' });
+  // Los mensajes de las secciones, plegados detrás de su «i».
+  vigilarMensajes($('#vista'));
+  cajon =crearCajon({ etiqueta: 'Menú de Finanzas J y C' });
   $('#btn-menu').addEventListener('click', menuPrincipal);
 
   window.addEventListener('hashchange', () => {
