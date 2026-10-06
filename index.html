@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-VY7QQOXri5gb+cXlBP5ddGa4qDYXqjCF0HFHNxbYZdc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-zaXJanqlcoXZAwVxfg0Cp9kd85vB6b5YhWXtHHzp8xo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3619,6 +3619,17 @@ body.velada .cabecera { filter: blur(18px); }
   box-shadow: var(--sombra-panel); font-size: 14px;
 }
 
+/* La meta de ahorro en dólares, en la tarjeta del sueldo. */
+.sueldo-meta {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px;
+  margin: 12px 0 2px; padding: 10px 12px; border-radius: 12px;
+  background: var(--superficie-2); font-size: 13px; color: var(--tinta-2);
+  font-variant-numeric: tabular-nums;
+}
+.sueldo-meta strong { color: var(--tinta); }
+.sueldo-meta .ok { color: var(--ok-texto); font-weight: 600; }
+.sueldo-meta .falta { color: var(--alerta); font-weight: 600; }
+
 </style>
 </head>
 <body>
@@ -3651,7 +3662,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'baaaab48f3';
+window.__VERSION_APP__ = 'da89c926a7';
 
 M["cerradura"] = (function () {
 /**
@@ -14604,7 +14615,7 @@ function render(raiz, { irA }) {
 function seccionSueldo(mes, usuario) {
   const c = cuentaDelSueldo(mes, usuario);
   const cab = `<header><h2>Sueldo de ${esc(usuario)}</h2>
-    <span class="pista">Ahorro ${c.pct} %</span></header>`;
+    <span class="pista">Ahorro ${c.pct} %${c.sueldo > 0 ? ` · ${money(c.ahorro)}` : ''}</span></header>`;
 
   if (c.sueldo <= 0) {
     return `${cab}<p class="vacio">No hay sueldo de ${esc(usuario)} en ${esc(nombreMes(mes))}
@@ -14654,11 +14665,17 @@ function seccionSueldo(mes, usuario) {
       </div>
     </div>
 
+    <div class="sueldo-meta">
+      <span>Meta de ahorro del mes: <strong>${c.pct} % del sueldo = ${money(c.ahorro)}</strong></span>
+      <span class="${c.ahorroReal >= c.ahorro ? 'ok' : 'falta'}">${c.ahorroReal >= c.ahorro
+    ? 'cubierta' : `llevas ${money(c.ahorroReal)} · faltan ${money(redondear(c.ahorro - c.ahorroReal))}`}</span>
+    </div>
+
     <div class="sueldo-barra" role="img" aria-label="${esc(tramos.map(([r, v]) => `${r}: ${money(v)}`).join('; '))}">
       ${tramos.map(([, v, k]) => `<span class="st-${k}" style="flex:${pct(v).toFixed(3)}"></span>`).join('')}
     </div>
     <ul class="sueldo-leyenda">${tramos.map(([r, v, k]) => `
-      <li><i class="st-${k}"></i>${esc(r)} <b>${money(v)}</b></li>`).join('')}</ul>
+      <li><i class="st-${k}"></i>${esc(r)} <b>${money(v)}</b>${k === 'ahorro' && v < c.ahorro ? ` de ${money(c.ahorro)}` : ''}</li>`).join('')}</ul>
 
     <div class="aviso ${AVISO[0]}"><span class="icono">${AVISO[1]}</span>
       <span class="crece">${AVISO[2]}</span></div>
