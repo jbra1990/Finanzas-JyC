@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-hx7VfnVofdrn427PMFYJrYFxAd6TXCFFrGi5tkO0nm8='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-D4iEcx8dSTgSREu15MSnYNuSEoFELfZ5BdLUJd7zeXY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3680,7 +3680,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'ca3a715739';
+window.__VERSION_APP__ = '0d23b49f20';
 
 M["cerradura"] = (function () {
 /**
@@ -13494,7 +13494,46 @@ const AJUSTES = [
     },
     aplicar() { marisco().aplicar(); },
   },
+  {
+    /*
+     * La última cuota de la refinanciación de Pichincha es de $29,04, no de
+     * $29,02: el estado de cuenta en PDF deja $58,06 por facturar tras la 1/3
+     * (84,85 × 1,0263 = 87,08 = 29,02 + 29,02 + 29,04). Con $29,02 al cupo
+     * utilizado le faltaban 2 centavos de los $2.452,09 del banco.
+     */
+    id: 'pichincha-refi-ultima-cuota',
+    revisar() {
+      const c = ultimaCuotaRefi();
+      if (!c) return { estado: 'nada' };
+      if (cerca(c.monto, REFI_ULTIMA)) return { estado: 'ya', titulo: 'Refinanciación de Pichincha', texto: 'la última cuota ya es de $29,04' };
+      return {
+        estado: 'aplicar',
+        titulo: 'Refinanciación de Pichincha: la última cuota',
+        texto: `La cuota de ${esc(nombreMes(c.mes))} pasa de ${money(c.monto)} a <strong>$29,04</strong>. El estado de cuenta
+          deja $58,06 por facturar ($29,02 + $29,04); así el cupo utilizado queda en $2.452,09 y el disponible en
+          $6.547,91, como el banco.`,
+      };
+    },
+    aplicar() {
+      const c = ultimaCuotaRefi();
+      if (!c || cerca(c.monto, REFI_ULTIMA)) return;
+      upsert('cuotas', { ...c, monto: REFI_ULTIMA });
+      const g = db.gastosTarjeta.find((x) => x.id === c.gasto_id);
+      if (g) upsert('gastosTarjeta', { ...g, monto_total: redondear(cuotasDe(g.id).reduce((t, x) => t + x.monto, 0)) });
+    },
+  },
 ];
+
+const REFI_ULTIMA = 29.04;
+/** La 3/3 de la refinanciación de Pichincha (noviembre), si está apuntada en 3 cuotas desde septiembre. */
+function ultimaCuotaRefi() {
+  const g = db.gastosTarjeta.find((x) => x.tarjeta === PI && (x.id === 'AJ-PICH-REFI-2026-09-15'
+    || (x.categoria === CAT_REFI && cuotasDe(x.id).some((c) => c.mes === PSEP && cerca(c.monto, 29.02)))));
+  if (!g) return null;
+  const cs = cuotasDe(g.id).sort((a, b) => a.n_cuota - b.n_cuota);
+  const ultima = cs[cs.length - 1];
+  return cs.length === 3 && ultima.mes === '2026-11' ? ultima : null;
+}
 
 /** C Nor Marisco $10,50 (10 sep, Pichincha): dónde está y qué hacer. */
 function marisco() {
@@ -13732,7 +13771,7 @@ const PASOS_PICH = [
   },
   {
     // De los $1.071,70 de agosto se pagaron $986,85 y $84,85 se refinanciaron
-    // en 3 cuotas de $29,02 («Dif con nacional online»). El consumo ya está en
+    // en 3 cuotas, $29,02 + $29,02 + $29,04 («Dif con nacional online»). El consumo ya está en
     // agosto: las cuotas cuentan en la tarjeta y en el cupo, pero no como gasto
     // (categoría «Refinanciación de tarjeta», ver `esFinanciacion`).
     revisar() {
@@ -13742,7 +13781,7 @@ const PASOS_PICH = [
       return {
         estado: 'aplicar',
         masSep: 29.02,
-        texto: `Refinanciación: <strong>3 cuotas de $29,02</strong> (septiembre a noviembre), como «Dif con nacional
+        texto: `Refinanciación: <strong>3 cuotas: $29,02 + $29,02 + $29,04</strong> (septiembre a noviembre), como «Dif con nacional
           online». Del saldo de agosto ($1.071,70) se pagaron $986,85 y $84,85 se pasaron a cuotas. Cuentan en la
           tarjeta y en el cupo, pero no como gasto nuevo: lo comprado ya está en agosto.`,
       };
@@ -13750,7 +13789,7 @@ const PASOS_PICH = [
     aplicar() {
       deCategoria(CAT_REFI);
       compraDirecta({ id: 'AJ-PICH-REFI-2026-09-15', fecha: '2026-09-15', tipo: 'Diferido', detalle: 'Dif con nacional online (refinanciación)',
-        categoria: CAT_REFI, mes_inicio: PSEP }, ['2026-09', '2026-10', '2026-11'].map((mes) => ({ mes, monto: 29.02 })));
+        categoria: CAT_REFI, mes_inicio: PSEP }, [['2026-09', 29.02], ['2026-10', 29.02], ['2026-11', REFI_ULTIMA]].map(([mes, monto]) => ({ mes, monto })));
     },
   },
   {
