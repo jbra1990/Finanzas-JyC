@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ISEvh0jYFw92pTFJUpG3TabH5nTVpc+3+1vT4TPgM40='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-vBh3kPFWh+hx4qxdYcFZp8f+2OXKQWVqabrRmVj12gk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3638,35 +3638,93 @@ body.velada .cabecera { filter: blur(18px); }
 }
 
 /*
- * La tarjeta del sueldo: primero la respuesta (cuánto se puede gastar sin
- * tocar el ahorro) y debajo la cuenta de la que sale, línea a línea, con los
- * dos resultados («te sobra» y «puedes gastar») marcados como totales.
+ * La tarjeta del sueldo: el anillo de la meta de ahorro y cuánto se puede
+ * gastar sin tocarla; la barra del sueldo con la marca del límite para
+ * gastar; y los dos bolsillos, para gastar y para ahorrar.
  */
-.sueldo-respuesta { display: flex; flex-direction: column; gap: 2px; }
+.sueldo-arriba { display: grid; grid-template-columns: 104px 1fr; gap: 16px; align-items: center; margin: 4px 0 2px; }
+.sueldo-anillo {
+  width: 104px; height: 104px; border-radius: 50%; position: relative;
+  display: grid; place-items: center;
+  background: conic-gradient(var(--ok) 0 var(--p), color-mix(in srgb, var(--alerta) 80%, transparent) var(--p) 100%);
+}
+.sueldo-anillo::before { content: ''; position: absolute; inset: 11px; border-radius: 50%; background: var(--superficie-solida); }
+.sueldo-anillo > div { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.15; }
+.sueldo-anillo b { font-size: 21px; font-weight: 740; color: var(--tinta); font-variant-numeric: tabular-nums; }
+.sueldo-anillo span { font-size: 10.5px; color: var(--tinta-3); }
+.sueldo-respuesta { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .sueldo-respuesta .etq {
   font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--tinta-3);
+  text-transform: uppercase; color: var(--tinta-3); text-wrap: balance;
 }
+.sueldo-respuesta .sueldo-cifra { font-size: 30px; line-height: 1.1; }
 .sueldo-respuesta .sueldo-cifra.pos { color: var(--ok-texto); }
-.sueldo-respuesta .nota { font-size: 12.5px; color: var(--tinta-2); text-wrap: pretty; }
-.sueldo-pasos {
-  list-style: none; margin: 12px 0 4px; padding: 6px 12px;
-  border-radius: 12px; background: var(--superficie-2);
-  font-size: 13px; font-variant-numeric: tabular-nums;
+.sueldo-chip {
+  align-self: flex-start; margin-top: 4px; padding: 4px 10px; border-radius: var(--radio-pill);
+  font-size: 12px; font-weight: 640; font-variant-numeric: tabular-nums;
 }
-.sueldo-pasos li {
-  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
-  padding: 5px 0; color: var(--tinta-2);
+.sueldo-chip.mal { color: var(--alerta); background: color-mix(in srgb, var(--alerta) 16%, transparent); border: 1px solid color-mix(in srgb, var(--alerta) 45%, transparent); }
+.sueldo-chip.bien { color: var(--ok-texto); background: color-mix(in srgb, var(--ok) 14%, transparent); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); }
+
+.sueldo-barra-limite {
+  position: relative; display: flex; height: 20px; margin: 34px 0 6px;
+  border-radius: 8px; background: var(--superficie-3);
 }
-.sueldo-pasos li small { font-size: 11.5px; color: var(--tinta-3); }
-.sueldo-pasos b { color: var(--tinta); font-weight: 620; white-space: nowrap; }
-.sueldo-pasos .paso-total { border-top: 1px solid var(--borde); padding-top: 7px; margin-bottom: 4px; }
-.sueldo-pasos .paso-total span { color: var(--tinta); font-weight: 640; }
-.sueldo-pasos .paso-total b { font-size: 14.5px; font-weight: 700; }
-.sueldo-pasos b.neg { color: var(--critico); }
-.sueldo-pasos b.pos { color: var(--ok-texto); }
-.sueldo-pasos .paso-falta { display: block; padding-top: 2px; font-size: 12px; color: var(--alerta); line-height: 1.45; }
-.sueldo-pasos .paso-falta strong { color: var(--alerta); }
+.sueldo-barra-limite > span { height: 100%; min-width: 2px; }
+.sueldo-barra-limite > span:first-child { border-radius: 8px 0 0 8px; }
+.sueldo-barra-limite > span:last-of-type { border-radius: 0 8px 8px 0; }
+.sueldo-barra-limite .st-exceso {
+  background: repeating-linear-gradient(135deg, var(--critico) 0 4px, color-mix(in srgb, var(--critico) 55%, transparent) 4px 8px);
+}
+.sueldo-marca { position: absolute; top: -22px; bottom: -5px; width: 2px; margin-left: -1px; background: var(--tinta); }
+.sueldo-marca::after {
+  content: attr(data-t); position: absolute; top: -3px; left: 50%; transform: translateX(-50%);
+  white-space: nowrap; font-size: 10.5px; font-weight: 650; color: var(--tinta);
+}
+.sueldo-marca[data-lado="fin"]::after { left: auto; right: -2px; transform: none; }
+.sueldo-marca[data-lado="inicio"]::after { left: -2px; transform: none; }
+.sueldo-barra-pie { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--tinta-3); font-variant-numeric: tabular-nums; }
+
+.sueldo-bolsillos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0 0; }
+.sueldo-bolsillo {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  padding: 12px 11px; border-radius: 14px; border: 1px solid var(--borde); background: var(--superficie-2);
+  font-variant-numeric: tabular-nums;
+}
+.sueldo-bolsillo.pasado {
+  border-color: color-mix(in srgb, var(--alerta) 55%, transparent);
+  background: color-mix(in srgb, var(--alerta) 8%, var(--superficie-2));
+}
+.sueldo-bolsillo.ahorro { border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.bol-tit { font-size: 13px; font-weight: 650; color: var(--tinta); }
+.bol-tope { font-size: 11.5px; color: var(--tinta-3); line-height: 1.35; }
+.sueldo-bolsillo ul { list-style: none; margin: 4px 0 0; padding: 0; font-size: 11.5px; color: var(--tinta-2); }
+.sueldo-bolsillo li { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; padding: 2px 0; }
+/* Si no cabe en una línea, la cifra baja entera a la siguiente, a la derecha. */
+.sueldo-bolsillo li { flex-wrap: wrap; column-gap: 6px; row-gap: 0; }
+.sueldo-bolsillo li span { white-space: nowrap; }
+.sueldo-bolsillo li b { margin-left: auto; }
+.sueldo-bolsillo li i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+.sueldo-bolsillo li b { color: var(--tinta); font-weight: 640; white-space: nowrap; }
+.sueldo-bolsillo .bol-total { border-top: 1px solid var(--borde); margin-top: 2px; padding-top: 5px; }
+.sueldo-bolsillo .bol-resto span, .sueldo-bolsillo .bol-resto b { font-weight: 680; }
+.sueldo-bolsillo .bol-resto.mal span, .sueldo-bolsillo .bol-resto.mal b { color: var(--critico); }
+.sueldo-bolsillo .bol-resto.bien span, .sueldo-bolsillo .bol-resto.bien b { color: var(--ok-texto); }
+.bol-cifra { font-size: 20px; font-weight: 720; letter-spacing: -0.02em; color: var(--ok-texto); }
+.bol-cifra.cero { color: var(--critico); }
+.bol-pie { font-size: 11.5px; color: var(--tinta-2); line-height: 1.4; }
+.bol-pie .mal { color: var(--alerta); }
+.bol-pista { display: block; height: 7px; border-radius: var(--radio-pill); background: var(--superficie-3); overflow: hidden; }
+.bol-pista i { display: block; height: 100%; background: var(--ok); }
+.sueldo-frase { margin: 12px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--tinta-2); text-wrap: pretty; }
+.sueldo-frase b { color: var(--tinta); }
+.sueldo-frase .mal { color: var(--alerta); }
+.st-exceso { background: var(--critico); }
+@media (max-width: 340px) {
+  .sueldo-bolsillos { grid-template-columns: 1fr; }
+  .sueldo-arriba { grid-template-columns: 88px 1fr; }
+  .sueldo-anillo { width: 88px; height: 88px; }
+}
 
 </style>
 </head>
@@ -3700,7 +3758,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '593143d692';
+window.__VERSION_APP__ = '72a2b567b5';
 
 M["cerradura"] = (function () {
 /**
@@ -14787,15 +14845,6 @@ function seccionSueldo(mes, usuario) {
       <div class="sueldo-acciones"><button class="btn pequeno" id="sueldo-ajustar">Ajustar sueldo y ahorro</button></div>`;
   }
 
-  const pct = (x) => Math.max(0, Math.min(100, (x / c.sueldo) * 100));
-  const tramos = [
-    ['Tarjeta', c.gastado.tarjeta, 'tarjeta'],
-    ['Efectivo y débito', c.gastado.efectivo + c.gastado.prestamo, 'efectivo'],
-    ['Por pagar', c.pendiente, 'pendiente'],
-    [`Ahorro ${c.pct} %`, Math.min(c.ahorro, Math.max(0, c.queda)), 'ahorro'],
-    ['Puedes gastar', Math.max(0, c.libre), 'libre'],
-  ].filter(([, v]) => v > 0);
-
   const AVISO = {
     bien: ['ok', '✓', `Vas bien: puedes gastar <strong>${money(c.libre)}</strong> más y
       todavía ahorras el ${c.pct} %${c.alDia > 0 ? ` —unos <strong>${money(c.alDia)}</strong>
@@ -14813,43 +14862,97 @@ function seccionSueldo(mes, usuario) {
     <li class="${clase}"><span>${rotulo}</span><strong>${valor}</strong></li>`;
 
   /*
-   * Arriba, la respuesta a la única pregunta que se hace al mirar esta tarjeta
-   * —¿cuánto puedo gastar sin tocar el ahorro?— y debajo la cuenta de la que
-   * sale, en cinco líneas que se leen de arriba abajo. Antes había dos cifras
-   * («Te queda» y «Libre para gastar») y una meta aparte, y no se veía que una
-   * sale de la otra.
+   * La tarjeta reparte el sueldo en dos bolsillos —para gastar (lo que no es
+   * ahorro) y para ahorrar (el % elegido)— y lo cuenta tres veces, cada una
+   * para una pregunta:
+   *   · arriba, ¿cuánto puedo gastar sin tocar el ahorro?, con un anillo de
+   *     cuánto de la meta de ahorro sigue en pie;
+   *   · en medio, una barra del sueldo entero con una marca en el límite para
+   *     gastar: lo que la cruza sale rayado, porque sale del ahorro;
+   *   · abajo, los dos bolsillos con sus cifras.
    */
-  const gastadoYa = redondear(c.totalGastado);
-  const faltaAhorro = redondear(Math.max(0, c.ahorro - Math.max(0, c.queda)));
-  const respuesta = c.libre > 0
-    ? (c.alDia > 0 ? `unos <strong>${money(c.alDia)}</strong> al día hasta fin de mes` : 'y aun así ahorras lo que quieres')
-    : c.queda >= 0
-      ? `Nada más este mes: lo que te sobra (${money(c.queda)}) no llega a los ${money(c.ahorro)} que quieres ahorrar.`
-      : `Nada: entre lo gastado y lo por pagar ya pasas el sueldo por ${money(-c.queda)}.`;
+  const tope = redondear(c.sueldo - c.ahorro);
+  const efectivo = redondear(c.gastado.efectivo + c.gastado.prestamo);
+  const usado = redondear(c.totalGastado + c.pendiente);
+  const pasado = c.libre < 0;
+  const libre = Math.max(0, c.libre);
+  // Lo que queda del ahorro: entre nada y la meta entera.
+  const ahorrado = redondear(Math.min(c.ahorro, Math.max(0, c.queda)));
+  const faltaAhorro = redondear(c.ahorro - ahorrado);
+  const pctMeta = c.ahorro > 0 ? Math.round((ahorrado / c.ahorro) * 100) : 100;
+
+  // La barra: el sueldo entero, o lo usado si ya lo pasa.
+  const escala = Math.max(c.sueldo, usado);
+  const ancho = (x) => `${Math.max(0, (x / escala) * 100).toFixed(2)}%`;
+  const porPagarDentro = Math.max(0, Math.min(c.pendiente, tope - c.gastado.tarjeta - efectivo));
+  const exceso = Math.max(0, redondear(usado - tope));
+  const marca = (tope / escala) * 100;
+  const tramos = [
+    [c.gastado.tarjeta, 'tarjeta', 'Tarjeta'],
+    [efectivo, 'efectivo', 'Efectivo y débito'],
+    [porPagarDentro, 'pendiente', 'Por pagar'],
+    [exceso, 'exceso', 'Pasado del límite'],
+    [libre, 'libre', 'Puedes gastar'],
+    [ahorrado, 'ahorro', 'Ahorro'],
+  ].filter(([v]) => v > 0);
+
+  const respuesta = pasado
+    ? `<span class="sueldo-chip mal">te pasaste ${money(-c.libre)}</span>`
+    : c.alDia > 0 ? `<span class="sueldo-chip bien">${money(c.alDia)} al día</span>` : '';
+  const frase = c.queda < 0
+    ? `<strong class="mal">Este mes no hay ahorro:</strong> entre lo gastado y lo por pagar pasas el sueldo
+      por <b>${money(-c.queda)}</b>, que sale de lo guardado.`
+    : pasado
+      ? `<strong class="mal">Desde hoy, todo lo que gastes sale del ahorro.</strong> Si no gastas nada más,
+        ahorras <b>${money(ahorrado)}</b> este mes.`
+      : `Puedes gastar <b>${money(libre)}</b> más${c.alDia > 0 ? ` —unos ${money(c.alDia)} al día—` : ''}
+        y el ahorro sigue completo.`;
+  const fila = (clase, rotulo, valor) => `<li><span><i class="st-${clase}"></i>${rotulo}</span><b>${money(valor)}</b></li>`;
 
   return `${cab}
-    <div class="sueldo-respuesta">
-      <span class="etq">Puedes gastar sin tocar el ahorro</span>
-      <span class="sueldo-cifra ${c.libre <= 0 ? 'neg' : 'pos'}">${money(Math.max(0, c.libre))}</span>
-      <span class="nota">${respuesta}</span>
+    <div class="sueldo-arriba">
+      <div class="sueldo-anillo" style="--p:${pctMeta}%" role="img"
+           aria-label="${pctMeta} % de la meta de ahorro">
+        <div><b>${pctMeta} %</b><span>de tu meta<br>de ahorro</span></div>
+      </div>
+      <div class="sueldo-respuesta">
+        <span class="etq">Puedes gastar sin tocar el ahorro</span>
+        <span class="sueldo-cifra ${pasado ? 'neg' : 'pos'}">${money(libre)}</span>
+        ${respuesta}
+      </div>
     </div>
 
-    <ol class="sueldo-pasos">
-      <li><span>Sueldo del mes${c.porCobrar > 0 ? ` <small>· falta cobrar ${money(c.porCobrar)}</small>` : ''}</span><b>${money(c.sueldo)}</b></li>
-      <li><span>− Ya gastado <small>(tarjeta, efectivo y débito)</small></span><b>${money(gastadoYa)}</b></li>
-      <li><span>− Por pagar este mes</span><b>${money(c.pendiente)}</b></li>
-      <li class="paso-total"><span>= Te sobra del sueldo</span><b class="${c.queda < 0 ? 'neg' : ''}">${money(c.queda)}</b></li>
-      <li><span>− Lo que quieres ahorrar <small>(${c.pct} % del sueldo)</small></span><b>${money(c.ahorro)}</b></li>
-      <li class="paso-total"><span>= Puedes gastar</span><b class="${c.libre <= 0 ? 'neg' : 'pos'}">${money(Math.max(0, c.libre))}</b></li>
-      ${faltaAhorro > 0 ? `<li class="paso-falta"><span>Si no gastas nada más, ahorras ${money(Math.max(0, c.queda))}${c.queda > 0 ? ` (${c.pctReal} %)` : ''}:
-        te faltan <strong>${money(faltaAhorro)}</strong> para el ${c.pct} %.</span></li>` : ''}
-    </ol>
-
-    <div class="sueldo-barra" role="img" aria-label="${esc(tramos.map(([r, v]) => `${r}: ${money(v)}`).join('; '))}">
-      ${tramos.map(([, v, k]) => `<span class="st-${k}" style="flex:${pct(v).toFixed(3)}"></span>`).join('')}
+    <div class="sueldo-barra-limite" role="img"
+         aria-label="${esc(tramos.map(([v, , r]) => `${r}: ${money(v)}`).join('; '))}; límite para gastar ${esc(money(tope))}">
+      ${tramos.map(([v, k]) => `<span class="st-${k}" style="width:${ancho(v)}"></span>`).join('')}
+      <b class="sueldo-marca" style="left:${marca.toFixed(2)}%"${marca > 75 ? ' data-lado="fin"' : marca < 25 ? ' data-lado="inicio"' : ''}
+         data-t="Límite para gastar ${esc(money(tope))}"></b>
     </div>
-    <ul class="sueldo-leyenda">${tramos.map(([r, v, k]) => `
-      <li><i class="st-${k}"></i>${esc(r)} <b>${money(v)}</b>${k === 'ahorro' && v < c.ahorro ? ` de ${money(c.ahorro)}` : ''}</li>`).join('')}</ul>
+    <div class="sueldo-barra-pie"><span>$0</span><span>Sueldo ${money(c.sueldo)}${c.porCobrar > 0
+    ? ` · falta cobrar ${money(c.porCobrar)}` : ''}</span></div>
+
+    <div class="sueldo-bolsillos">
+      <div class="sueldo-bolsillo${pasado ? ' pasado' : ''}">
+        <span class="bol-tit">Para gastar</span>
+        <span class="bol-tope">${100 - c.pct} % del sueldo<br>${money(tope)}</span>
+        <ul>
+          ${fila('tarjeta', 'Tarjeta', c.gastado.tarjeta)}
+          ${fila('efectivo', 'Efectivo', efectivo)}
+          ${fila('pendiente', 'Por pagar', c.pendiente)}
+          <li class="bol-total"><span>Usado</span><b>${money(usado)}</b></li>
+          <li class="bol-resto ${pasado ? 'mal' : 'bien'}"><span>${pasado ? 'Te pasaste' : 'Te quedan'}</span><b>${money(Math.abs(c.libre))}</b></li>
+        </ul>
+      </div>
+      <div class="sueldo-bolsillo ahorro">
+        <span class="bol-tit">Para ahorrar</span>
+        <span class="bol-tope">${c.pct} % del sueldo<br>${money(c.ahorro)}</span>
+        <span class="bol-cifra${ahorrado > 0 ? '' : ' cero'}">${money(ahorrado)}</span>
+        <span class="bol-pie">${faltaAhorro > 0 ? `ahorrados · faltan <b class="mal">${money(faltaAhorro)}</b>` : 'meta completa'}</span>
+        <span class="bol-pista"><i style="width:${pctMeta}%"></i></span>
+        <span class="bol-pie">${faltaAhorro > 0 ? `Los ${money(faltaAhorro)} que faltan se usaron para gastar.` : 'El ahorro del mes está intacto.'}</span>
+      </div>
+    </div>
+    <p class="sueldo-frase">${frase}</p>
 
     <div class="aviso ${AVISO[0]}"><span class="icono">${AVISO[1]}</span>
       <span class="crece">${AVISO[2]}</span></div>
