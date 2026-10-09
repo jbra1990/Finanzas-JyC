@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-tQ/RTPFsAOWaUwT79A4WqDpo3QGWoAHBfEN7uRlMPHY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ISEvh0jYFw92pTFJUpG3TabH5nTVpc+3+1vT4TPgM40='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3637,16 +3637,36 @@ body.velada .cabecera { filter: blur(18px); }
   box-shadow: var(--sombra-panel); font-size: 14px;
 }
 
-/* La meta de ahorro en dólares, en la tarjeta del sueldo. */
-.sueldo-meta {
-  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px;
-  margin: 12px 0 2px; padding: 10px 12px; border-radius: 12px;
-  background: var(--superficie-2); font-size: 13px; color: var(--tinta-2);
-  font-variant-numeric: tabular-nums;
+/*
+ * La tarjeta del sueldo: primero la respuesta (cuánto se puede gastar sin
+ * tocar el ahorro) y debajo la cuenta de la que sale, línea a línea, con los
+ * dos resultados («te sobra» y «puedes gastar») marcados como totales.
+ */
+.sueldo-respuesta { display: flex; flex-direction: column; gap: 2px; }
+.sueldo-respuesta .etq {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--tinta-3);
 }
-.sueldo-meta strong { color: var(--tinta); }
-.sueldo-meta .ok { color: var(--ok-texto); font-weight: 600; }
-.sueldo-meta .falta { color: var(--alerta); font-weight: 600; }
+.sueldo-respuesta .sueldo-cifra.pos { color: var(--ok-texto); }
+.sueldo-respuesta .nota { font-size: 12.5px; color: var(--tinta-2); text-wrap: pretty; }
+.sueldo-pasos {
+  list-style: none; margin: 12px 0 4px; padding: 6px 12px;
+  border-radius: 12px; background: var(--superficie-2);
+  font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.sueldo-pasos li {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 5px 0; color: var(--tinta-2);
+}
+.sueldo-pasos li small { font-size: 11.5px; color: var(--tinta-3); }
+.sueldo-pasos b { color: var(--tinta); font-weight: 620; white-space: nowrap; }
+.sueldo-pasos .paso-total { border-top: 1px solid var(--borde); padding-top: 7px; margin-bottom: 4px; }
+.sueldo-pasos .paso-total span { color: var(--tinta); font-weight: 640; }
+.sueldo-pasos .paso-total b { font-size: 14.5px; font-weight: 700; }
+.sueldo-pasos b.neg { color: var(--critico); }
+.sueldo-pasos b.pos { color: var(--ok-texto); }
+.sueldo-pasos .paso-falta { display: block; padding-top: 2px; font-size: 12px; color: var(--alerta); line-height: 1.45; }
+.sueldo-pasos .paso-falta strong { color: var(--alerta); }
 
 </style>
 </head>
@@ -3680,7 +3700,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '8e6f21ebe8';
+window.__VERSION_APP__ = '593143d692';
 
 M["cerradura"] = (function () {
 /**
@@ -14773,7 +14793,7 @@ function seccionSueldo(mes, usuario) {
     ['Efectivo y débito', c.gastado.efectivo + c.gastado.prestamo, 'efectivo'],
     ['Por pagar', c.pendiente, 'pendiente'],
     [`Ahorro ${c.pct} %`, Math.min(c.ahorro, Math.max(0, c.queda)), 'ahorro'],
-    ['Libre', Math.max(0, c.libre), 'libre'],
+    ['Puedes gastar', Math.max(0, c.libre), 'libre'],
   ].filter(([, v]) => v > 0);
 
   const AVISO = {
@@ -14792,27 +14812,38 @@ function seccionSueldo(mes, usuario) {
   const linea = (rotulo, valor, clase = '') => `
     <li class="${clase}"><span>${rotulo}</span><strong>${valor}</strong></li>`;
 
+  /*
+   * Arriba, la respuesta a la única pregunta que se hace al mirar esta tarjeta
+   * —¿cuánto puedo gastar sin tocar el ahorro?— y debajo la cuenta de la que
+   * sale, en cinco líneas que se leen de arriba abajo. Antes había dos cifras
+   * («Te queda» y «Libre para gastar») y una meta aparte, y no se veía que una
+   * sale de la otra.
+   */
+  const gastadoYa = redondear(c.totalGastado);
+  const faltaAhorro = redondear(Math.max(0, c.ahorro - Math.max(0, c.queda)));
+  const respuesta = c.libre > 0
+    ? (c.alDia > 0 ? `unos <strong>${money(c.alDia)}</strong> al día hasta fin de mes` : 'y aun así ahorras lo que quieres')
+    : c.queda >= 0
+      ? `Nada más este mes: lo que te sobra (${money(c.queda)}) no llega a los ${money(c.ahorro)} que quieres ahorrar.`
+      : `Nada: entre lo gastado y lo por pagar ya pasas el sueldo por ${money(-c.queda)}.`;
+
   return `${cab}
-    <div class="sueldo-cabeza">
-      <div>
-        <span class="etq">Te queda</span>
-        <span class="sueldo-cifra ${c.queda < 0 ? 'neg' : ''}">${money(c.queda)}</span>
-        <span class="nota">de ${money(c.sueldo)} de sueldo${c.porCobrar > 0
-    ? ` · falta cobrar ${money(c.porCobrar)}` : ''}</span>
-      </div>
-      <div class="sueldo-libre">
-        <span class="etq">Libre para gastar</span>
-        <span class="sueldo-cifra-2 ${c.libre <= 0 ? 'neg' : ''}">${money(Math.max(0, c.libre))}</span>
-        ${c.alDia > 0 ? `<span class="nota">${money(c.alDia)} al día</span>`
-    : c.libre <= 0 ? '<span class="nota">ya en el ahorro</span>' : ''}
-      </div>
+    <div class="sueldo-respuesta">
+      <span class="etq">Puedes gastar sin tocar el ahorro</span>
+      <span class="sueldo-cifra ${c.libre <= 0 ? 'neg' : 'pos'}">${money(Math.max(0, c.libre))}</span>
+      <span class="nota">${respuesta}</span>
     </div>
 
-    <div class="sueldo-meta">
-      <span>Meta de ahorro del mes: <strong>${c.pct} % del sueldo = ${money(c.ahorro)}</strong></span>
-      <span class="${c.ahorroReal >= c.ahorro ? 'ok' : 'falta'}">${c.ahorroReal >= c.ahorro
-    ? 'cubierta' : `llevas ${money(c.ahorroReal)} · faltan ${money(redondear(c.ahorro - c.ahorroReal))}`}</span>
-    </div>
+    <ol class="sueldo-pasos">
+      <li><span>Sueldo del mes${c.porCobrar > 0 ? ` <small>· falta cobrar ${money(c.porCobrar)}</small>` : ''}</span><b>${money(c.sueldo)}</b></li>
+      <li><span>− Ya gastado <small>(tarjeta, efectivo y débito)</small></span><b>${money(gastadoYa)}</b></li>
+      <li><span>− Por pagar este mes</span><b>${money(c.pendiente)}</b></li>
+      <li class="paso-total"><span>= Te sobra del sueldo</span><b class="${c.queda < 0 ? 'neg' : ''}">${money(c.queda)}</b></li>
+      <li><span>− Lo que quieres ahorrar <small>(${c.pct} % del sueldo)</small></span><b>${money(c.ahorro)}</b></li>
+      <li class="paso-total"><span>= Puedes gastar</span><b class="${c.libre <= 0 ? 'neg' : 'pos'}">${money(Math.max(0, c.libre))}</b></li>
+      ${faltaAhorro > 0 ? `<li class="paso-falta"><span>Si no gastas nada más, ahorras ${money(Math.max(0, c.queda))}${c.queda > 0 ? ` (${c.pctReal} %)` : ''}:
+        te faltan <strong>${money(faltaAhorro)}</strong> para el ${c.pct} %.</span></li>` : ''}
+    </ol>
 
     <div class="sueldo-barra" role="img" aria-label="${esc(tramos.map(([r, v]) => `${r}: ${money(v)}`).join('; '))}">
       ${tramos.map(([, v, k]) => `<span class="st-${k}" style="flex:${pct(v).toFixed(3)}"></span>`).join('')}
@@ -14824,7 +14855,7 @@ function seccionSueldo(mes, usuario) {
       <span class="crece">${AVISO[2]}</span></div>
 
     <details class="sueldo-cuenta">
-      <summary>Cómo sale la cuenta</summary>
+      <summary>Ver el detalle</summary>
       <ul class="desglose-medios">
         ${linea(`Sueldo del mes${c.porCobrar > 0 ? ` (cobrado ${money(c.cobrado)} · por cobrar ${money(c.porCobrar)})` : ''}`, money(c.sueldo))}
         ${linea(`− Tarjetas de ${esc(usuario)}, cuotas del mes`, money(c.gastado.tarjeta))}
@@ -14835,9 +14866,9 @@ function seccionSueldo(mes, usuario) {
         ${linea('− Por pagar este mes', money(c.pendiente))}
         ${c.pendientes.map((p) => linea(`<small>${esc(p.detalle)}${p.nota ? ` · ${esc(p.nota)}` : ''}</small>`,
     `<small>${money(p.monto)}</small>`, 'sub')).join('')}
-        ${linea('= Te queda', money(c.queda), 'total')}
-        ${linea(`− Ahorro ${c.pct} %`, money(c.ahorro))}
-        ${linea('= Libre para gastar', money(c.libre), 'total')}
+        ${linea('= Te sobra del sueldo', money(c.queda), 'total')}
+        ${linea(`− Lo que quieres ahorrar (${c.pct} %)`, money(c.ahorro))}
+        ${linea('= Puedes gastar sin tocar el ahorro', money(c.libre), 'total')}
       </ul>
       <p class="pista">${c.esperado.base === 'mio'
     ? `Sueldo esperado: ${money(c.esperado.monto)}, puesto por ti.`
