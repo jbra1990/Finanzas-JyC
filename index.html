@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-D4iEcx8dSTgSREu15MSnYNuSEoFELfZ5BdLUJd7zeXY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-tQ/RTPFsAOWaUwT79A4WqDpo3QGWoAHBfEN7uRlMPHY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3680,7 +3680,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '0d23b49f20';
+window.__VERSION_APP__ = '8e6f21ebe8';
 
 M["cerradura"] = (function () {
 /**
@@ -10442,9 +10442,14 @@ function esDe(usuario, quien) {
  * mano: lo escrito a mano manda sobre lo deducido.
  */
 const NOTA_PAGO_PRESUPUESTO = 'Pago registrado desde Presupuesto';
+/*
+ * Al cargar, los textos se pasan a «Primera en mayúscula» (`normalizarTextos`)
+ * y la nota queda «…desde presupuesto»: se compara sin mayúsculas.
+ */
+const esPagoDePresupuesto = (g) => String(g?.notas || '').trim().toLowerCase() === NOTA_PAGO_PRESUPUESTO.toLowerCase();
 function cubiertosPorManuales() {
   const nombres = new Set(fijosManuales().map((f) => claveGasto(f.detalle)).filter(Boolean));
-  return (g) => g.notas === NOTA_PAGO_PRESUPUESTO || nombres.has(claveGasto(g.detalle));
+  return (g) => esPagoDePresupuesto(g) || nombres.has(claveGasto(g.detalle));
 }
 
 function recurrencias(quien = null) {
@@ -10841,7 +10846,7 @@ function compraQueLoCubre(r) {
   const mesDe = (g) => db.cuotas.filter((c) => c.gasto_id === g.id).map((c) => c.mes).sort()[0];
   return db.gastosTarjeta.find((g) => {
     if (r.usuario && g.usuario !== r.usuario) return false;
-    if (g.notas === NOTA_PAGO_PRESUPUESTO) return false;
+    if (esPagoDePresupuesto(g)) return false;
     const n = Number(g.cuotas) || 1;
     if (r.clase === 'plazos' ? (g.tipo !== 'Diferido' || n !== Number(r.cuotas) || mesDe(g) !== r.desdeMes)
       : (n !== 1 || mesDe(g) !== r.mes)) return false;
@@ -11009,6 +11014,41 @@ function diaDelMes(mes, dia) {
  * septiembre, septiembre se queda con lo real; la previsión solo rellena los
  * meses donde todavía no hay nada de ese gasto.
  */
+/**
+ * El mes de la letra que saldó cada pago atrasado de un gasto a plazos.
+ *
+ * La letra de septiembre del hipotecario se paga a primeros de octubre, pero
+ * con el sueldo de septiembre: el de octubre aún no ha llegado. Contada en
+ * octubre, el sueldo de octubre cargaba dos letras (la pagada y la que queda
+ * por pagar) y el de septiembre ninguna.
+ *
+ * Cada «Pagar» salda la siguiente letra en orden (ver `recurrencias`), así
+ * que los pagos de la fila, del más reciente hacia atrás, son sus letras
+ * marcadas, de la última hacia atrás. Solo se mueve un pago que salda una
+ * letra de uno o dos meses antes; si no encaja, manda la fecha del pago. En
+ * Cuentas el dinero sigue saliendo el día que salió.
+ *
+ * @returns {Map<string, string>} id del gasto → mes de su letra
+ */
+function letrasAtrasadas(recs) {
+  const letraDe = new Map();
+  for (const r of recs) {
+    if (!r.manual || r.clase !== 'plazos' || !r.pagos?.length) continue;
+    const clave = claveGasto(r.detalle);
+    const pagos = db.gastosEfectivo
+      .filter((g) => esPagoDePresupuesto(g) && claveGasto(g.detalle) === clave && g.fecha)
+      .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)) || String(a.id).localeCompare(String(b.id)));
+    const letras = [...r.pagos].sort();
+    for (let k = 1; k <= Math.min(pagos.length, letras.length); k += 1) {
+      const g = pagos[pagos.length - k];
+      const letra = letras[letras.length - k];
+      const pagadoEn = claveMes(g.fecha);
+      if (letra < pagadoEn && letra >= sumarMeses(pagadoEn, -2)) letraDe.set(g.id, letra);
+    }
+  }
+  return letraDe;
+}
+
 function proyeccion(meses, { excluidas = null, quien = null } = {}) {
   const fuera = excluidas || new Set(recurrencias(quien)
     .filter((r) => estaExcluida(r.clave)).map((r) => r.clave));
@@ -11070,8 +11110,11 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
       compra?.fecha, enCuotas ? `cuota ${c.n_cuota} de ${compra.cuotas}` : '',
       compra?.proposito || '');
   }
+  const recs = recurrencias(quien);
+  // Una letra atrasada cuenta en el mes de la letra, no en el del pago.
+  const letraDe = letrasAtrasadas(recs);
   for (const g of db.gastosEfectivo) {
-    const m = porMes.get(claveMes(g.fecha));
+    const m = porMes.get(letraDe.get(g.id) || claveMes(g.fecha));
     if (!m || !esDe(g.usuario, quien)) continue;
     const medio = medioManual.get(claveGasto(g.detalle)) || medioDe(g.cuenta);
     apuntar(m, MEDIOS.includes(medio) ? medio : 'Efectivo',
@@ -11080,7 +11123,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
   }
 
   const usadas = [];
-  for (const r of recurrencias(quien)) {
+  for (const r of recs) {
     if (!r.fiable || !r.vigente || fuera.has(r.clave) || r.cubierto) continue;
     let aporta = false;
 
@@ -11443,6 +11486,14 @@ function cuentaDelSueldo(mes = mesActual(), usuario = 'J') {
     prestamo: salido('Préstamo'),
   };
   const totalGastado = redondear(gastado.tarjeta + gastado.efectivo + gastado.prestamo);
+  // Las letras que se cuentan en otro mes que el del pago (ver `letrasAtrasadas`):
+  // las pagadas este mes que eran de antes, y las de este mes pagadas después.
+  const movidas = [...letrasAtrasadas(recurrencias(usuario))]
+    .map(([id, letra]) => ({ g: db.gastosEfectivo.find((x) => x.id === id), letra }))
+    .filter(({ g }) => g && esDe(g.usuario, usuario))
+    .map(({ g, letra }) => ({ detalle: g.detalle, monto: redondear(Number(g.monto) || 0), fecha: g.fecha, letra, pagadoEn: claveMes(g.fecha) }));
+  const letrasDeAntes = movidas.filter((x) => x.pagadoEn === mes);
+  const letrasPagadasDespues = movidas.filter((x) => x.letra === mes);
   const pendientes = (fila.realLineas || []).filter((l) => l.aMano)
     .map((l) => ({ detalle: l.detalle, monto: redondear(l.monto), medio: l.medio, nota: l.nota || '' }));
   const pendiente = redondear(MEDIOS.reduce((s, k) => s + (fila.aMano[k] || 0), 0));
@@ -11465,7 +11516,7 @@ function cuentaDelSueldo(mes = mesActual(), usuario = 'J') {
 
   return {
     mes, usuario, sueldo, cobrado, porCobrar, esperado,
-    gastado, totalGastado, pendientes, pendiente,
+    gastado, totalGastado, pendientes, pendiente, letrasDeAntes, letrasPagadasDespues,
     queda, pct, ahorro, libre,
     // Lo que de verdad se ahorraría si el mes acabara hoy así.
     ahorroReal: redondear(Math.max(0, queda)),
@@ -14779,6 +14830,8 @@ function seccionSueldo(mes, usuario) {
         ${linea(`− Tarjetas de ${esc(usuario)}, cuotas del mes`, money(c.gastado.tarjeta))}
         ${linea('− Efectivo y débito', money(c.gastado.efectivo))}
         ${c.gastado.prestamo > 0 ? linea('− Préstamo pagado', money(c.gastado.prestamo)) : ''}
+        ${c.letrasPagadasDespues.map((l) => linea(`<small>${esc(l.detalle)} · letra de ${esc(nombreMes(l.letra).split(' ')[0].toLowerCase())}, pagada el ${esc(textoFecha(l.fecha))}</small>`,
+    `<small>${money(l.monto)}</small>`, 'sub')).join('')}
         ${linea('− Por pagar este mes', money(c.pendiente))}
         ${c.pendientes.map((p) => linea(`<small>${esc(p.detalle)}${p.nota ? ` · ${esc(p.nota)}` : ''}</small>`,
     `<small>${money(p.monto)}</small>`, 'sub')).join('')}
@@ -14797,7 +14850,9 @@ function seccionSueldo(mes, usuario) {
       : 'Sin sueldo esperado: se usa solo lo cobrado.'}
       Cuenta como sueldo lo que se apunta como quincena, fin de mes o sueldo.
       Lo «por pagar» es lo escrito en Presupuesto para este mes y aún sin marcar
-      como pagado.</p>
+      como pagado.${c.letrasDeAntes.map((l) => ` ${esc(l.detalle)} (${money(l.monto)}), pagado el
+      ${esc(textoFecha(l.fecha))}, es la letra de ${esc(nombreMes(l.letra).split(' ')[0].toLowerCase())}: cuenta en el
+      sueldo de ese mes, no en este.`).join('')}</p>
     </details>
     <div class="sueldo-acciones"><button class="btn pequeno" id="sueldo-ajustar">Ajustar sueldo y ahorro</button></div>`;
 }
