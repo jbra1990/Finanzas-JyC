@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-vBh3kPFWh+hx4qxdYcFZp8f+2OXKQWVqabrRmVj12gk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-UnyYq7PnlkgkwLEDlvJ5ceIbXIgFhL18/Xw6CAYt0yU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3726,6 +3726,85 @@ body.velada .cabecera { filter: blur(18px); }
   .sueldo-anillo { width: 88px; height: 88px; }
 }
 
+/*
+ * Presupuesto en tres tarjetas: 1 Lo real, 2 Simulación, 3 Comunes. Cada mes
+ * es un desplegable: cuánto queda del sueldo, una barra con la marca del límite
+ * para gastar (el sueldo menos el ahorro) y, al tocarlo, el detalle.
+ */
+.pz-num {
+  display: inline-grid; place-items: center; flex: none;
+  width: 22px; height: 22px; border-radius: 50%; margin-right: 8px;
+  font-size: 12px; font-weight: 750; vertical-align: 2px;
+}
+.pz-num.real { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok-texto); }
+.pz-num.sim { background: color-mix(in srgb, var(--acento) 25%, transparent); color: var(--acento); }
+.pz-num.com { background: color-mix(in srgb, var(--tinta-3) 28%, transparent); color: var(--tinta); }
+.pz-sub { margin: 2px 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--tinta-2); text-wrap: pretty; }
+.pz-sub b { color: var(--tinta); }
+.pz-sub-tit { margin: 16px 0 4px; font-size: 13px; font-weight: 680; color: var(--tinta); }
+.pz-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 12px; }
+.pz-kpis.dos { grid-template-columns: 1fr 1fr; }
+.pz-kpis > div {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  padding: 8px 10px; border-radius: 12px; border: 1px solid var(--borde); background: var(--superficie-2);
+}
+.pz-kpis .k { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tinta-3); }
+.pz-kpis .v { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; color: var(--tinta); font-variant-numeric: tabular-nums; }
+.pz-kpis .v.ok { color: var(--ok-texto); }
+.pz-kpis .v.mal { color: var(--alerta); }
+.pz-ley { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 4px; font-size: 11.5px; color: var(--tinta-2); }
+.pz-ley i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.pz-ley .pz-ley-marca { width: 2px; height: 11px; border-radius: 0; background: var(--tinta); vertical-align: -2px; }
+
+.pz-tarjeta { background: var(--serie-1); }
+.pz-efectivo { background: var(--serie-3); }
+.pz-fijo { background: color-mix(in srgb, var(--alerta) 75%, transparent); }
+.pz-real { background: color-mix(in srgb, var(--serie-1) 55%, transparent); }
+.pz-comunes {
+  background: repeating-linear-gradient(135deg,
+    color-mix(in srgb, var(--tinta-3) 70%, transparent) 0 3px,
+    color-mix(in srgb, var(--tinta-3) 30%, transparent) 3px 6px);
+}
+.pz-simulado { background: var(--acento); }
+
+.pz-meses { margin-top: 4px; }
+.pz-mes { border-top: 1px solid var(--grid); }
+.pz-mes > summary { list-style: none; cursor: pointer; padding: 10px 0 8px; }
+.pz-mes > summary::-webkit-details-marker { display: none; }
+.pz-mes > summary:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; border-radius: 6px; }
+.pz-mes-cab {
+  display: grid; grid-template-columns: 1fr auto; gap: 1px 10px; align-items: baseline;
+  font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.pz-mes-nombre { font-weight: 680; color: var(--tinta); }
+.pz-mes-nombre::before { content: '›'; display: inline-block; width: 12px; color: var(--tinta-3); transition: transform 0.15s; }
+.pz-mes[open] .pz-mes-nombre::before { transform: rotate(90deg); }
+.pz-mes-queda { text-align: right; color: var(--tinta-2); }
+.pz-mes-queda b { font-weight: 720; }
+.pz-mes-queda b.ok, .pz-mes-estado.ok { color: var(--ok-texto); }
+.pz-mes-queda b.mal, .pz-mes-estado.mal { color: var(--alerta); }
+.pz-mes-cab small { font-size: 11.5px; color: var(--tinta-3); padding-left: 12px; }
+.pz-mes-cab small.pz-mes-estado { text-align: right; padding-left: 0; }
+.pz-barra {
+  position: relative; display: flex; height: 12px; margin: 7px 0 5px;
+  border-radius: 6px; background: var(--superficie-3);
+}
+.pz-barra > span { height: 100%; min-width: 2px; }
+.pz-barra > span:first-child { border-radius: 6px 0 0 6px; }
+.pz-marca { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--tinta); }
+.pz-mes-pie { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--tinta-3); font-variant-numeric: tabular-nums; }
+.pz-mes-pie b { color: var(--tinta-2); font-weight: 620; }
+.pz-mes-pie b.sim { color: var(--acento); }
+.pz-mes .caja-desglose { margin: 0 0 10px; }
+.pz-nota {
+  margin: 12px 0 0; padding: 10px 12px; border-radius: 12px;
+  font-size: 12.5px; line-height: 1.5; color: var(--tinta-2);
+  background: color-mix(in srgb, var(--acento) 10%, var(--superficie-2));
+  border: 1px solid color-mix(in srgb, var(--acento) 35%, transparent);
+}
+.pz-nota b { color: var(--tinta); }
+.pz-nota .mal { color: var(--alerta); font-weight: 650; }
+
 </style>
 </head>
 <body>
@@ -3758,7 +3837,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '72a2b567b5';
+window.__VERSION_APP__ = 'f747e465ed';
 
 M["cerradura"] = (function () {
 /**
@@ -10459,6 +10538,23 @@ function marcarPago(id, mes, pagado = true, enOrden = null) {
   db.config[CLAVE_MANUALES] = JSON.stringify(lista);
 }
 
+/**
+ * Lo escrito a mano es de dos clases, y en Presupuesto van en tarjetas
+ * distintas:
+ *   · un PAGO FIJO —la letra del préstamo, algo que se paga sí o sí— cuenta en
+ *     «Lo real», en el sueldo del mes y en «Cómo va el mes»;
+ *   · una SIMULACIÓN —el repuesto que se piensa diferir, un pago único que
+ *     todavía no se decidió— solo cuenta en «Simulación», hasta que se ejecuta.
+ * Se elige al escribirlo (`simulacion`). Lo guardado antes de poder elegir sigue
+ * la regla de siempre: lo que se «Ejecuta» (una vez, o a plazos con tarjeta) es
+ * simulación; un préstamo o lo que se paga mes a mes, pago fijo.
+ */
+function esSimulacion(r) {
+  if (!r?.manual) return false;
+  if (typeof r.simulacion === 'boolean') return r.simulacion;
+  return r.clase === 'unico' || (r.clase === 'plazos' && r.medio === 'Tarjeta');
+}
+
 function borrarManual(id) {
   db.config[CLAVE_MANUALES] = JSON.stringify(fijosManuales().filter((x) => x.id !== id));
 }
@@ -11153,6 +11249,14 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
      */
     aMano: cero(),
     realLineas: [],
+    /*
+     * Lo previsto, partido por quién lo pone: los pagos fijos escritos a mano
+     * (también en `aMano`), lo que se simula y lo que la app deduce del
+     * historial. Son las tres tarjetas de Presupuesto.
+     */
+    fijos: 0,
+    simulacion: 0,
+    comunes: 0,
   }]));
 
   /*
@@ -11215,12 +11319,17 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
      * del historial —la gasolina, el súper— es una media de lo que suele pasar,
      * y eso se queda solo en la simulación.
      */
-    const sumar = (mes, monto, cuando, conocido = false) => {
+    // De dónde sale: un pago fijo, una simulación o lo que deduce la app.
+    const origen = !r.manual ? 'comunes' : esSimulacion(r) ? 'simulacion' : 'fijos';
+    const sumar = (mes, monto, cuando, conocidoPedido = false) => {
       const casilla = porMes.get(mes);
       // Un mes ya pagado no se prevé: su importe ya está apuntado como gasto
       // real, y volver a preverlo lo contaría dos veces.
       if (!casilla || mes < ahora || r.mesesConRegistro.has(mes) || pagados.has(mes)) return;
+      // Lo simulado no es real hasta que se ejecute.
+      const conocido = conocidoPedido && origen !== 'simulacion';
       casilla.previsto += monto;
+      casilla[origen] += monto;
       // Se reparte por medio en la misma proporción que el historial.
       Object.entries(r.reparto || { Efectivo: 1 }).forEach(([medio, parte]) => {
         if (casilla.medios[medio] !== undefined) casilla.medios[medio] += monto * parte;
@@ -11229,7 +11338,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
           casilla.aMano[medio] += monto * parte;
         }
       });
-      casilla.lineas.push({ clave: r.clave, detalle: r.detalle, monto, cuando, reparto: r.reparto });
+      casilla.lineas.push({ clave: r.clave, detalle: r.detalle, monto, cuando, reparto: r.reparto, origen });
       if (conocido) {
         casilla.realLineas.push({
           detalle: r.detalle,
@@ -11304,6 +11413,9 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
     x.comprometido = redondear(x.comprometido);
     x.previsto = redondear(x.previsto);
     x.simulado = redondear(x.comprometido + x.previsto);
+    x.fijos = redondear(x.fijos);
+    x.simulacion = redondear(x.simulacion);
+    x.comunes = redondear(x.comunes);
     MEDIOS.forEach((k) => {
       x.medios[k] = redondear(x.medios[k]);
       x.reales[k] = redondear(x.reales[k]);
@@ -11549,6 +11661,23 @@ function sueldoEsperado(mes, usuario = 'J') {
  *   medio, lo pendiente con sus líneas, lo que queda, la meta de ahorro, lo
  *   libre y cómo va («bien», «cerca», «ahorro», «pasado»).
  */
+/**
+ * El sueldo de un mes para Presupuesto, de una persona o de los dos.
+ *
+ * Lo cobrado si ya llegó todo y, si no, lo esperado. Un mes que todavía no ha
+ * llegado se calcula con lo de hoy: mirar tres meses atrás desde enero dejaría
+ * fuera la quincena de septiembre y caería en la mediana de otros meses.
+ */
+function sueldoDelMes(mes, quien = 'J') {
+  const personas = quien === 'Ambos' ? ['J', 'C'] : [quien];
+  const base = mes > mesActual() ? mesActual() : mes;
+  return personas.reduce((t, u) => {
+    const cobrado = mes > mesActual() ? 0 : sueldoCobrado(mes, u);
+    const sueldo = Math.max(cobrado, sueldoEsperado(base, u).monto);
+    return { sueldo: redondear(t.sueldo + sueldo), cobrado: redondear(t.cobrado + cobrado) };
+  }, { sueldo: 0, cobrado: 0 });
+}
+
 function cuentaDelSueldo(mes = mesActual(), usuario = 'J') {
   const fila = proyeccion([mes], { quien: usuario }).filas[0];
   const cobrado = sueldoCobrado(mes, usuario);
@@ -11605,7 +11734,7 @@ function cuentaDelSueldo(mes = mesActual(), usuario = 'J') {
   };
 }
 
-return { ES_SUELDO, MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, compraQueLoCubre, cuentaDelSueldo, estaExcluida, fijosManuales, guardarAjuste, guardarAjusteSueldo, guardarManual, marcarPago, medioDe, mesesProyectados, porcentajeAhorro, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra, sueldoEsperado };
+return { ES_SUELDO, MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, compraQueLoCubre, cuentaDelSueldo, esSimulacion, estaExcluida, fijosManuales, guardarAjuste, guardarAjusteSueldo, guardarManual, marcarPago, medioDe, mesesProyectados, porcentajeAhorro, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra, sueldoDelMes, sueldoEsperado };
 })();
 
 M["pdf"] = (function () {
@@ -18098,10 +18227,9 @@ M["views/plan"] = (function () {
  */
 
 const {db, guardar, categoriasGasto, cuentasBancarias, tarjetas, upsert, nuevoId, capitalizar} = M["store"];
-const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes, hoyLocal} = M["calc"];
-const {columnasApiladas, alRedimensionar} = M["charts"];
+const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes, hoyLocal, totalAhorrado} = M["calc"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo, confirmar} = M["ui"];
-const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago} = M["plan"];
+const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago, esSimulacion, sueldoDelMes, porcentajeAhorro} = M["plan"];
 const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
 const vistaTarjetas = M["views/tarjetas"];
 const {plegable} = M["pliegue"];
@@ -18194,12 +18322,15 @@ function render(raiz, { irA } = {}) {
    * para saber cuál había escrito uno. Aquí se ve de un vistazo qué se metió a
    * mano, cuánto suma y dónde tocar para añadir otro.
    */
-  const mios = [...fiables.filter((r) => r.manual), ...unicosHechos];
-  const fijos = fiables.filter((r) => !r.manual && r.tipo === 'Fijo');
-  const variables = fiables.filter((r) => !r.manual && r.tipo !== 'Fijo');
-  // Lo que se paga una vez no tiene un «al mes»; se cuenta aparte para poder
-  // decir en la cabecera cuánto hay pendiente y cuándo cae.
-  const unicosVivos = mios.filter((r) => r.clase === 'unico' && r.vigente);
+  // Lo escrito a mano, partido en pagos fijos (van a «Lo real») y
+  // simulaciones (a «Simulación»). Ver `esSimulacion`.
+  const pagosFijos = fiables.filter((r) => r.manual && !esSimulacion(r));
+  const simulados = [...fiables.filter((r) => r.manual && esSimulacion(r)), ...unicosHechos];
+  const comunes = fiables.filter((r) => !r.manual)
+    .sort((a, b) => (a.tipo === b.tipo ? b.porMes - a.porMes : a.tipo === 'Fijo' ? -1 : 1));
+  const contexto = {
+    plan, quien: estado.quien, pagosFijos, simulados, comunes, suma,
+  };
 
   raiz.innerHTML = `
     <section class="panel">
@@ -18233,88 +18364,15 @@ function render(raiz, { irA } = {}) {
 
     <section class="tarjeta">${comoVaElMes(primero, estado.quien)}</section>
 
-    <section class="tarjeta" id="ritmo">${seccionRitmo(ritmo)}</section>
-
     <div class="barra-accion">
+      <span class="pista crece">Meses a ver</span>
       <div id="seg-horizonte"></div>
     </div>
 
-    <section class="tarjeta">
-      <header><h2>Simulación mes a mes</h2>
-        <span class="pista">Apuntado y previsto</span></header>
-      ${avisoInfo(`De lo que sale del historial solo se proyecta lo que
-        se repite con un ritmo reconocible; una compra suelta que no vuelve no
-        entra. Sí entra lo que escribas tú, incluido un pago de una sola vez.
-        Aun así esta cifra es un piso, no un techo: el gasto real de los últimos
-        meses promedia ${money(promedio)}.`)}
-      <div id="g-plan"></div>
-      ${tablaMeses(plan.filas, {
-    grupo: 'sim',
-    celda: (f) => f.medios,
-    total: (f) => f.simulado,
-    totales: plan.totales.medios,
-    granTotal: plan.totales.simulado,
-  })}
-    </section>
-
-    <section class="tarjeta">
-      <header><h2>Solo lo real</h2>
-        <span class="pista">Solo lo ya registrado</span></header>
-      ${avisoInfo(`Aquí no hay ni una cifra supuesta: el efectivo ya
-        gastado, las cuotas de tarjeta de compras ya hechas, las cuotas de
-        préstamo y los pagos únicos que hayas apuntado. Aunque venzan meses
-        adelante, esos importes están decididos, no estimados. La última columna
-        va acumulando. Tócale a un mes para ver de qué se compone.`)}
-      ${tablaMeses(plan.filas, {
-    grupo: 'real',
-    celda: (f) => f.reales,
-    total: (f) => f.real,
-    totales: plan.totales.reales,
-    granTotal: plan.totales.real,
-    acumulado: true,
-  })}
-      ${notaAMano(plan)}
-    </section>
-
-    <section class="tarjeta">
-      <header><h2>Los que escribo yo</h2>
-        <span class="pista">${mios.length ? [
-    // Si todo lo escrito a mano es de una vez, no hay «al mes» que enseñar:
-    // decir «$0,00 al mes» solo hace ruido.
-    // Tres datos no caben en la pestaña de una línea: con el mensual y el de
-    // una vez basta, el número de gastos ya se ve en la propia lista.
-    // Con las dos cifras juntas no cabe en una línea; manda la mensual, y si
-    // no hay, la de una vez.
-    suma(mios)
-      ? `${money(suma(mios))} al mes`
-      : (unicosVivos.length
-        ? `${money(redondear(unicosVivos.reduce((t, r) => t + r.monto, 0)))} una vez`
-        : ''),
-  ].filter(Boolean).join(' · ') : 'Todavía ninguno'}</span></header>
-      ${mios.length ? listaRecurrencias(mios, false) : `
-        <p class="vacio">Aquí van los gastos que sabes que vienen aunque no estén
-          en el historial: una cuota de préstamo, un curso diferido, una
-          suscripción que acabas de contratar, o un pago suelto que ya tienes
-          decidido. Entran en la previsión del mes que les toque igual que los
-          que la app deduce sola.</p>`}
-      <div class="barra-accion">
-        <span class="pista crece">Puede repetirse, ir a plazos o ser un solo pago
-          en un mes concreto. Se escribe el concepto, el importe y cómo se paga.</span>
-        <button class="btn primario pequeno" id="btn-fijo">+ Añadir gasto</button>
-      </div>
-    </section>
-
-    <section class="tarjeta">
-      <header><h2>Fijos que deduce la app</h2>
-        <span class="pista">${money(suma(fijos))} al mes fijo</span></header>
-      ${listaRecurrencias(fijos, false)}
-    </section>
-
-    <section class="tarjeta">
-      <header><h2>Variables que se repiten</h2>
-        <span class="pista">Aprox ${money(suma(variables))} al mes</span></header>
-      ${listaRecurrencias(variables, false)}
-    </section>
+    <section class="tarjeta" id="pz-real">${tarjetaReal(contexto)}</section>
+    <section class="tarjeta" id="pz-sim">${tarjetaSimulacion(contexto)}</section>
+    <section class="tarjeta" id="pz-comunes">${tarjetaComunes(contexto)}</section>
+    <section class="tarjeta" id="ritmo">${seccionRitmo(ritmo)}</section>
 
     ${descartadas.length ? `
       <section class="tarjeta">
@@ -18353,45 +18411,13 @@ function render(raiz, { irA } = {}) {
     (v) => { estado.horizonte = Number(v); render(raiz, { irA }); },
   ));
 
-  const pintar = () => {
-    columnasApiladas($('#g-plan', raiz), meses.map((m) => nombreMes(m, true)), [
-      { nombre: 'Comprometido', valores: plan.filas.map((f) => f.comprometido) },
-      { nombre: 'Previsto', valores: plan.filas.map((f) => f.previsto) },
-    ], { alto: 240 });
-  };
-  pintar();
-  alRedimensionar(pintar);
-
-  // Desplegar un mes para ver de qué se compone: en la tabla simulada, lo
-  // previsto; en la real, los gastos concretos que ya están apuntados.
-  $$('.desplegable', raiz).forEach((fila) => {
-    const abrir = () => {
-      const m = fila.dataset.mes;
-      const grupo = fila.dataset.grupo;
-      const det = $(`[data-detalle="${CSS.escape(`${grupo}:${m}`)}"]`, raiz);
-      const abierta = fila.getAttribute('aria-expanded') === 'true';
-      const datos = plan.filas.find((f) => f.mes === m);
-      if (!abierta && !det.dataset.pintado) {
-        det.firstElementChild.innerHTML = `<div class="caja-desglose">${
-          grupo === 'real' ? detalleReal(datos) : detalleMes(datos)}</div>`;
-        det.dataset.pintado = 'si';
-      }
-      const caja = det.querySelector('.caja-desglose');
-      // El ancho se mide en la tabla a la que pertenece la fila, no en la
-      // primera de la pantalla: con dos tablas ya no son la misma.
-      const scroll = fila.closest('.tabla-scroll');
-      if (caja && scroll) caja.style.width = `${Math.max(240, scroll.clientWidth - 32)}px`;
-      det.hidden = abierta;
-      fila.setAttribute('aria-expanded', String(!abierta));
-    };
-    fila.addEventListener('click', abrir);
-    fila.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); }
-    });
-  });
-
   const recargar = () => render(raiz, { irA });
-  $('#btn-fijo', raiz).addEventListener('click', () => formFijo(null, recargar));
+  $('#btn-fijo', raiz).addEventListener('click', () => formFijo({
+    esNuevo: true, manual: true, simulacion: false, clase: 'plazos', medio: 'Préstamo',
+  }, recargar));
+  $('#btn-simular', raiz).addEventListener('click', () => formFijo({
+    esNuevo: true, manual: true, simulacion: true, clase: 'plazos', medio: 'Tarjeta', cargo: 'Diferido',
+  }, recargar));
   $$('[data-editar]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => {
       const r = todas.find((x) => x.clave === btn.dataset.editar);
@@ -18473,41 +18499,168 @@ function render(raiz, { irA } = {}) {
   });
 }
 
-/**
- * La tabla de meses por bolsillo. Se dibuja dos veces con los mismos huesos:
- * una con lo simulado —lo apuntado más lo que la app supone— y otra con lo
- * real pelado. El `grupo` separa las filas desplegables de las dos, que si no
- * comparten el `data-mes` y abrir un mes en una abriría el de la otra.
+/*
+ * Presupuesto en tres tarjetas, cada una con una pregunta:
+ *   1. LO REAL: ¿qué gasto sí o sí? Lo registrado y los pagos fijos escritos a
+ *      mano. Sin estimaciones. Contra el sueldo y contra lo que hay en cuentas.
+ *   2. SIMULACIÓN: ¿y si…? Lo real + los gastos comunes + lo que uno escribe
+ *      para probar. No cuenta como real hasta que se ejecuta.
+ *   3. COMUNES: lo que la app ve repetirse en el historial. Puede pasar o no.
  */
-function tablaMeses(filas, {
-  grupo, celda, total, totales, granTotal, acumulado = false,
-}) {
-  const columnas = MEDIOS.length + 2 + (acumulado ? 1 : 0);
-  return `
-    <div class="tabla-scroll">
-      <table>
-        <thead><tr><th>Mes</th>${MEDIOS.map((m) => `<th>${m}</th>`).join('')}
-          <th>Total</th>${acumulado ? '<th>Acumulado</th>' : ''}</tr></thead>
-        <tbody>${filas.map((f) => `
-          <tr class="desplegable" data-grupo="${grupo}" data-mes="${esc(f.mes)}"
-              aria-expanded="false" tabindex="0">
-            <td><span class="flecha" aria-hidden="true">›</span>${esc(nombreMes(f.mes))}</td>
-            ${MEDIOS.map((m) => `<td class="${celda(f)[m] ? '' : 'cero'}">${
-  celda(f)[m] ? money(celda(f)[m]) : '—'}</td>`).join('')}
-            <td><strong>${money(total(f))}</strong></td>
-            ${acumulado ? `<td class="acumulado">${money(f.acumulado)}</td>` : ''}
-          </tr>
-          <tr class="detalle" data-detalle="${grupo}:${esc(f.mes)}" hidden>
-            <td colspan="${columnas}"></td></tr>`).join('')}
-        </tbody>
-        <tfoot><tr>
-          <td>TOTAL</td>
-          ${MEDIOS.map((m) => `<td>${money(totales[m])}</td>`).join('')}
-          <td>${money(granTotal)}</td>
-          ${acumulado ? `<td class="acumulado">${money(granTotal)}</td>` : ''}
-        </tr></tfoot>
-      </table>
-    </div>`;
+
+/** Sueldo, meta de ahorro y escala de la barra de un mes. */
+function cuentaDelMes(f, quien) {
+  const { sueldo, cobrado } = sueldoDelMes(f.mes, quien);
+  const pct = porcentajeAhorro(quien === 'Ambos' ? 'J' : quien);
+  const meta = redondear((sueldo * pct) / 100);
+  return { sueldo, cobrado, pct, meta, limite: redondear(sueldo - meta) };
+}
+
+/** Una barra de un mes: los tramos y la marca del límite para gastar. */
+function barraMes(tramos, sueldo, limite) {
+  const total = tramos.reduce((t, [v]) => t + Math.max(0, v), 0);
+  const escala = Math.max(sueldo, total, 1);
+  const ancho = (v) => `${((Math.max(0, v) / escala) * 100).toFixed(2)}%`;
+  return `<div class="pz-barra" role="img" aria-label="${esc(tramos.map(([v, , r]) => `${r}: ${money(v)}`).join('; '))}; límite para gastar ${esc(money(limite))}">
+    ${tramos.filter(([v]) => v > 0).map(([v, k]) => `<span class="pz-${k}" style="width:${ancho(v)}"></span>`).join('')}
+    <b class="pz-marca" style="left:${((limite / escala) * 100).toFixed(2)}%"></b>
+  </div>`;
+}
+
+/** La cabecera de un mes: cuánto queda del sueldo y si llega al ahorro. */
+function cabezaMes(f, c, gasto, rotuloGasto) {
+  const queda = redondear(c.sueldo - gasto);
+  const llega = queda >= c.meta;
+  return `<span class="pz-mes-nombre">${esc(nombreMes(f.mes))}</span>
+    <span class="pz-mes-queda">queda <b class="${llega ? 'ok' : 'mal'}">${money(queda)}</b></span>
+    <small>${rotuloGasto} ${money(gasto)}${rotuloGasto === 'gasto' ? ` de ${money(c.sueldo)}` : ''}</small>
+    <small class="pz-mes-estado ${llega ? 'ok' : 'mal'}">${llega
+    ? `alcanza para el ${c.pct} %` : `faltan ${money(redondear(c.meta - queda))} para el ${c.pct} %`}</small>`;
+}
+
+function tarjetaReal({ plan, quien, pagosFijos }) {
+  const enCuentas = totalAhorrado();
+  let saldo = enCuentas;
+  const filas = plan.filas.map((f, i) => {
+    const c = cuentaDelMes(f, quien);
+    const fijos = redondear(MEDIOS.reduce((t, k) => t + (f.aMano[k] || 0), 0));
+    const tarjeta = redondear(f.reales.Tarjeta - f.aMano.Tarjeta);
+    const efectivo = redondear(f.real - fijos - tarjeta);
+    /*
+     * Lo que habría en cuentas al cerrar el mes: el sueldo que falta cobrar
+     * entra, y sale lo real que aún no salió. Del mes en curso, el efectivo ya
+     * gastado ya está descontado del saldo; la tarjeta se da por pagada en su
+     * mes.
+     */
+    saldo = i === 0
+      ? redondear(saldo + (c.sueldo - c.cobrado) - fijos - tarjeta)
+      : redondear(saldo + c.sueldo - f.real);
+    return `<details class="pz-mes" data-mes="${esc(f.mes)}">
+      <summary>
+        <div class="pz-mes-cab">${cabezaMes(f, c, f.real, 'gasto')}</div>
+        ${barraMes([[tarjeta, 'tarjeta', 'Tarjeta'], [efectivo, 'efectivo', 'Efectivo y débito'], [fijos, 'fijo', 'Pagos fijos']], c.sueldo, c.limite)}
+        <div class="pz-mes-pie"><span>En cuentas al cierre del mes</span><span>≈ <b>${money(saldo)}</b></span></div>
+      </summary>
+      <div class="caja-desglose">${detalleReal(f)}</div>
+    </details>`;
+  });
+  const f0 = plan.filas[0];
+  const c0 = cuentaDelMes(f0, quien);
+  const queda0 = redondear(c0.sueldo - f0.real);
+  return `<header><h2><span class="pz-num real">1</span>Lo real</h2><span class="pista">Lo que sí o sí</span></header>
+    <p class="pz-sub">Lo ya registrado (tarjeta, efectivo y débito) y los <b>pagos fijos</b> que sabes que
+      vienen, como la letra de un préstamo. <b>Sin estimaciones.</b> Toca un mes para ver el detalle.</p>
+    <div class="pz-kpis">
+      <div><span class="k">En cuentas hoy</span><span class="v">${money(enCuentas)}</span></div>
+      <div><span class="k">Real de ${esc(nombreMes(f0.mes).split(' ')[0].toLowerCase())}</span><span class="v">${money(f0.real)}</span></div>
+      <div><span class="k">Queda del sueldo</span><span class="v ${queda0 >= c0.meta ? 'ok' : 'mal'}">${money(queda0)}</span></div>
+    </div>
+    <div class="pz-ley"><span><i class="pz-tarjeta"></i>Tarjeta</span><span><i class="pz-efectivo"></i>Efectivo y débito</span>
+      <span><i class="pz-fijo"></i>Pagos fijos</span><span><i class="pz-ley-marca"></i>Límite para gastar</span></div>
+    <div class="pz-meses">${filas.join('')}</div>
+    <h3 class="pz-sub-tit">Pagos fijos</h3>
+    ${pagosFijos.length ? listaRecurrencias(pagosFijos, false) : `
+      <p class="vacio">Ningún pago fijo todavía. Aquí van los que se pagan sí o sí:
+        la letra de un préstamo, una cuota en efectivo, una suscripción.</p>`}
+    <div class="barra-accion"><span class="pista crece">Un pago que vas a hacer sí o sí.</span>
+      <button class="btn primario pequeno" id="btn-fijo">+ Pago fijo</button></div>`;
+}
+
+function tarjetaSimulacion({ plan, quien, simulados }) {
+  const meses = plan.filas.map((f) => {
+    const c = cuentaDelMes(f, quien);
+    const proy = redondear(f.real + f.comunes + f.simulacion);
+    const queda = redondear(c.sueldo - proy);
+    return {
+      f, c, proy, llega: queda >= c.meta, falta: redondear(c.meta - queda),
+      llegaSin: queda + f.simulacion >= c.meta,
+    };
+  });
+  const hay = meses.some((m) => m.f.simulacion > 0);
+  const corto = meses.filter((m) => !m.llega);
+  const cortoSin = meses.filter((m) => !m.llegaSin);
+  const nombre = (m) => nombreMes(m.f.mes).split(' ')[0].toLowerCase();
+  const lista = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}` : xs[0]);
+  const resumen = !hay ? ''
+    : corto.length
+      ? `<p class="pz-nota"><b>Con lo que simulas,</b> <span class="mal">${lista(corto.map(nombre))}</span>
+        ${corto.length > 1 ? 'no llegan' : 'no llega'} al ahorro (${corto.map((m) => `${nombre(m)}: faltan ${money(m.falta)}`).join('; ')}).
+        ${cortoSin.length ? `Sin ello, ${lista(cortoSin.map(nombre))} ${cortoSin.length > 1 ? 'se quedan cortos' : 'se queda corto'} igual.`
+    : 'Sin ello, todos los meses llegan.'}</p>`
+      : '<p class="pz-nota"><b>Con lo que simulas, todos los meses llegan al ahorro.</b></p>';
+  return `<header><h2><span class="pz-num sim">2</span>Simulación</h2><span class="pista">¿Y si…?</span></header>
+    <p class="pz-sub">Lo real (1) + los gastos comunes que calcula la app (3) + lo que escribes para probar.
+      <b>No cuenta como real hasta que lo ejecutes.</b></p>
+    ${simulados.length ? listaRecurrencias(simulados, false) : `
+      <p class="vacio">Nada simulado. Prueba con algo que piensas comprar —un repuesto
+        diferido, un viaje— y mira cómo quedarían los meses.</p>`}
+    <div class="barra-accion"><span class="pista crece">Algo que piensas gastar.</span>
+      <button class="btn primario pequeno" id="btn-simular">+ Simular un gasto</button></div>
+    <div class="pz-ley"><span><i class="pz-real"></i>Lo real</span><span><i class="pz-comunes"></i>Comunes (app)</span>
+      <span><i class="pz-simulado"></i>Simulado</span><span><i class="pz-ley-marca"></i>Límite</span></div>
+    <div class="pz-meses">${meses.map(({ f, c, proy }) => `<details class="pz-mes" data-mes="${esc(f.mes)}">
+      <summary>
+        <div class="pz-mes-cab">${cabezaMes(f, c, proy, 'proyección')}</div>
+        ${barraMes([[f.real, 'real', 'Lo real'], [f.comunes, 'comunes', 'Comunes'], [f.simulacion, 'simulado', 'Simulado']], c.sueldo, c.limite)}
+        <div class="pz-mes-pie"><span>real ${money(f.real)} + app ${money(f.comunes)}${f.simulacion > 0
+    ? ` + <b class="sim">simulado ${money(f.simulacion)}</b>` : ''}</span></div>
+      </summary>
+      <div class="caja-desglose">${detallePrevisto(f)}</div>
+    </details>`).join('')}</div>
+    ${resumen}`;
+}
+
+function tarjetaComunes({ comunes, suma }) {
+  return `<header><h2><span class="pz-num com">3</span>Comunes</h2><span class="pista">Lo calcula la app</span></header>
+    <p class="pz-sub">Lo que la app ve que se repite en tu historial. <b>Puede pasar o no:</b> es una estimación.
+      Cuando la compra ocurre, pasa a «Lo real». «Dejar fuera» lo saca de la simulación.</p>
+    <div class="pz-kpis dos">
+      <div><span class="k">Al mes, aprox.</span><span class="v">${money(suma(comunes))}</span></div>
+      <div><span class="k">Gastos que se repiten</span><span class="v">${comunes.length}</span></div>
+    </div>
+    ${comunes.length ? listaRecurrencias(comunes, false) : `
+      <p class="vacio">Todavía no hay gastos que se repitan con un ritmo reconocible:
+        hacen falta al menos tres apariciones.</p>`}`;
+}
+
+/** Lo previsto de un mes que no es real: lo común y lo simulado. */
+function detallePrevisto(fila) {
+  const lineas = fila.lineas.filter((l) => l.origen !== 'fijos');
+  if (!lineas.length) {
+    return `<p class="vacio">Nada previsto para ${esc(nombreMes(fila.mes))} además de lo real.</p>`;
+  }
+  return `<ul class="desglose">${lineas.map((l) => `
+    <li>
+      <div class="principal">
+        <div class="titulo">${esc(l.detalle)}
+          <span class="chip">${l.origen === 'simulacion' ? 'simulado' : 'app'}</span></div>
+        <div class="meta">${esc(String(l.cuando).startsWith('~') || /^cuota|^pago/.test(String(l.cuando)) ? l.cuando : textoFecha(l.cuando))}</div>
+      </div>
+      <div class="monto">${money(l.monto)}</div>
+    </li>`).join('')}
+    </ul>
+    <div class="pie-desglose">Lo real: <strong>${money(fila.real)}</strong> · comunes
+      <strong>${money(fila.comunes)}</strong> · simulado <strong>${money(fila.simulacion)}</strong></div>`;
 }
 
 /*
@@ -18737,42 +18890,6 @@ function diasQuedan(mes) {
   return new Date(a, m, 0).getDate() - hoy.getDate();
 }
 
-/*
- * Por qué esta tabla no cuadra con Resumen.
- *
- * «Solo lo real» cuenta también lo que uno ESCRIBE —un gasto a plazos, un pago
- * único—, porque el importe y el mes están decididos aunque el cargo no haya
- * llegado. Resumen, en cambio, enseña lo que la tarjeta ya facturó: tiene que
- * cuadrar con el estado de cuenta del banco, que es para lo que sirve.
- *
- * Las dos cifras son correctas y miden cosas distintas. Lo que faltaba era
- * decir cuánto vale esa diferencia, que es lo que hacía pensar en un error.
- */
-function notaAMano(plan) {
-  const total = MEDIOS.reduce((s, k) => s + (plan.totales.aMano?.[k] || 0), 0);
-  if (total <= 0) return '';
-
-  const hoy = mesActual();
-  const deEsteMes = plan.filas.find((f) => f.mes === hoy);
-  const porMedio = MEDIOS
-    .filter((k) => (deEsteMes?.aMano?.[k] || 0) > 0)
-    .map((k) => `<strong>${money(deEsteMes.aMano[k])}</strong> en ${k.toLowerCase()}`);
-  // «a, b y c»: con « y » entre todos parecía una lista de dos cosas mal escrita.
-  const lista = porMedio.length > 1
-    ? `${porMedio.slice(0, -1).join(', ')} y ${porMedio[porMedio.length - 1]}`
-    : porMedio[0];
-
-  return `<div class="aviso"><span class="icono">i</span>
-    <span class="crece">${lista
-    ? `Este mes, ${lista} son gastos que escribiste a mano y que todavía no ha
-       cobrado nadie. `
-    : 'Parte de estas cifras son gastos que escribiste a mano y que todavía no ha '
-      + 'cobrado nadie. '}Cuentan como reales —el importe y el mes están
-    decididos— pero por eso esta tabla no cuadra con Resumen, que solo enseña lo
-    que la tarjeta ya facturó. En el detalle de cada mes van marcados «a mano».
-    En todos los meses de la tabla suman ${money(redondear(total))}.</span></div>`;
-}
-
 function detalleReal(fila) {
   if (!fila) return '';
   if (!fila.realLineas.length) {
@@ -18875,6 +18992,8 @@ function formFijo(r, alTerminar) {
     || (clasePrevia === 'plazos' ? 'Préstamo' : 'Efectivo');
   const cuerpo = `
     ${editaDeducido ? '' : `
+      <div class="campo ancho"><label>Es</label><div id="pf-es"></div>
+        <p class="pista" id="pf-es-pista"></p></div>
       <div class="campo ancho"><label>Qué es</label><div id="pf-clase"></div></div>`}
     <div class="campo ancho"><label for="pf-detalle">Concepto</label>
       <input id="pf-detalle" name="detalle" required placeholder="Préstamo del carro"
@@ -18957,8 +19076,10 @@ function formFijo(r, alTerminar) {
 
   let tipo = r?.tipo || 'Fijo';
   let clase = clasePrevia;
+  // Pago fijo («Lo real») o simulación («Simulación»): ver `esSimulacion`.
+  let simulacion = typeof r?.simulacion === 'boolean' ? r.simulacion : Boolean(r?.manual && !nuevo && esSimulacion(r));
   const dlg = modal({
-    titulo: nuevo ? 'Nuevo gasto previsto' : `Corregir «${r.detalle}»`,
+    titulo: nuevo ? (simulacion ? 'Simular un gasto' : 'Nuevo pago fijo') : `Corregir «${r.detalle}»`,
     cuerpo,
     aceptar: nuevo ? 'Añadir' : 'Guardar',
     alAbrir(form) {
@@ -18968,6 +19089,20 @@ function formFijo(r, alTerminar) {
       ));
       conectarCategoria(form, 'pf-cat');
       const preview = $('#pf-preview', form);
+      const cajaEs = $('#pf-es', form);
+      if (cajaEs) {
+        const pistaEs = $('#pf-es-pista', form);
+        const explicar = () => {
+          pistaEs.textContent = simulacion
+            ? 'Solo cuenta en «Simulación», para ver cómo quedarían los meses. Con «Ejecutar» pasa a lo real.'
+            : 'Se paga sí o sí: cuenta en «Lo real», en el sueldo del mes y en «Cómo va el mes».';
+        };
+        cajaEs.appendChild(segmentado(
+          [{ valor: 'fijo', texto: 'Pago fijo' }, { valor: 'sim', texto: 'Simulación' }],
+          simulacion ? 'sim' : 'fijo', (v) => { simulacion = v === 'sim'; explicar(); },
+        ));
+        explicar();
+      }
 
       /*
        * Los campos que no son de la clase elegida se ESCONDEN Y SE DESACTIVAN.
@@ -19071,8 +19206,8 @@ function formFijo(r, alTerminar) {
           const cuando = $('#pf-unico-mes', form).value || mesHoy;
           preview.innerHTML = monto
             ? `Un solo pago de <strong>${money(monto)}</strong> en
-               <strong>${esc(nombreMes(cuando))}</strong>. Se suma a ese mes en las
-               dos tablas —la simulada y la real— y no vuelve a aparecer.`
+               <strong>${esc(nombreMes(cuando))}</strong>. Se suma a ese mes
+               ${simulacion ? 'en la simulación' : 'en lo real y en la simulación'} y no vuelve a aparecer.`
             : 'Escribe el importe para ver dónde va a caer.';
           return;
         }
@@ -19158,7 +19293,10 @@ function formFijo(r, alTerminar) {
           tipo,
         }),
       };
-      const fila = { ...comun, detalle: capitalizar(d.detalle), ...propio[clase]() };
+      const fila = {
+        ...comun, detalle: capitalizar(d.detalle), ...propio[clase](),
+        ...(editaDeducido ? {} : { simulacion }),
+      };
 
       if (nuevo) {
         guardarManual({
@@ -19226,28 +19364,6 @@ function conLaDetectada(dias) {
   };
   return [...CADENCIAS, suya].sort((a, b) => a.valor - b.valor);
 }
-
-function detalleMes(fila) {
-  if (!fila) return '';
-  if (!fila.lineas.length) {
-    return `<p class="vacio">Sin previsión para ${esc(nombreMes(fila.mes))}:
-      todo lo que se espera ya está registrado.</p>`;
-  }
-  return `<ul class="desglose">${fila.lineas.map((l) => `
-    <li>
-      <div class="principal">
-        <div class="titulo">${esc(l.detalle)}</div>
-        <div class="meta">${esc(String(l.cuando).startsWith('~') ? l.cuando : textoFecha(l.cuando))}</div>
-      </div>
-      <div class="monto">${money(l.monto)}</div>
-    </li>`).join('')}
-    </ul>
-    <div class="pie-desglose">${fila.lineas.length}
-      ${fila.lineas.length === 1 ? 'gasto previsto' : 'gastos previstos'} ·
-      <strong>${money(fila.previsto)}</strong> sobre
-      ${money(fila.comprometido)} ya comprometidos</div>`;
-}
-
 
 /**
  * Registrar el pago de un gasto previsto.
