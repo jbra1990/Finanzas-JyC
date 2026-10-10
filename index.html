@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-JFVHDBYGzGyZ8eJxiKcg8br44L5HKzzS75GHl/3eYiw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jZ1MYIzBTV4BSlHVwIUWN4Hap8N3vFBHX+pxzyAN4Yo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3812,6 +3812,53 @@ body.velada .cabecera { filter: blur(18px); }
   background: color-mix(in srgb, var(--alerta) 12%, transparent);
 }
 
+/* Listas plegables dentro de las tarjetas de Presupuesto. */
+.pz-lista { margin: 12px 0 4px; border: 1px solid var(--borde); border-radius: 12px; background: var(--superficie-2); }
+.pz-lista > summary {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  padding: 10px 12px; cursor: pointer; list-style: none; font-size: 13px;
+}
+.pz-lista > summary::-webkit-details-marker { display: none; }
+.pz-lista > summary:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; border-radius: 12px; }
+.pz-lista-tit { font-weight: 660; color: var(--tinta); }
+.pz-lista-tit::before { content: '›'; display: inline-block; width: 14px; color: var(--tinta-3); transition: transform 0.15s; }
+.pz-lista[open] .pz-lista-tit::before { transform: rotate(90deg); }
+.pz-lista-res { font-size: 12px; color: var(--tinta-3); font-variant-numeric: tabular-nums; text-align: right; }
+.pz-lista > .lista, .pz-lista > .vacio { padding: 0 12px 8px; margin: 0; }
+
+/* El comparador: tres escenarios por mes. */
+.pz-comp-fin {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 12px;
+  font-variant-numeric: tabular-nums;
+}
+.pz-comp-fin > .k { grid-column: 1 / -1; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tinta-3); }
+.pz-comp-fin > div {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  padding: 8px 9px; border-radius: 12px; border: 1px solid var(--borde); background: var(--superficie-2);
+}
+.pz-comp-fin span { font-size: 11px; color: var(--tinta-2); }
+.pz-comp-fin b { font-size: 14px; font-weight: 720; color: var(--tinta); letter-spacing: -0.01em; }
+.pz-comp-fin small { font-size: 10.5px; color: var(--tinta-3); line-height: 1.3; }
+.pz-comp-fin i, .pz-comp-tabla i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+.pz-comp > summary { padding-bottom: 6px; }
+.pz-comp-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; margin-bottom: 4px; }
+.pz-comp-cab small { font-size: 11.5px; color: var(--tinta-3); text-align: right; }
+.pz-comp-tabla { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; table-layout: fixed; }
+.pz-comp-tabla th, .pz-comp-tabla td { padding: 4px 2px; text-align: right; vertical-align: top; }
+.pz-comp-tabla thead th { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tinta-3); line-height: 1.2; }
+.pz-comp-tabla tbody th { text-align: left; font-weight: 620; color: var(--tinta-2); white-space: nowrap; width: 27%; }
+.pz-comp-tabla td { color: var(--tinta); font-weight: 640; }
+.pz-comp-tabla td small { display: block; font-size: 10.5px; font-weight: 500; color: var(--tinta-3); }
+.pz-comp-tabla td.ok { color: var(--ok-texto); }
+.pz-comp-tabla td.mal { color: var(--alerta); }
+.pz-comp-tabla tbody tr + tr { border-top: 1px solid var(--grid); }
+/* Sin el aspecto de las tablas grandes de la app: es un resumen dentro de la tarjeta. */
+.pz-comp-tabla thead th, .pz-comp-tabla tbody th, .pz-comp-tabla td {
+  background: none; border: 0; position: static; white-space: normal;
+}
+.pz-comp-tabla tbody th { white-space: nowrap; }
+.pz-comp-tabla tbody tr + tr { border-top: 1px solid var(--grid); }
+
 </style>
 </head>
 <body>
@@ -3844,7 +3891,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '5682ba52cc';
+window.__VERSION_APP__ = 'd4e96e0acb';
 
 M["cerradura"] = (function () {
 /**
@@ -11685,6 +11732,19 @@ function sueldoDelMes(mes, quien = 'J') {
   }, { sueldo: 0, cobrado: 0 });
 }
 
+/**
+ * Otros ingresos de un mes que todavía no han llegado a las cuentas: lo que no
+ * es sueldo (una venta, un reembolso, un extra) apuntado con fecha posterior a
+ * `desde`. Lo de antes ya está en el saldo de las cuentas.
+ */
+function otrosIngresos(mes, quien = 'J', desde = '') {
+  return redondear(db.ingresos
+    .filter((i) => (i.mes || claveMes(i.fecha)) === mes && String(i.fecha || '').slice(0, 10) > desde
+      && (quien === 'Ambos' || i.usuario === quien)
+      && esIngresoReal(i) && !ES_SUELDO.test(i.concepto || ''))
+    .reduce((s, i) => s + (Number(i.neto) || 0), 0));
+}
+
 function cuentaDelSueldo(mes = mesActual(), usuario = 'J') {
   const fila = proyeccion([mes], { quien: usuario }).filas[0];
   const cobrado = sueldoCobrado(mes, usuario);
@@ -11741,7 +11801,7 @@ function cuentaDelSueldo(mes = mesActual(), usuario = 'J') {
   };
 }
 
-return { ES_SUELDO, MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, compraQueLoCubre, cuentaDelSueldo, esSimulacion, estaExcluida, fijosManuales, guardarAjuste, guardarAjusteSueldo, guardarManual, marcarPago, medioDe, mesesProyectados, porcentajeAhorro, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra, sueldoDelMes, sueldoEsperado };
+return { ES_SUELDO, MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, compraQueLoCubre, cuentaDelSueldo, esSimulacion, estaExcluida, fijosManuales, guardarAjuste, guardarAjusteSueldo, guardarManual, marcarPago, medioDe, mesesProyectados, otrosIngresos, porcentajeAhorro, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra, sueldoDelMes, sueldoEsperado };
 })();
 
 M["pdf"] = (function () {
@@ -18280,9 +18340,9 @@ M["views/plan"] = (function () {
  */
 
 const {db, guardar, categoriasGasto, cuentasBancarias, tarjetas, upsert, nuevoId, capitalizar} = M["store"];
-const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes, hoyLocal, totalAhorrado} = M["calc"];
+const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes, hoyLocal, ahorradoAl} = M["calc"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo, confirmar} = M["ui"];
-const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago, esSimulacion, sueldoDelMes, porcentajeAhorro, claveGasto} = M["plan"];
+const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago, esSimulacion, sueldoDelMes, porcentajeAhorro, claveGasto, otrosIngresos} = M["plan"];
 const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
 const vistaTarjetas = M["views/tarjetas"];
 const {plegable} = M["pliegue"];
@@ -18291,7 +18351,11 @@ const {plegable} = M["pliegue"];
  * y mezclar dos bolsillos daba una cifra que no es de nadie. Se puede cambiar
  * en cualquier momento, y la elección se recuerda mientras dure la sesión.
  */
-const estado = { horizonte: 6, mesAbierto: null, quien: 'J' };
+const estado = {
+  horizonte: 6, mesAbierto: null, quien: 'J',
+  // Las listas plegables que se dejaron abiertas: siguen así al repintar.
+  listas: new Set(),
+};
 
 function render(raiz, { irA } = {}) {
   const meses = mesesProyectados(estado.horizonte);
@@ -18480,6 +18544,13 @@ function render(raiz, { irA } = {}) {
     (v) => { estado.horizonte = Number(v); render(raiz, { irA }); },
   ));
 
+  // Las listas plegables se recuerdan abiertas al repintar (tras pagar, editar…).
+  $$('details.pz-lista', raiz).forEach((d) => {
+    d.addEventListener('toggle', () => {
+      if (d.open) estado.listas.add(d.dataset.lista); else estado.listas.delete(d.dataset.lista);
+    });
+  });
+
   const recargar = () => render(raiz, { irA });
   $('#btn-fijo', raiz).addEventListener('click', () => formFijo({
     esNuevo: true, manual: true, simulacion: false, clase: 'plazos', medio: 'Préstamo',
@@ -18624,21 +18695,13 @@ function cabezaMes(f, c, gasto, rotuloGasto) {
     ? `alcanza para el ${c.pct} %` : `faltan ${money(redondear(c.meta - queda))} para el ${c.pct} %`}</small>`;
 }
 
-function tarjetaReal({ plan, quien, pagosFijos }) {
-  const enCuentas = totalAhorrado();
-  let saldo = enCuentas;
+function tarjetaReal({ plan, quien, pagosFijos, suma }) {
+  const enCuentas = ahorradoAl(hoyLocal());
+  const cierre = cierres(plan, quien, (f) => f.real);
   const filas = plan.filas.map((f, i) => {
     const c = cuentaDelMes(f, quien);
     const { fijos, tarjeta, efectivo } = partesReales(f);
-    /*
-     * Lo que habría en cuentas al cerrar el mes: el sueldo que falta cobrar
-     * entra, y sale lo real que aún no salió. Del mes en curso, el efectivo ya
-     * gastado ya está descontado del saldo; la tarjeta se da por pagada en su
-     * mes.
-     */
-    saldo = i === 0
-      ? redondear(saldo + (c.sueldo - c.cobrado) - fijos - tarjeta)
-      : redondear(saldo + c.sueldo - f.real);
+    const { saldo } = cierre[i];
     return `<details class="pz-mes" data-mes="${esc(f.mes)}">
       <summary>
         <div class="pz-mes-cab">${cabezaMes(f, c, f.real, 'gasto')}</div>
@@ -18662,12 +18725,47 @@ function tarjetaReal({ plan, quien, pagosFijos }) {
     <div class="pz-ley"><span><i class="pz-tarjeta"></i>Tarjeta</span><span><i class="pz-efectivo"></i>Efectivo y débito</span>
       <span><i class="pz-fijo"></i>Pagos fijos</span><span><i class="pz-ley-marca"></i>Límite para gastar</span></div>
     <div class="pz-meses">${filas.join('')}</div>
-    <h3 class="pz-sub-tit">Pagos fijos</h3>
-    ${pagosFijos.length ? listaRecurrencias(pagosFijos, false) : `
+    ${listaPlegable('fijos', 'Pagos fijos', pagosFijos.length
+    ? `${pagosFijos.length} · ${money(suma(pagosFijos))} al mes` : 'ninguno',
+  pagosFijos.length ? listaRecurrencias(pagosFijos, false) : `
       <p class="vacio">Ningún pago fijo todavía. Aquí van los que se pagan sí o sí:
-        la letra de un préstamo, una cuota en efectivo, una suscripción.</p>`}
+        la letra de un préstamo, una cuota en efectivo, una suscripción.</p>`)}
     <div class="barra-accion"><span class="pista crece">Un pago que vas a hacer sí o sí.</span>
       <button class="btn primario pequeno" id="btn-fijo">+ Pago fijo</button></div>`;
+}
+
+/**
+ * Lo que habría en cuentas al cerrar cada mes si se gasta `gasto(f)`.
+ *
+ * Se parte de lo que hay hoy en bancos y efectivo (sin lo invertido) y, mes a
+ * mes, entra el sueldo y los otros ingresos apuntados que aún no llegaron, y
+ * sale lo gastado. Del mes en curso, lo que ya salió por efectivo o débito ya
+ * está descontado del saldo; lo demás —tarjeta, pagos fijos, lo simulado, lo
+ * común— se da por pagado en el mes.
+ */
+function cierres(plan, quien, gasto) {
+  const hoy = hoyLocal();
+  let saldo = ahorradoAl(hoy);
+  return plan.filas.map((f, i) => {
+    const c = cuentaDelMes(f, quien);
+    const extra = otrosIngresos(f.mes, quien, hoy);
+    const total = redondear(gasto(f));
+    saldo = i === 0
+      ? redondear(saldo + (c.sueldo - c.cobrado) + extra - (total - partesReales(f).efectivo))
+      : redondear(saldo + c.sueldo + extra - total);
+    return { saldo, extra };
+  });
+}
+
+/**
+ * Una lista dentro de una tarjeta, plegada: el título dice qué hay y cuánto
+ * suma, y se abre al tocarlo. Se recuerda abierta mientras dure la sesión.
+ */
+function listaPlegable(id, titulo, resumen, html) {
+  return `<details class="pz-lista" data-lista="${esc(id)}"${estado.listas.has(id) ? ' open' : ''}>
+    <summary><span class="pz-lista-tit">${titulo}</span><span class="pz-lista-res">${resumen}</span></summary>
+    ${html}
+  </details>`;
 }
 
 /** Lo real de un mes partido en sus tres bolsillos. */
@@ -18713,14 +18811,11 @@ function mesesCon(plan, quien, total) {
  * gastar. Aquí van la lista de lo simulado y el botón para simular.
  */
 function tarjetaRealSim({ plan, quien, simulados }) {
-  let saldo = totalAhorrado();
   const meses = mesesCon(plan, quien, (f) => f.real + f.simulacion);
+  // Como en «Lo real», y además sale lo simulado.
+  const cierre = cierres(plan, quien, (f) => f.real + f.simulacion);
   const filas = meses.map(({ f, c, proy }, i) => {
-    const { fijos, tarjeta } = partesReales(f);
-    // Como en «Lo real», y además sale lo simulado.
-    saldo = i === 0
-      ? redondear(saldo + (c.sueldo - c.cobrado) - fijos - tarjeta - f.simulacion)
-      : redondear(saldo + c.sueldo - proy);
+    const { saldo } = cierre[i];
     return `<details class="pz-mes" data-mes="${esc(f.mes)}">
       <summary>
         <div class="pz-mes-cab">${cabezaMes(f, c, proy, 'gasto')}</div>
@@ -18735,9 +18830,12 @@ function tarjetaRealSim({ plan, quien, simulados }) {
   return `<header><h2><span class="pz-num sim">2</span>Simulación</h2><span class="pista">Real + simulado</span></header>
     <p class="pz-sub">Lo real (1) más lo que escribes para probar: un repuesto que piensas diferir, un viaje.
       <b>Sin los gastos comunes de la app. Lo simulado no cuenta como real hasta que lo ejecutes.</b></p>
-    ${simulados.length ? listaRecurrencias(simulados, false) : `
+    ${listaPlegable('simulados', 'Lo que simulas', simulados.length
+    ? `${simulados.length} · ${money(redondear(simulados.filter((r) => r.vigente && !r.cubierto)
+      .reduce((t, r) => t + (r.clase === 'plazos' ? (r.restante ?? r.total) : r.clase === 'unico' ? r.monto : r.porMes), 0)))}`
+    : 'nada', simulados.length ? listaRecurrencias(simulados, false) : `
       <p class="vacio">Nada simulado. Prueba con algo que piensas comprar y mira cómo
-        quedarían los meses.</p>`}
+        quedarían los meses.</p>`)}
     <div class="barra-accion"><span class="pista crece">Algo que piensas gastar.</span>
       <button class="btn primario pequeno" id="btn-simular">+ Simular un gasto</button></div>
     <div class="pz-ley"><span><i class="pz-real"></i>Lo real</span><span><i class="pz-simulado"></i>Simulado</span>
@@ -18747,27 +18845,65 @@ function tarjetaRealSim({ plan, quien, simulados }) {
 }
 
 /*
- * 3 · La proyección completa: lo real, lo simulado y además los gastos comunes
- * que la app espera por el historial. Es la cifra más parecida a lo que de
- * verdad se va a gastar.
+ * 3 · El comparador: por mes, los tres escenarios uno debajo del otro —solo lo
+ * real; lo real más lo simulado; y además lo que la app espera por la
+ * frecuencia de consumo—, cuánto se aparta cada uno de lo real (en dinero y en
+ * %), y cuánto quedaría del sueldo y en cuentas en cada caso.
  */
+const ESCENARIOS = [
+  { k: 'real', rotulo: 'Real', gasto: (f) => f.real },
+  { k: 'simulado', rotulo: '+ Simulado', gasto: (f) => f.real + f.simulacion },
+  { k: 'comunes', rotulo: '+ Comunes', gasto: (f) => f.real + f.simulacion + f.comunes },
+];
+
 function tarjetaSimulacion({ plan, quien }) {
-  const meses = mesesCon(plan, quien, (f) => f.real + f.comunes + f.simulacion);
-  return `<header><h2><span class="pz-num sim">3</span>Con gastos comunes</h2><span class="pista">Proyección</span></header>
-    <p class="pz-sub">Lo real (1) + lo simulado (2) + los gastos comunes que calcula la app (4): víveres,
-      gasolina, salidas… <b>Lo más parecido a lo que de verdad vas a gastar.</b></p>
-    <div class="pz-ley"><span><i class="pz-real"></i>Lo real</span><span><i class="pz-comunes"></i>Comunes (app)</span>
-      <span><i class="pz-simulado"></i>Simulado</span><span><i class="pz-ley-marca"></i>Límite</span></div>
-    <div class="pz-meses">${meses.map(({ f, c, proy }) => `<details class="pz-mes" data-mes="${esc(f.mes)}">
+  const cierre = ESCENARIOS.map((e) => cierres(plan, quien, e.gasto));
+  const ultimo = plan.filas[plan.filas.length - 1];
+  const total = (e) => redondear(plan.filas.reduce((t, f) => t + e.gasto(f), 0));
+  const pctDe = (x, base) => (base > 0 ? `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x / base) * 100)} %` : '');
+  const dif = (x, base) => (x > 0.004 ? `<small>+${money(x)} · ${pctDe(x, base)}</small>` : '<small>igual</small>');
+
+  const meses = plan.filas.map((f, i) => {
+    const c = cuentaDelMes(f, quien);
+    const extra = cierre[0][i].extra;
+    const base = redondear(f.real);
+    const filas = ESCENARIOS.map((e, k) => {
+      const g = redondear(e.gasto(f));
+      const queda = redondear(c.sueldo - g);
+      return `<tr class="esc-${e.k}">
+        <th><i class="pz-${e.k}"></i>${e.rotulo}</th>
+        <td>${money(g)}${k ? dif(redondear(g - base), base) : ''}</td>
+        <td class="${queda >= c.meta ? 'ok' : 'mal'}">${money(queda)}</td>
+        <td>${money(cierre[k][i].saldo)}</td>
+      </tr>`;
+    }).join('');
+    return `<details class="pz-mes pz-comp" data-mes="${esc(f.mes)}">
       <summary>
-        <div class="pz-mes-cab">${cabezaMes(f, c, proy, 'proyección')}</div>
-        ${barraMes([[f.real, 'real', 'Lo real'], [f.comunes, 'comunes', 'Comunes'], [f.simulacion, 'simulado', 'Simulado']], c.sueldo, c.limite)}
-        <div class="pz-mes-pie"><span>real ${money(f.real)} + app ${money(f.comunes)}${f.simulacion > 0
-    ? ` + <b class="sim">simulado ${money(f.simulacion)}</b>` : ''}</span></div>
+        <div class="pz-comp-cab"><span class="pz-mes-nombre">${esc(nombreMes(f.mes))}</span>
+          <small>sueldo ${money(c.sueldo)}${extra > 0 ? ` + otros ingresos ${money(extra)}` : ''}</small></div>
+        <table class="pz-comp-tabla">
+          <thead><tr><th></th><th>Gasto</th><th>Queda sueldo</th><th>En cuentas</th></tr></thead>
+          <tbody>${filas}</tbody>
+        </table>
       </summary>
       <div class="caja-desglose">${detallePrevisto(f)}</div>
-    </details>`).join('')}</div>
-    ${notaSimulacion(meses)}`;
+    </details>`;
+  });
+
+  const totalReal = total(ESCENARIOS[0]);
+  return `<header><h2><span class="pz-num sim">3</span>Comparar</h2><span class="pista">Los tres escenarios</span></header>
+    <p class="pz-sub">Cada mes, tres maneras de verlo: <b>solo lo real</b> (1), lo real <b>+ lo que simulas</b> (2) y
+      además <b>+ los gastos comunes</b> que la app calcula por frecuencia (4). Cuánto se aparta cada uno de lo real,
+      cuánto queda del sueldo (en verde si llega al ahorro) y cuánto quedaría en cuentas, con los otros ingresos que
+      tengas apuntados.</p>
+    <div class="pz-comp-fin">
+      <span class="k">Al cierre de ${esc(nombreMes(ultimo.mes))} tendrías en cuentas</span>
+      ${ESCENARIOS.map((e, k) => `<div class="esc-${e.k}"><span><i class="pz-${e.k}"></i>${e.k === 'real' ? 'Solo lo real' : e.rotulo}</span>
+        <b>${money(cierre[k][cierre[k].length - 1].saldo)}</b>
+        <small>gasto ${money(total(e))}${k ? ` · ${pctDe(total(e) - totalReal, totalReal)} que lo real` : ` en ${plan.filas.length} meses`}</small></div>`).join('')}
+    </div>
+    <div class="pz-meses">${meses.join('')}</div>
+    ${notaSimulacion(mesesCon(plan, quien, ESCENARIOS[2].gasto))}`;
 }
 
 /** Lo simulado de un mes, para el detalle de «Real + simulado». */
@@ -18788,13 +18924,12 @@ function tarjetaComunes({ comunes, suma }) {
   return `<header><h2><span class="pz-num com">4</span>Comunes</h2><span class="pista">Lo calcula la app</span></header>
     <p class="pz-sub">Lo que la app ve que se repite en tu historial. <b>Puede pasar o no:</b> es una estimación.
       Cuando la compra ocurre, pasa a «Lo real». «Dejar fuera» lo saca de la proyección (3).</p>
-    <div class="pz-kpis dos">
-      <div><span class="k">Al mes, aprox.</span><span class="v">${money(suma(comunes))}</span></div>
-      <div><span class="k">Gastos que se repiten</span><span class="v">${comunes.length}</span></div>
-    </div>
-    ${comunes.length ? listaRecurrencias(comunes, false) : `
+
+    ${listaPlegable('comunes', 'Gastos que se repiten', comunes.length
+    ? `${comunes.length} · ${money(suma(comunes))} al mes` : 'ninguno',
+  comunes.length ? listaRecurrencias(comunes, false) : `
       <p class="vacio">Todavía no hay gastos que se repitan con un ritmo reconocible:
-        hacen falta al menos tres apariciones.</p>`}`;
+        hacen falta al menos tres apariciones.</p>`)}`;
 }
 
 /** Lo previsto de un mes que no es real: lo común y lo simulado. */
