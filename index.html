@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-UnyYq7PnlkgkwLEDlvJ5ceIbXIgFhL18/Xw6CAYt0yU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-rHvO7xTufrEHsd3ai+Fb5tcI+VqyEj33YoE+WSnMp5w='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3805,6 +3805,13 @@ body.velada .cabecera { filter: blur(18px); }
 .pz-nota b { color: var(--tinta); }
 .pz-nota .mal { color: var(--alerta); font-weight: 650; }
 
+/* Un gasto escrito a mano que repite uno de Comunes. */
+.chip.alerta {
+  color: var(--alerta);
+  border-color: color-mix(in srgb, var(--alerta) 50%, transparent);
+  background: color-mix(in srgb, var(--alerta) 12%, transparent);
+}
+
 </style>
 </head>
 <body>
@@ -3837,7 +3844,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'f747e465ed';
+window.__VERSION_APP__ = '6d57c156bb';
 
 M["cerradura"] = (function () {
 /**
@@ -13491,7 +13498,7 @@ M["ajustes"] = (function () {
 const {db, upsert, guardar, quitarCuotas, sepultar, eliminar} = M["store"];
 const {alCambiarSync, configurado, estadoSync} = M["sync"];
 const {registrarGastoTarjeta} = M["forms"];
-const {fijosManuales, borrarManual, compraQueLoCubre} = M["plan"];
+const {fijosManuales, borrarManual, compraQueLoCubre, recurrencias, estaExcluida, claveGasto, guardarAjuste} = M["plan"];
 const {money, nombreMes, sumarMeses, claveEstadoCuenta, redondear, esIngresoReal, textoFecha} = M["calc"];
 const {$, esc, modal, brindis} = M["ui"];
 const CLAVE = 'ajustes_hechos';
@@ -13509,6 +13516,28 @@ function marcados() {
 }
 function marcar(id, estado) {
   db.config[CLAVE] = JSON.stringify({ ...marcados(), [id]: estado });
+}
+
+/**
+ * Lo escrito a mano en Presupuesto que ya no sirve: lo que repite un gasto
+ * que la app ya deduce (misma categoría, o mismo ritmo e importe al mes) y
+ * lo que ya terminó de pagarse. Lo mismo que Presupuesto marca en el archivo.
+ */
+function manualesQueNoSirven() {
+  const todas = recurrencias();
+  const deducidos = todas.filter((r) => !r.manual && r.fiable && r.vigente && !estaExcluida(r.clave));
+  const repite = (r) => r.clase === 'periodico' && (deducidos.find((d) => d.clave === claveGasto(r.categoria || ''))
+    || deducidos.find((d) => Math.abs(d.cadencia - r.cadencia) <= 1 && Math.abs(d.porMes - r.porMes) <= Math.max(0.5, d.porMes * 0.02)));
+  return todas.filter((r) => r.manual).map((r) => {
+    const d = repite(r);
+    if (d) {
+      return { r, motivo: `repite «${esc(d.detalle)}», que la app ya cuenta en Comunes (${money(d.porMes)} al mes)${estaExcluida(r.clave) ? '; por eso estaba fuera' : ': se sumaba dos veces'}` };
+    }
+    if (r.clase === 'plazos' && (r.pagadas || 0) >= r.cuotas) {
+      return { r, motivo: `terminado de pagar (${r.cuotas} de ${r.cuotas}, ${money(r.total)})` };
+    }
+    return null;
+  }).filter(Boolean);
 }
 
 /** La tarjeta Bolivariano, por id y, si no, por nombre. */
@@ -13549,6 +13578,30 @@ const AJUSTES = [
     },
     aplicar() {
       fijosManuales().filter((f) => compraQueLoCubre(f)).forEach((f) => borrarManual(f.id));
+    },
+  },
+  {
+    /*
+     * Presupuesto: lo escrito a mano que ya no sirve. «Gasolina» ($15,23 cada
+     * 5 días) está fuera porque repite «Combustible», que la app ya cuenta en
+     * Comunes con las mismas cifras: devolverla la contaría dos veces. Y lo
+     * que terminó de pagarse —«Pago arreglo casa», «Compras temu»— ya no
+     * cuenta en ningún sitio. Se borran de Presupuesto; el historial de
+     * gastos no se toca.
+     */
+    id: 'presupuesto-limpieza-2026-10',
+    revisar() {
+      const sobran = manualesQueNoSirven();
+      if (!sobran.length) return { estado: 'nada' };
+      return {
+        estado: 'aplicar',
+        titulo: 'En Presupuesto, lo que ya no sirve',
+        texto: `<ul class="ajustes-pasos">${sobran.map(({ r, motivo }) => `<li>«${esc(r.detalle)}»: ${motivo}.</li>`).join('')}</ul>
+          Se borran de Presupuesto. No cambia ninguna cifra: ya no contaban. Los gastos registrados no se tocan.`,
+      };
+    },
+    aplicar() {
+      manualesQueNoSirven().forEach(({ r }) => { borrarManual(r.id); guardarAjuste(r.clave, null); });
     },
   },
   {
@@ -18229,7 +18282,7 @@ M["views/plan"] = (function () {
 const {db, guardar, categoriasGasto, cuentasBancarias, tarjetas, upsert, nuevoId, capitalizar} = M["store"];
 const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes, hoyLocal, totalAhorrado} = M["calc"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo, confirmar} = M["ui"];
-const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago, esSimulacion, sueldoDelMes, porcentajeAhorro} = M["plan"];
+const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago, esSimulacion, sueldoDelMes, porcentajeAhorro, claveGasto} = M["plan"];
 const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
 const vistaTarjetas = M["views/tarjetas"];
 const {plegable} = M["pliegue"];
@@ -18322,10 +18375,25 @@ function render(raiz, { irA } = {}) {
    * para saber cuál había escrito uno. Aquí se ve de un vistazo qué se metió a
    * mano, cuánto suma y dónde tocar para añadir otro.
    */
+  /*
+   * Un gasto que se repite escrito a mano puede ser el mismo que la app ya
+   * deduce de su categoría: «Gasolina» a mano y «Combustible» en Comunes, con
+   * las mismas cifras. Contados los dos, la gasolina sale el doble. Se marca
+   * para decirlo y para no ofrecer devolverlo si está fuera.
+   */
+  const deducidosVivos = todas.filter((r) => !r.manual && r.fiable && r.vigente && !estaExcluida(r.clave));
+  const marcar = (r) => {
+    if (!r.manual || r.clase !== 'periodico') return r;
+    // La misma categoría, o el mismo ritmo y el mismo importe al mes.
+    const igual = deducidosVivos.find((d) => d.clave === claveGasto(r.categoria || ''))
+      || deducidosVivos.find((d) => Math.abs(d.cadencia - r.cadencia) <= 1
+        && Math.abs(d.porMes - r.porMes) <= Math.max(0.5, d.porMes * 0.02));
+    return igual ? { ...r, duplica: igual } : r;
+  };
   // Lo escrito a mano, partido en pagos fijos (van a «Lo real») y
   // simulaciones (a «Simulación»). Ver `esSimulacion`.
-  const pagosFijos = fiables.filter((r) => r.manual && !esSimulacion(r));
-  const simulados = [...fiables.filter((r) => r.manual && esSimulacion(r)), ...unicosHechos];
+  const pagosFijos = fiables.filter((r) => r.manual && !esSimulacion(r)).map(marcar);
+  const simulados = [...fiables.filter((r) => r.manual && esSimulacion(r)), ...unicosHechos].map(marcar);
   const comunes = fiables.filter((r) => !r.manual)
     .sort((a, b) => (a.tipo === b.tipo ? b.porMes - a.porMes : a.tipo === 'Fijo' ? -1 : 1));
   const contexto = {
@@ -18374,29 +18442,29 @@ function render(raiz, { irA } = {}) {
     <section class="tarjeta" id="pz-comunes">${tarjetaComunes(contexto)}</section>
     <section class="tarjeta" id="ritmo">${seccionRitmo(ritmo)}</section>
 
-    ${descartadas.length ? `
-      <section class="tarjeta">
-        <header><h2>Fuera del presupuesto</h2>
-          <span class="pista">Tócalos para volver</span></header>
-        ${listaRecurrencias(descartadas, true)}
-      </section>` : ''}
-
-    ${caducadas.length ? `
-      <section class="tarjeta">
-        <header><h2>Parece que ya no se repiten</h2>
-          <span class="pista">Sin aparecer</span></header>
-        ${listaRecurrencias(caducadas, null)}
-      </section>` : ''}
-
-    ${irregulares.length ? `
-      <section class="tarjeta">
-        <header><h2>Se repiten sin ritmo fijo</h2>
-          <span class="pista">Fuera de la previsión</span></header>
-        ${listaRecurrencias(irregulares, null)}
+    ${descartadas.length || caducadas.length || irregulares.length ? `
+      <section class="tarjeta" id="pz-archivo">
+        <header><h2>Archivo</h2>
+          <span class="pista">No cuenta · ${descartadas.length + caducadas.length + irregulares.length}</span></header>
+        <p class="pz-sub">Nada de lo que hay aquí suma en Lo real, Simulación ni Comunes:
+          es para consultar.</p>
+        ${descartadas.length ? `
+          <h3 class="pz-sub-tit">Fuera del presupuesto</h3>
+          <p class="pz-sub">Lo que sacaste con «Dejar fuera». «Devolver» lo vuelve a contar.</p>
+          ${listaRecurrencias(descartadas.map(marcar), true)}` : ''}
+        ${caducadas.length ? `
+          <h3 class="pz-sub-tit">Terminados o que ya no se repiten</h3>
+          <p class="pz-sub">Lo que terminó de pagarse o dejó de aparecer en el historial.</p>
+          ${listaRecurrencias(caducadas.map(marcar), null)}` : ''}
+        ${irregulares.length ? `
+          <h3 class="pz-sub-tit">Se repiten sin ritmo fijo</h3>
+          <p class="pz-sub">Vuelven, pero sin un ritmo que permita preverlos.</p>
+          ${listaRecurrencias(irregulares, null)}` : ''}
       </section>` : ''}`;
 
   // Larga —un concepto por fila—: se pliega al tocar su título.
   plegable($('#ritmo', raiz), 'plan:ritmo');
+  plegable($('#pz-archivo', raiz), 'plan:archivo');
 
   $('#seg-quien', raiz).appendChild(segmentado(
     [{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' },
@@ -18467,6 +18535,21 @@ function render(raiz, { irA } = {}) {
         clase: 'periodico',
         usuario: estado.quien === 'Ambos' ? '' : estado.quien,
       }, recargar);
+    });
+  });
+
+  // Borrar lo escrito a mano que está en el archivo: fuera, terminado o repetido.
+  $$('[data-borrar]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const r = todas.find((x) => x.clave === btn.dataset.borrar);
+      if (!r?.manual) return;
+      confirmar(`¿Borrar «${r.detalle}»? Ya no cuenta en ningún sitio; se quita también de esta lista.`, () => {
+        borrarManual(r.id);
+        guardarAjuste(r.clave, null);
+        guardar();
+        brindis(`«${r.detalle}» borrado`);
+        render(raiz, { irA });
+      }, { aceptar: 'Borrar' });
     });
   });
 
@@ -18698,7 +18781,12 @@ function listaRecurrencias(filas, fuera) {
           ${r.clase === 'unico' && !r.vigente
     ? `<span class="chip">${r.hecho ? 'ya pagado' : 'su mes ya pasó'}</span>` : ''}
           ${r.ajustado && !r.manual ? '<span class="chip">corregido</span>' : ''}
-          ${r.cubierto ? '<span class="chip">ya está en Tarjetas</span>' : ''}</div>
+          ${r.cubierto ? '<span class="chip">ya está en Tarjetas</span>' : ''}
+          ${r.duplica ? `<span class="chip alerta">repite «${esc(r.duplica.detalle)}»</span>` : ''}</div>
+        ${r.duplica ? `<div class="meta">La app ya cuenta este gasto en Comunes como «${esc(r.duplica.detalle)}»
+          (${money(r.duplica.porMes)} al mes)${fuera === true
+    ? ': devolverlo lo contaría dos veces. Se puede borrar.'
+    : ': así se suma dos veces. Bórralo, o deja fuera «' + esc(r.duplica.detalle) + '» en Comunes.'}</div>` : ''}
         ${r.cubierto ? `<div class="meta">Ya se compró con tarjeta: «${esc(r.cubierto.detalle)}»${
   r.cubierto.proposito ? ` (${esc(r.cubierto.proposito)})` : ''}, ${esc(textoFecha(String(r.cubierto.fecha).slice(0, 10)))},
           ${Number(r.cubierto.cuotas) > 1 ? `${Number(r.cubierto.cuotas)} cuotas de ${money(redondear(Number(r.cubierto.monto_total) / Number(r.cubierto.cuotas)))}` : money(r.cubierto.monto_total)}.
@@ -18727,16 +18815,17 @@ function listaRecurrencias(filas, fuera) {
       esc(nombreMes(r.mes, true))}</span></div>`
     : `<div class="monto">${money(r.porMes)}<span class="pie">al mes</span></div>`}
       ${r.clase === 'plazos' ? contadorPlazos(r) : ''}
-      ${fuera === null ? '' : `
+      ${fuera === null && !r.manual ? '' : `
         <div class="acciones">
-          ${r.cubierto ? `<button class="btn pequeno primario" data-quitar-cubierto="${esc(r.clave)}">Quitar de aquí</button>`
+          ${fuera !== false ? '' : r.cubierto ? `<button class="btn pequeno primario" data-quitar-cubierto="${esc(r.clave)}">Quitar de aquí</button>`
     : r.manual && seEjecuta(r) ? `<button class="btn pequeno primario" data-pagar="${esc(r.clave)}">Ejecutar</button>`
       : r.manual ? `<button class="btn pequeno${
   hecho(r) ? '' : ' primario'}" data-pagar="${esc(r.clave)}">
             ${hecho(r) ? 'Pagado ✓' : 'Pagar'}</button>` : ''}
-          <button class="btn pequeno" data-editar="${esc(r.clave)}">Editar</button>
-          <button class="btn pequeno${fuera ? ' primario' : ''}" data-alternar="${esc(r.clave)}">
-            ${fuera ? 'Devolver' : 'Dejar fuera'}</button>
+          ${fuera === null ? '' : `<button class="btn pequeno" data-editar="${esc(r.clave)}">Editar</button>`}
+          ${r.manual && fuera !== false ? `<button class="btn pequeno${r.duplica || fuera === null ? ' primario' : ''}" data-borrar="${esc(r.clave)}">Borrar</button>` : ''}
+          ${fuera === false ? `<button class="btn pequeno" data-alternar="${esc(r.clave)}">Dejar fuera</button>`
+    : fuera === true && !r.duplica ? `<button class="btn pequeno primario" data-alternar="${esc(r.clave)}">Devolver</button>` : ''}
         </div>`}
     </li>`).join('')}</ul>`;
 }
