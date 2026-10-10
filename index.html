@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jZ1MYIzBTV4BSlHVwIUWN4Hap8N3vFBHX+pxzyAN4Yo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-0pE2+ZmhEmIP0Bg6mOf1vZXKkaVgmVWs6WtTh+N+8vg='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3859,6 +3859,14 @@ body.velada .cabecera { filter: blur(18px); }
 .pz-comp-tabla tbody th { white-space: nowrap; }
 .pz-comp-tabla tbody tr + tr { border-top: 1px solid var(--grid); }
 
+/* Los valores de cada tramo de la barra, debajo, con su color. */
+.pz-valores {
+  display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0 0 4px;
+  font-size: 11.5px; color: var(--tinta-2); font-variant-numeric: tabular-nums;
+}
+.pz-valores i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
+.pz-valores b { color: var(--tinta); font-weight: 640; }
+
 </style>
 </head>
 <body>
@@ -3891,7 +3899,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'd4e96e0acb';
+window.__VERSION_APP__ = '18afc9e02a';
 
 M["cerradura"] = (function () {
 /**
@@ -18681,7 +18689,8 @@ function barraMes(tramos, sueldo, limite) {
   return `<div class="pz-barra" role="img" aria-label="${esc(tramos.map(([v, , r]) => `${r}: ${money(v)}`).join('; '))}; límite para gastar ${esc(money(limite))}">
     ${tramos.filter(([v]) => v > 0).map(([v, k]) => `<span class="pz-${k}" style="width:${ancho(v)}"></span>`).join('')}
     <b class="pz-marca" style="left:${((limite / escala) * 100).toFixed(2)}%"></b>
-  </div>`;
+  </div>
+  <div class="pz-valores">${tramos.filter(([v]) => v > 0).map(([v, k, r]) => `<span><i class="pz-${k}"></i>${esc(r)} <b>${money(v)}</b></span>`).join('')}</div>`;
 }
 
 /** La cabecera de un mes: cuánto queda del sueldo y si llega al ahorro. */
@@ -18722,8 +18731,7 @@ function tarjetaReal({ plan, quien, pagosFijos, suma }) {
       <div><span class="k">Real de ${esc(nombreMes(f0.mes).split(' ')[0].toLowerCase())}</span><span class="v">${money(f0.real)}</span></div>
       <div><span class="k">Queda del sueldo</span><span class="v ${queda0 >= c0.meta ? 'ok' : 'mal'}">${money(queda0)}</span></div>
     </div>
-    <div class="pz-ley"><span><i class="pz-tarjeta"></i>Tarjeta</span><span><i class="pz-efectivo"></i>Efectivo y débito</span>
-      <span><i class="pz-fijo"></i>Pagos fijos</span><span><i class="pz-ley-marca"></i>Límite para gastar</span></div>
+    <div class="pz-ley"><span><i class="pz-ley-marca"></i>Límite para gastar</span></div>
     <div class="pz-meses">${filas.join('')}</div>
     ${listaPlegable('fijos', 'Pagos fijos', pagosFijos.length
     ? `${pagosFijos.length} · ${money(suma(pagosFijos))} al mes` : 'ninguno',
@@ -18819,9 +18827,11 @@ function tarjetaRealSim({ plan, quien, simulados }) {
     return `<details class="pz-mes" data-mes="${esc(f.mes)}">
       <summary>
         <div class="pz-mes-cab">${cabezaMes(f, c, proy, 'gasto')}</div>
-        ${barraMes([[f.real, 'real', 'Lo real'], [f.simulacion, 'simulado', 'Simulado']], c.sueldo, c.limite)}
-        <div class="pz-mes-pie"><span>real ${money(f.real)}${f.simulacion > 0
-    ? ` + <b class="sim">simulado ${money(f.simulacion)}</b>` : ''}</span></div>
+        ${(() => {
+    const { fijos, tarjeta, efectivo } = partesReales(f);
+    return barraMes([[tarjeta, 'tarjeta', 'Tarjeta'], [efectivo, 'efectivo', 'Efectivo y débito'],
+      [fijos, 'fijo', 'Pagos fijos'], [f.simulacion, 'simulado', 'Simulado']], c.sueldo, c.limite);
+  })()}
         <div class="pz-mes-pie"><span>En cuentas al cierre del mes</span><span>≈ <b>${money(saldo)}</b></span></div>
       </summary>
       <div class="caja-desglose">${detalleSimulado(f)}${detalleReal(f)}</div>
@@ -18838,8 +18848,7 @@ function tarjetaRealSim({ plan, quien, simulados }) {
         quedarían los meses.</p>`)}
     <div class="barra-accion"><span class="pista crece">Algo que piensas gastar.</span>
       <button class="btn primario pequeno" id="btn-simular">+ Simular un gasto</button></div>
-    <div class="pz-ley"><span><i class="pz-real"></i>Lo real</span><span><i class="pz-simulado"></i>Simulado</span>
-      <span><i class="pz-ley-marca"></i>Límite para gastar</span></div>
+    <div class="pz-ley"><span><i class="pz-ley-marca"></i>Límite para gastar</span></div>
     <div class="pz-meses">${filas.join('')}</div>
     ${notaSimulacion(meses)}`;
 }
