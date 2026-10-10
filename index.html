@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-rHvO7xTufrEHsd3ai+Fb5tcI+VqyEj33YoE+WSnMp5w='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-JFVHDBYGzGyZ8eJxiKcg8br44L5HKzzS75GHl/3eYiw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3844,7 +3844,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '6d57c156bb';
+window.__VERSION_APP__ = '5682ba52cc';
 
 M["cerradura"] = (function () {
 /**
@@ -18438,6 +18438,7 @@ function render(raiz, { irA } = {}) {
     </div>
 
     <section class="tarjeta" id="pz-real">${tarjetaReal(contexto)}</section>
+    <section class="tarjeta" id="pz-realsim">${tarjetaRealSim(contexto)}</section>
     <section class="tarjeta" id="pz-sim">${tarjetaSimulacion(contexto)}</section>
     <section class="tarjeta" id="pz-comunes">${tarjetaComunes(contexto)}</section>
     <section class="tarjeta" id="ritmo">${seccionRitmo(ritmo)}</section>
@@ -18583,12 +18584,14 @@ function render(raiz, { irA } = {}) {
 }
 
 /*
- * Presupuesto en tres tarjetas, cada una con una pregunta:
+ * Presupuesto en cuatro tarjetas, cada una con una pregunta:
  *   1. LO REAL: ¿qué gasto sí o sí? Lo registrado y los pagos fijos escritos a
  *      mano. Sin estimaciones. Contra el sueldo y contra lo que hay en cuentas.
- *   2. SIMULACIÓN: ¿y si…? Lo real + los gastos comunes + lo que uno escribe
- *      para probar. No cuenta como real hasta que se ejecuta.
- *   3. COMUNES: lo que la app ve repetirse en el historial. Puede pasar o no.
+ *   2. REAL + SIMULADO: ¿y si compro esto? Lo real + lo que uno escribe para
+ *      probar, que no cuenta como real hasta que se ejecuta.
+ *   3. CON GASTOS COMUNES: lo real + lo simulado + lo que la app espera por el
+ *      historial. La proyección completa.
+ *   4. COMUNES: lo que la app ve repetirse en el historial. Puede pasar o no.
  */
 
 /** Sueldo, meta de ahorro y escala de la barra de un mes. */
@@ -18626,9 +18629,7 @@ function tarjetaReal({ plan, quien, pagosFijos }) {
   let saldo = enCuentas;
   const filas = plan.filas.map((f, i) => {
     const c = cuentaDelMes(f, quien);
-    const fijos = redondear(MEDIOS.reduce((t, k) => t + (f.aMano[k] || 0), 0));
-    const tarjeta = redondear(f.reales.Tarjeta - f.aMano.Tarjeta);
-    const efectivo = redondear(f.real - fijos - tarjeta);
+    const { fijos, tarjeta, efectivo } = partesReales(f);
     /*
      * Lo que habría en cuentas al cerrar el mes: el sueldo que falta cobrar
      * entra, y sale lo real que aún no salió. Del mes en curso, el efectivo ya
@@ -18669,36 +18670,92 @@ function tarjetaReal({ plan, quien, pagosFijos }) {
       <button class="btn primario pequeno" id="btn-fijo">+ Pago fijo</button></div>`;
 }
 
-function tarjetaSimulacion({ plan, quien, simulados }) {
-  const meses = plan.filas.map((f) => {
+/** Lo real de un mes partido en sus tres bolsillos. */
+function partesReales(f) {
+  const fijos = redondear(MEDIOS.reduce((t, k) => t + (f.aMano[k] || 0), 0));
+  const tarjeta = redondear(f.reales.Tarjeta - f.aMano.Tarjeta);
+  return { fijos, tarjeta, efectivo: redondear(f.real - fijos - tarjeta) };
+}
+
+/**
+ * La frase que resume lo simulado: qué meses no llegan al ahorro por culpa de
+ * lo que se simula, y cuáles no llegarían de todos modos.
+ */
+function notaSimulacion(meses) {
+  if (!meses.some((m) => m.f.simulacion > 0)) return '';
+  const corto = meses.filter((m) => !m.llega);
+  const cortoSin = meses.filter((m) => !m.llegaSin);
+  const nombre = (m) => nombreMes(m.f.mes).split(' ')[0].toLowerCase();
+  const lista = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}` : xs[0]);
+  if (!corto.length) return '<p class="pz-nota"><b>Con lo que simulas, todos los meses llegan al ahorro.</b></p>';
+  return `<p class="pz-nota"><b>Con lo que simulas,</b> <span class="mal">${lista(corto.map(nombre))}</span>
+    ${corto.length > 1 ? 'no llegan' : 'no llega'} al ahorro (${corto.map((m) => `${nombre(m)}: faltan ${money(m.falta)}`).join('; ')}).
+    ${cortoSin.length ? `Sin ello, ${lista(cortoSin.map(nombre))} ${cortoSin.length > 1 ? 'se quedan cortos' : 'se queda corto'} igual.`
+    : 'Sin ello, todos los meses llegan.'}</p>`;
+}
+
+/** Cada mes de una proyección: lo que suma, lo que queda y si llega al ahorro. */
+function mesesCon(plan, quien, total) {
+  return plan.filas.map((f) => {
     const c = cuentaDelMes(f, quien);
-    const proy = redondear(f.real + f.comunes + f.simulacion);
+    const proy = redondear(total(f));
     const queda = redondear(c.sueldo - proy);
     return {
       f, c, proy, llega: queda >= c.meta, falta: redondear(c.meta - queda),
       llegaSin: queda + f.simulacion >= c.meta,
     };
   });
-  const hay = meses.some((m) => m.f.simulacion > 0);
-  const corto = meses.filter((m) => !m.llega);
-  const cortoSin = meses.filter((m) => !m.llegaSin);
-  const nombre = (m) => nombreMes(m.f.mes).split(' ')[0].toLowerCase();
-  const lista = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}` : xs[0]);
-  const resumen = !hay ? ''
-    : corto.length
-      ? `<p class="pz-nota"><b>Con lo que simulas,</b> <span class="mal">${lista(corto.map(nombre))}</span>
-        ${corto.length > 1 ? 'no llegan' : 'no llega'} al ahorro (${corto.map((m) => `${nombre(m)}: faltan ${money(m.falta)}`).join('; ')}).
-        ${cortoSin.length ? `Sin ello, ${lista(cortoSin.map(nombre))} ${cortoSin.length > 1 ? 'se quedan cortos' : 'se queda corto'} igual.`
-    : 'Sin ello, todos los meses llegan.'}</p>`
-      : '<p class="pz-nota"><b>Con lo que simulas, todos los meses llegan al ahorro.</b></p>';
-  return `<header><h2><span class="pz-num sim">2</span>Simulación</h2><span class="pista">¿Y si…?</span></header>
-    <p class="pz-sub">Lo real (1) + los gastos comunes que calcula la app (3) + lo que escribes para probar.
-      <b>No cuenta como real hasta que lo ejecutes.</b></p>
+}
+
+/*
+ * 2 · Lo real más lo que se simula, sin los gastos comunes que estima la app:
+ * cómo quedarían los meses con lo que sí o sí y con lo que uno está pensando
+ * gastar. Aquí van la lista de lo simulado y el botón para simular.
+ */
+function tarjetaRealSim({ plan, quien, simulados }) {
+  let saldo = totalAhorrado();
+  const meses = mesesCon(plan, quien, (f) => f.real + f.simulacion);
+  const filas = meses.map(({ f, c, proy }, i) => {
+    const { fijos, tarjeta } = partesReales(f);
+    // Como en «Lo real», y además sale lo simulado.
+    saldo = i === 0
+      ? redondear(saldo + (c.sueldo - c.cobrado) - fijos - tarjeta - f.simulacion)
+      : redondear(saldo + c.sueldo - proy);
+    return `<details class="pz-mes" data-mes="${esc(f.mes)}">
+      <summary>
+        <div class="pz-mes-cab">${cabezaMes(f, c, proy, 'gasto')}</div>
+        ${barraMes([[f.real, 'real', 'Lo real'], [f.simulacion, 'simulado', 'Simulado']], c.sueldo, c.limite)}
+        <div class="pz-mes-pie"><span>real ${money(f.real)}${f.simulacion > 0
+    ? ` + <b class="sim">simulado ${money(f.simulacion)}</b>` : ''}</span></div>
+        <div class="pz-mes-pie"><span>En cuentas al cierre del mes</span><span>≈ <b>${money(saldo)}</b></span></div>
+      </summary>
+      <div class="caja-desglose">${detalleSimulado(f)}${detalleReal(f)}</div>
+    </details>`;
+  });
+  return `<header><h2><span class="pz-num sim">2</span>Simulación</h2><span class="pista">Real + simulado</span></header>
+    <p class="pz-sub">Lo real (1) más lo que escribes para probar: un repuesto que piensas diferir, un viaje.
+      <b>Sin los gastos comunes de la app. Lo simulado no cuenta como real hasta que lo ejecutes.</b></p>
     ${simulados.length ? listaRecurrencias(simulados, false) : `
-      <p class="vacio">Nada simulado. Prueba con algo que piensas comprar —un repuesto
-        diferido, un viaje— y mira cómo quedarían los meses.</p>`}
+      <p class="vacio">Nada simulado. Prueba con algo que piensas comprar y mira cómo
+        quedarían los meses.</p>`}
     <div class="barra-accion"><span class="pista crece">Algo que piensas gastar.</span>
       <button class="btn primario pequeno" id="btn-simular">+ Simular un gasto</button></div>
+    <div class="pz-ley"><span><i class="pz-real"></i>Lo real</span><span><i class="pz-simulado"></i>Simulado</span>
+      <span><i class="pz-ley-marca"></i>Límite para gastar</span></div>
+    <div class="pz-meses">${filas.join('')}</div>
+    ${notaSimulacion(meses)}`;
+}
+
+/*
+ * 3 · La proyección completa: lo real, lo simulado y además los gastos comunes
+ * que la app espera por el historial. Es la cifra más parecida a lo que de
+ * verdad se va a gastar.
+ */
+function tarjetaSimulacion({ plan, quien }) {
+  const meses = mesesCon(plan, quien, (f) => f.real + f.comunes + f.simulacion);
+  return `<header><h2><span class="pz-num sim">3</span>Con gastos comunes</h2><span class="pista">Proyección</span></header>
+    <p class="pz-sub">Lo real (1) + lo simulado (2) + los gastos comunes que calcula la app (4): víveres,
+      gasolina, salidas… <b>Lo más parecido a lo que de verdad vas a gastar.</b></p>
     <div class="pz-ley"><span><i class="pz-real"></i>Lo real</span><span><i class="pz-comunes"></i>Comunes (app)</span>
       <span><i class="pz-simulado"></i>Simulado</span><span><i class="pz-ley-marca"></i>Límite</span></div>
     <div class="pz-meses">${meses.map(({ f, c, proy }) => `<details class="pz-mes" data-mes="${esc(f.mes)}">
@@ -18710,13 +18767,27 @@ function tarjetaSimulacion({ plan, quien, simulados }) {
       </summary>
       <div class="caja-desglose">${detallePrevisto(f)}</div>
     </details>`).join('')}</div>
-    ${resumen}`;
+    ${notaSimulacion(meses)}`;
+}
+
+/** Lo simulado de un mes, para el detalle de «Real + simulado». */
+function detalleSimulado(fila) {
+  const lineas = fila.lineas.filter((l) => l.origen === 'simulacion');
+  if (!lineas.length) return '';
+  return `<ul class="desglose">${lineas.map((l) => `
+    <li>
+      <div class="principal">
+        <div class="titulo">${esc(l.detalle)} <span class="chip">simulado</span></div>
+        <div class="meta">${esc(String(l.cuando).startsWith('~') || /^cuota|^pago/.test(String(l.cuando)) ? l.cuando : textoFecha(l.cuando))}</div>
+      </div>
+      <div class="monto">${money(l.monto)}</div>
+    </li>`).join('')}</ul>`;
 }
 
 function tarjetaComunes({ comunes, suma }) {
-  return `<header><h2><span class="pz-num com">3</span>Comunes</h2><span class="pista">Lo calcula la app</span></header>
+  return `<header><h2><span class="pz-num com">4</span>Comunes</h2><span class="pista">Lo calcula la app</span></header>
     <p class="pz-sub">Lo que la app ve que se repite en tu historial. <b>Puede pasar o no:</b> es una estimación.
-      Cuando la compra ocurre, pasa a «Lo real». «Dejar fuera» lo saca de la simulación.</p>
+      Cuando la compra ocurre, pasa a «Lo real». «Dejar fuera» lo saca de la proyección (3).</p>
     <div class="pz-kpis dos">
       <div><span class="k">Al mes, aprox.</span><span class="v">${money(suma(comunes))}</span></div>
       <div><span class="k">Gastos que se repiten</span><span class="v">${comunes.length}</span></div>
