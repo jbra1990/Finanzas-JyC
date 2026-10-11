@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-k4r6RuW5b3hj4bwK6B6vCvz4FSlIUPEUHPXDjBxxAHw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-q2InnfnNkKM0ewZ99fbkc6DVjBUccaqx8eL4Y++aBd4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3903,6 +3903,12 @@ dialog.pz-dialogo .modal-cuerpo { padding: 12px; }
 .pz-hoja tfoot td.mal { color: var(--alerta); }
 .pz-hoja .vacio { text-align: center; color: var(--tinta-3); }
 .pz-hoja-nota { margin: 6px 2px 0; font-size: 11.5px; }
+/* El título de cada grupo de la hoja, con su subtotal. */
+.pz-hoja tbody tr.grupo > * {
+  background: color-mix(in srgb, var(--acento) 14%, var(--superficie-solida));
+  color: var(--tinta); font-weight: 700; border-top: 1px solid var(--borde);
+}
+.pz-hoja tbody tr.grupo .fija small { font-weight: 500; color: var(--tinta-3); margin-left: 4px; }
 
 </style>
 </head>
@@ -3936,7 +3942,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '067d8a1606';
+window.__VERSION_APP__ = 'a466c29046';
 
 M["cerradura"] = (function () {
 /**
@@ -18976,6 +18982,9 @@ const TABLAS = {
 };
 const TIPO_SIM = 'Simulado';
 const TIPO_COM = 'Común (app)';
+/** El orden de los grupos en la tabla: lo fijo, la tarjeta, el efectivo, lo simulado y lo común. */
+const ORDEN_TIPO = ['Pago fijo', 'Tarjeta', 'Efectivo y débito', TIPO_SIM, TIPO_COM];
+const posTipo = (t) => { const i = ORDEN_TIPO.indexOf(t); return i < 0 ? ORDEN_TIPO.length : i; };
 
 function lineasReales(f) {
   return f.realLineas.map((l) => ({
@@ -19012,15 +19021,46 @@ function abrirTabla(cual, { plan, quien }) {
       if (!filas.has(clave)) {
         filas.set(clave, {
           nombre: ver.por === 'gasto' ? l.detalle : clave,
-          tipo: ver.por === 'gasto' ? l.tipo : '',
+          tipo: ver.por === 'gasto' ? l.tipo : ver.por === 'tipo' ? clave : '',
           valores: meses.map(() => 0),
+          porTipo: {},
         });
       }
-      filas.get(clave).valores[i] += l.monto;
+      const x = filas.get(clave);
+      x.valores[i] += l.monto;
+      x.porTipo[l.tipo] = (x.porTipo[l.tipo] || 0) + l.monto;
     }));
+    /*
+     * Ordenadas por grupo —pagos fijos, tarjeta, efectivo y débito, lo simulado
+     * y lo común— y dentro de cada uno de mayor a menor. Una categoría va en el
+     * grupo de lo que más pesa en ella.
+     */
     return [...filas.values()]
-      .map((x) => ({ ...x, valores: x.valores.map(redondear), total: redondear(x.valores.reduce((t, v) => t + v, 0)) }))
-      .sort((a, b) => b.total - a.total);
+      .map((x) => ({
+        ...x,
+        tipo: x.tipo || Object.entries(x.porTipo).sort((a, b) => b[1] - a[1])[0]?.[0] || '',
+        valores: x.valores.map(redondear),
+        total: redondear(x.valores.reduce((t, v) => t + v, 0)),
+      }))
+      .sort((a, b) => posTipo(a.tipo) - posTipo(b.tipo) || b.total - a.total);
+  };
+
+  /** Las filas con un título por grupo delante, que lleva el subtotal de cada mes. */
+  const conGrupos = (filas) => {
+    if (ver.por === 'tipo') return filas.map((x) => ({ ...x, grupo: false }));
+    const salida = [];
+    filas.forEach((x, k) => {
+      if (k === 0 || filas[k - 1].tipo !== x.tipo) {
+        const delGrupo = filas.filter((y) => y.tipo === x.tipo);
+        const valores = meses.map((_, i) => redondear(delGrupo.reduce((t, y) => t + y.valores[i], 0)));
+        salida.push({
+          nombre: x.tipo || 'Otros', tipo: '', valores, grupo: true, n: delGrupo.length,
+          total: redondear(valores.reduce((t, v) => t + v, 0)),
+        });
+      }
+      salida.push({ ...x, grupo: false });
+    });
+    return salida;
   };
 
   const pie = () => {
@@ -19056,12 +19096,13 @@ function abrirTabla(cual, { plan, quien }) {
   const pintar = (caja) => {
     const filas = datos();
     const conTipo = ver.por === 'gasto' && cual !== 'comunes';
+    const lista = conGrupos(filas);
     caja.querySelector('.pz-hoja').innerHTML = `<table>
       <thead><tr><th class="fija">${ver.por === 'gasto' ? 'Gasto' : ver.por === 'categoria' ? 'Categoría' : 'Forma de pago'}</th>
         ${conTipo ? '<th class="tipo">Tipo</th>' : ''}
         ${meses.map((f) => `<th>${esc(nombreMes(f.mes, true))}</th>`).join('')}<th>Total</th><th>Promedio</th></tr></thead>
-      <tbody>${filas.map((x) => `<tr>
-        <th class="fija">${esc(x.nombre)}</th>${conTipo ? `<td class="tipo">${esc(x.tipo)}</td>` : ''}
+      <tbody>${lista.map((x) => `<tr${x.grupo ? ' class="grupo"' : ''}>
+        <th class="fija">${esc(x.nombre)}${x.grupo ? ` <small>${x.n}</small>` : ''}</th>${conTipo ? `<td class="tipo">${x.grupo ? '' : esc(x.tipo)}</td>` : ''}
         ${x.valores.map((v, i) => celda(v, i)).join('')}
         <td class="tot">${money(x.total)}</td><td class="tot">${money(redondear(x.total / meses.length))}</td></tr>`).join('')
   || `<tr><td colspan="${meses.length + 3}" class="vacio">Nada en estos meses.</td></tr>`}</tbody>
@@ -19077,9 +19118,10 @@ function abrirTabla(cual, { plan, quien }) {
 
   const csv = () => {
     const n = (v) => String(redondear(v)).replace('.', ',');
-    const filas = datos();
+    const filas = conGrupos(datos());
     const cab = ['Fila', ...(ver.por === 'gasto' ? ['Tipo'] : []), ...meses.map((f) => nombreMes(f.mes)), 'Total'];
-    const lineasCsv = [cab, ...filas.map((x) => [x.nombre, ...(ver.por === 'gasto' ? [x.tipo] : []), ...x.valores.map(n), n(x.total)]),
+    const lineasCsv = [cab, ...filas.map((x) => [x.grupo ? `${x.nombre.toUpperCase()} (subtotal)` : x.nombre,
+      ...(ver.por === 'gasto' ? [x.grupo ? '' : x.tipo] : []), ...x.valores.map(n), n(x.total)]),
       ...pie().map((x) => [x.nombre, ...(ver.por === 'gasto' ? [''] : []), ...x.valores.map(n), x.sinTotal ? '' : n(x.valores.reduce((t, v) => t + v, 0))])];
     return lineasCsv.map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
   };
