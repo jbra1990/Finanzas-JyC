@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-gr3br+1XGfR1OU43nBtf00MOBZ8D4puGhIW/Je/WwVg='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-eXcwIWY1RfCp0uN4pqRHa79oim3630mNtXiaKXSK4ko='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3912,6 +3912,41 @@ dialog.pz-dialogo .modal-pie { z-index: 4; }
 }
 .pz-hoja tbody tr.grupo .fija small { font-weight: 500; color: var(--tinta-3); margin-left: 4px; }
 
+/*
+ * «Ya comprometido» de Tarjetas: lo firmado en cuotas, mes a mes, partido en
+ * diferidos y suscripciones, con lo que termina cada mes y el detalle al tocar.
+ */
+.cm-lead { margin: 0 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--tinta-2); }
+.cm-lead b { color: var(--tinta); }
+.cm-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 10px; font-variant-numeric: tabular-nums; }
+.cm-kpis > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--borde); background: var(--superficie-2); }
+.cm-kpis .k { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tinta-3); }
+.cm-kpis b { font-size: 14.5px; font-weight: 720; color: var(--tinta); }
+.cm-kpis small { font-size: 10.5px; color: var(--tinta-3); line-height: 1.3; }
+.cm-ley { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--tinta-2); margin: 0 0 4px; }
+.cm-ley i, .cm-sub i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+.cm-dif { background: var(--serie-1); }
+.cm-rec { background: var(--serie-3); }
+.cm-mes-d { border-top: 1px solid var(--grid); }
+.cm-mes-d > summary { list-style: none; cursor: pointer; padding: 8px 0 6px; }
+.cm-mes-d > summary::-webkit-details-marker { display: none; }
+.cm-fila { display: grid; grid-template-columns: 64px 1fr auto; gap: 10px; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+.cm-nombre { color: var(--tinta); font-weight: 640; }
+.cm-nombre::before { content: '›'; display: inline-block; width: 11px; color: var(--tinta-3); transition: transform 0.15s; }
+.cm-mes-d[open] .cm-nombre::before { transform: rotate(90deg); }
+.cm-barra2 { display: flex; gap: 2px; height: 10px; border-radius: 5px; background: var(--superficie-3); overflow: hidden; }
+.cm-barra2 > i { display: block; height: 100%; min-width: 2px; }
+.cm-total { font-weight: 700; color: var(--tinta); min-width: 74px; text-align: right; }
+.cm-sub { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 4px 0 0 74px; font-size: 11px; color: var(--tinta-2); font-variant-numeric: tabular-nums; }
+.cm-baja { color: var(--ok-texto); }
+.cm-sube { color: var(--alerta); }
+.cm-termina { color: var(--tinta-3); }
+.cm-items { list-style: none; margin: 2px 0 10px 74px; padding: 0; font-size: 12px; }
+.cm-items li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-top: 1px dashed var(--grid); }
+.cm-items small { display: block; font-size: 10.5px; color: var(--tinta-3); }
+.cm-items b { font-weight: 640; color: var(--tinta); white-space: nowrap; }
+.cm-pie { margin: 8px 0 0; font-size: 11.5px; color: var(--tinta-3); }
+
 </style>
 </head>
 <body>
@@ -3944,7 +3979,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '95ad0a7f91';
+window.__VERSION_APP__ = '23590ec466';
 
 M["cerradura"] = (function () {
 /**
@@ -16620,7 +16655,7 @@ M["views/tarjetas"] = (function () {
 /** Vista «Tarjetas»: cupo, consumo del mes, diferidos vivos y movimientos. */
 
 const {db, tarjetas, eliminar, guardar, quitarCuotas} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir, comprometidoProximos, posiblesRepetidos, marcarNoRepetidos} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir, posiblesRepetidos, marcarNoRepetidos} = M["calc"];
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, aNumero, notaFila, marcaNota, notaTexto, centrarElegido, modal} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
@@ -17048,34 +17083,102 @@ function sumaPorTipo(tarjetaId, mes, usuario, tipo) {
  * Una compra a plazos se siente gratis el día que se firma: entra una cuota
  * pequeña y el resto queda fuera de la vista hasta que llega el mes. Aquí se
  * ve entera la sombra de lo ya decidido, que es lo que de verdad limita
- * cuánto se puede gastar en octubre o en noviembre.
+ * cuánto se puede gastar en octubre o en noviembre: cuánto es cada mes, qué
+ * parte son cuotas de diferidos y qué parte suscripciones, qué compra termina
+ * de pagarse y desde cuándo la tarjeta queda libre. Los mismos importes que
+ * `comprometidoEnMes`: todo lo que no es corriente.
  */
+function comprometidoDetalle(t, usuario) {
+  const desde = mesActual();
+  const gastos = new Map(db.gastosTarjeta.map((g) => [g.id, g]));
+  // Hasta la última cuota de un diferido (mínimo 6 meses, máximo 12).
+  const ultimoDif = db.cuotas
+    .filter((c) => c.tarjeta === t.id && c.mes >= desde && (usuario === 'ambos' || c.usuario === usuario)
+      && gastos.get(c.gasto_id)?.tipo === 'Diferido')
+    .reduce((m, c) => (c.mes > m ? c.mes : m), desde);
+  const hasta = Math.min(12, Math.max(6, (Number(ultimoDif.slice(0, 4)) - Number(desde.slice(0, 4))) * 12
+    + Number(ultimoDif.slice(5, 7)) - Number(desde.slice(5, 7)) + 1));
+  const cuantos = hasta;
+  const meses = Array.from({ length: cuantos }, (_, i) => sumarMeses(desde, i));
+  const filas = meses.map((mes) => ({ mes, dif: 0, rec: 0, items: [] }));
+  for (const c of db.cuotas) {
+    const i = meses.indexOf(c.mes);
+    if (i < 0 || c.tarjeta !== t.id || (usuario !== 'ambos' && c.usuario !== usuario)) continue;
+    const g = gastos.get(c.gasto_id);
+    const tipo = g?.tipo || 'Corriente';
+    if (tipo === 'Corriente') continue;
+    const monto = Number(c.monto) || 0;
+    const rec = tipo === 'Recurrente';
+    filas[i][rec ? 'rec' : 'dif'] += monto;
+    filas[i].items.push({
+      detalle: g?.detalle || c.categoria || 'Cuota', monto, rec,
+      n: Number(c.n_cuota), de: Number(g?.cuotas), ultima: !rec && Number(c.n_cuota) === Number(g?.cuotas),
+    });
+  }
+  filas.forEach((f) => {
+    f.dif = redondear(f.dif); f.rec = redondear(f.rec); f.total = redondear(f.dif + f.rec);
+    f.items.sort((a, b) => a.rec - b.rec || b.monto - a.monto);
+  });
+  // La cola de meses en cero no dice nada: se recorta.
+  let fin = filas.length;
+  while (fin > 1 && filas[fin - 1].total === 0) fin -= 1;
+  return filas.slice(0, fin);
+}
+
 function seccionComprometido(t, usuario) {
-  const filas = comprometidoProximos(6, t.id, usuario);
+  const filas = comprometidoDetalle(t, usuario);
   // El rótulo de la esquina cabe en una línea de unos 140 px: más largo, la
   // pestaña se estira y desencaja la cabecera en pantallas de 320.
   const cab = `<header><h2>Ya comprometido</h2>
     <span class="pista">Próximos meses</span></header>`;
 
-  const total = redondear(filas.reduce((s, f) => s + f.monto, 0));
+  const total = redondear(filas.reduce((s, f) => s + f.total, 0));
+  const porPagarDif = redondear(filas.reduce((s, f) => s + f.dif, 0));
   if (total <= 0) {
     return `${cab}<p class="vacio">Nada a plazos en ${esc(t.nombre)}: todo lo
       que gastes estos meses lo decides tú sobre la marcha.</p>`;
   }
 
-  const tope = Math.max(...filas.map((f) => f.monto), 1);
+  const corto = (m) => nombreMes(m, true);
+  const largo = (m) => nombreMes(m).split(' ')[0].toLowerCase();
+  const tope = Math.max(...filas.map((f) => f.total), 1);
+  const hoy = filas[0];
+  // El primer mes sin cuotas de diferidos: desde ahí solo quedan suscripciones.
+  const libre = filas.find((f, i) => i > 0 && f.dif === 0);
+  const ultimoDif = [...filas].reverse().find((f) => f.dif > 0);
+
   return `${cab}
-    <p class="pista" style="margin:-4px 0 12px">Esto se debe ANTES de comprar
-    nada: son cuotas de diferidos y cargos recurrentes ya firmados.</p>
-    <ul class="comprometidos">${filas.map((f) => `
-      <li>
-        <span class="cm-mes">${esc(nombreMes(f.mes, true))}</span>
-        <span class="cm-barra"><i style="width:${((f.monto / tope) * 100).toFixed(1)}%"></i></span>
-        <span class="cm-monto">${f.monto > 0 ? money(f.monto) : '—'}</span>
-      </li>`).join('')}</ul>
-    <div class="aviso"><span class="icono">Σ</span>
-      <span class="crece">${money(total)} repartidos hasta
-      ${esc(nombreMes(filas[filas.length - 1].mes))}.</span></div>`;
+    <p class="cm-lead">Cuotas que ya firmaste en ${esc(t.nombre)}: <b>se cobran compres o no</b>.
+      Lo que gastes nuevo va encima de esto.</p>
+    <div class="cm-kpis">
+      <div><span class="k">Este mes</span><b>${money(hoy.total)}</b>
+        <small>${hoy.dif ? `${money(hoy.dif)} diferidos` : ''}${hoy.dif && hoy.rec ? ' · ' : ''}${hoy.rec ? `${money(hoy.rec)} suscripciones` : ''}</small></div>
+      <div><span class="k">Diferidos por pagar</span><b>${money(porPagarDif)}</b><small>con la cuota de este mes</small></div>
+      <div><span class="k">Sin diferidos desde</span><b>${ultimoDif ? esc(corto(sumarMeses(ultimoDif.mes, 1))) : 'ya'}</b>
+        <small>${ultimoDif ? `última cuota en ${esc(largo(ultimoDif.mes))}` : 'solo suscripciones'}</small></div>
+    </div>
+    <div class="cm-ley"><span><i class="cm-dif"></i>Cuotas de diferidos</span><span><i class="cm-rec"></i>Suscripciones</span></div>
+    <div class="cm-meses">${filas.map((f, i) => {
+    const antes = i ? filas[i - 1].total : null;
+    const cambio = antes === null ? '' : f.total < antes - 0.004
+      ? `<span class="cm-baja">↓ ${money(redondear(antes - f.total))}</span>`
+      : f.total > antes + 0.004 ? `<span class="cm-sube">↑ ${money(redondear(f.total - antes))}</span>` : '';
+    const terminan = f.items.filter((x) => x.ultima).map((x) => x.detalle);
+    return `<details class="cm-mes-d">
+      <summary>
+        <div class="cm-fila"><span class="cm-nombre">${esc(corto(f.mes))}</span>
+          <span class="cm-barra2" role="img" aria-label="${esc(`${money(f.dif)} diferidos, ${money(f.rec)} suscripciones`)}">
+            ${f.dif ? `<i class="cm-dif" style="width:${((f.dif / tope) * 100).toFixed(1)}%"></i>` : ''}${f.rec ? `<i class="cm-rec" style="width:${((f.rec / tope) * 100).toFixed(1)}%"></i>` : ''}</span>
+          <b class="cm-total">${f.total ? money(f.total) : '—'}</b></div>
+        <div class="cm-sub">${f.dif ? `<span><i class="cm-dif"></i>${money(f.dif)}</span>` : ''}${f.rec ? `<span><i class="cm-rec"></i>${money(f.rec)}</span>` : ''}${cambio}
+          ${terminan.length ? `<span class="cm-termina">termina${terminan.length > 1 ? 'n' : ''}: ${esc(terminan.slice(0, 3).join(', '))}${terminan.length > 3 ? '…' : ''}</span>` : ''}</div>
+      </summary>
+      <ul class="cm-items">${f.items.map((x) => `<li><span>${esc(x.detalle)}
+        <small>${x.rec ? 'suscripción' : `cuota ${x.n} de ${x.de}`}${x.ultima ? ' · <b>última</b>' : ''}</small></span><b>${money(x.monto)}</b></li>`).join('')}</ul>
+    </details>`;
+  }).join('')}</div>
+    <p class="cm-pie">Toca un mes para ver qué cuotas lo forman.${libre
+    ? ` Desde ${esc(largo(libre.mes))} ya no quedan diferidos: lo comprometido baja a ${money(libre.total)} al mes.` : ''}</p>`;
 }
 
 function listaDiferidos(tarjetaId, usuario) {
