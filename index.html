@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-0pE2+ZmhEmIP0Bg6mOf1vZXKkaVgmVWs6WtTh+N+8vg='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-k4r6RuW5b3hj4bwK6B6vCvz4FSlIUPEUHPXDjBxxAHw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3867,6 +3867,43 @@ body.velada .cabecera { filter: blur(18px); }
 .pz-valores i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
 .pz-valores b { color: var(--tinta); font-weight: 640; }
 
+/* «Ver en tabla» de Presupuesto: una hoja con los meses en columnas. */
+.pz-tabla-btn { display: flex; justify-content: flex-end; margin: -2px 0 8px; }
+dialog.pz-dialogo { width: min(1100px, calc(100vw - 12px)); max-height: 94vh; background: var(--superficie-solida); }
+dialog.pz-dialogo .modal-cab, dialog.pz-dialogo .modal-pie { background: var(--superficie-solida); }
+dialog.pz-dialogo .modal-cuerpo { padding: 12px; }
+.pz-hoja-ctl { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; }
+.pz-hoja-ctl .etq { display: block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tinta-3); margin-bottom: 4px; }
+.pz-hoja {
+  overflow: auto; max-height: calc(94vh - 300px); min-height: 180px;
+  border: 1px solid var(--borde); border-radius: 10px; background: var(--superficie-solida);
+}
+.pz-hoja table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+.pz-hoja th, .pz-hoja td { padding: 6px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; text-align: right; background: var(--superficie-solida); }
+.pz-hoja thead th {
+  position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--tinta) 8%, var(--superficie-solida));
+  font-size: 10.5px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tinta-2);
+}
+.pz-hoja .fija {
+  position: sticky; left: 0; z-index: 1; text-align: left; max-width: 128px;
+  overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: var(--tinta);
+  border-right: 1px solid var(--borde);
+}
+.pz-hoja thead .fija { z-index: 3; }
+.pz-hoja td.tipo { text-align: left; color: var(--tinta-3); font-size: 11px; }
+.pz-hoja td.cero { color: var(--tinta-3); }
+.pz-hoja td.tot { font-weight: 680; color: var(--tinta); background: color-mix(in srgb, var(--tinta) 5%, var(--superficie-solida)); }
+.pz-hoja tbody tr:hover > * { background: color-mix(in srgb, var(--acento) 10%, var(--superficie-solida)); }
+.pz-hoja tfoot th, .pz-hoja tfoot td { background: color-mix(in srgb, var(--tinta) 6%, var(--superficie-solida)); font-weight: 650; }
+.pz-hoja tfoot .fija { white-space: normal; line-height: 1.25; }
+.pz-hoja tfoot tr.total > * { border-top: 2px solid var(--borde-fuerte, var(--borde)); color: var(--tinta); }
+.pz-hoja tfoot tr.sub > * { font-weight: 560; color: var(--tinta-2); }
+.pz-hoja tfoot tr.sueldo > * { color: var(--tinta); }
+.pz-hoja tfoot td.ok { color: var(--ok-texto); }
+.pz-hoja tfoot td.mal { color: var(--alerta); }
+.pz-hoja .vacio { text-align: center; color: var(--tinta-3); }
+.pz-hoja-nota { margin: 6px 2px 0; font-size: 11.5px; }
+
 </style>
 </head>
 <body>
@@ -3899,7 +3936,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '18afc9e02a';
+window.__VERSION_APP__ = '067d8a1606';
 
 M["cerradura"] = (function () {
 /**
@@ -11334,11 +11371,11 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
   }
 
   // Lo ya apuntado: las cuotas son de tarjeta y los gastos sueltos, de efectivo.
-  const apuntar = (m, medio, monto, detalle, fecha, nota, proposito = '') => {
+  const apuntar = (m, medio, monto, detalle, fecha, nota, proposito = '', categoria = '') => {
     m.comprometido += monto;
     m.medios[medio] += monto;
     m.reales[medio] += monto;
-    m.realLineas.push({ detalle, monto, medio, fecha, nota, proposito, aMano: false });
+    m.realLineas.push({ detalle, monto, medio, fecha, nota, proposito, aMano: false, categoria });
   };
 
   for (const c of db.cuotas) {
@@ -11352,7 +11389,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
       // La fecha que interesa es la de la compra: el mes de la cuota ya lo
       // dice la fila que se ha desplegado.
       compra?.fecha, enCuotas ? `cuota ${c.n_cuota} de ${compra.cuotas}` : '',
-      compra?.proposito || '');
+      compra?.proposito || '', compra?.categoria || c.categoria || '');
   }
   const recs = recurrencias(quien);
   // Una letra atrasada cuenta en el mes de la letra, no en el del pago.
@@ -11363,7 +11400,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
     const medio = medioManual.get(claveGasto(g.detalle)) || medioDe(g.cuenta);
     apuntar(m, MEDIOS.includes(medio) ? medio : 'Efectivo',
       Number(g.monto) || 0, g.detalle || g.categoria || 'Gasto', g.fecha,
-      '', g.proposito || '');
+      '', g.proposito || '', g.categoria || '');
   }
 
   const usadas = [];
@@ -11400,7 +11437,9 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
           casilla.aMano[medio] += monto * parte;
         }
       });
-      casilla.lineas.push({ clave: r.clave, detalle: r.detalle, monto, cuando, reparto: r.reparto, origen });
+      casilla.lineas.push({
+        clave: r.clave, detalle: r.detalle, monto, cuando, reparto: r.reparto, origen, categoria: r.categoria || '',
+      });
       if (conocido) {
         casilla.realLineas.push({
           detalle: r.detalle,
@@ -11408,6 +11447,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
           medio: Object.keys(r.reparto || { Efectivo: 1 })[0],
           nota: cuando,
           aMano: true,
+          categoria: r.categoria || '',
         });
       }
       aporta = true;
@@ -18349,7 +18389,7 @@ M["views/plan"] = (function () {
 
 const {db, guardar, categoriasGasto, cuentasBancarias, tarjetas, upsert, nuevoId, capitalizar} = M["store"];
 const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes, hoyLocal, ahorradoAl} = M["calc"];
-const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo, confirmar} = M["ui"];
+const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo, confirmar, descargar} = M["ui"];
 const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago, esSimulacion, sueldoDelMes, porcentajeAhorro, claveGasto, otrosIngresos} = M["plan"];
 const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
 const vistaTarjetas = M["views/tarjetas"];
@@ -18559,6 +18599,10 @@ function render(raiz, { irA } = {}) {
     });
   });
 
+  $$('[data-tabla]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => abrirTabla(btn.dataset.tabla, contexto));
+  });
+
   const recargar = () => render(raiz, { irA });
   $('#btn-fijo', raiz).addEventListener('click', () => formFijo({
     esNuevo: true, manual: true, simulacion: false, clase: 'plazos', medio: 'Préstamo',
@@ -18726,6 +18770,7 @@ function tarjetaReal({ plan, quien, pagosFijos, suma }) {
   return `<header><h2><span class="pz-num real">1</span>Lo real</h2><span class="pista">Lo que sí o sí</span></header>
     <p class="pz-sub">Lo ya registrado (tarjeta, efectivo y débito) y los <b>pagos fijos</b> que sabes que
       vienen, como la letra de un préstamo. <b>Sin estimaciones.</b> Toca un mes para ver el detalle.</p>
+    <div class="pz-tabla-btn"><button type="button" class="btn pequeno" data-tabla="real">▦ Ver en tabla</button></div>
     <div class="pz-kpis">
       <div><span class="k">En cuentas hoy</span><span class="v">${money(enCuentas)}</span></div>
       <div><span class="k">Real de ${esc(nombreMes(f0.mes).split(' ')[0].toLowerCase())}</span><span class="v">${money(f0.real)}</span></div>
@@ -18840,6 +18885,7 @@ function tarjetaRealSim({ plan, quien, simulados }) {
   return `<header><h2><span class="pz-num sim">2</span>Simulación</h2><span class="pista">Real + simulado</span></header>
     <p class="pz-sub">Lo real (1) más lo que escribes para probar: un repuesto que piensas diferir, un viaje.
       <b>Sin los gastos comunes de la app. Lo simulado no cuenta como real hasta que lo ejecutes.</b></p>
+    <div class="pz-tabla-btn"><button type="button" class="btn pequeno" data-tabla="sim">▦ Ver en tabla</button></div>
     ${listaPlegable('simulados', 'Lo que simulas', simulados.length
     ? `${simulados.length} · ${money(redondear(simulados.filter((r) => r.vigente && !r.cubierto)
       .reduce((t, r) => t + (r.clase === 'plazos' ? (r.restante ?? r.total) : r.clase === 'unico' ? r.monto : r.porMes), 0)))}`
@@ -18905,6 +18951,7 @@ function tarjetaSimulacion({ plan, quien }) {
       además <b>+ los gastos comunes</b> que la app calcula por frecuencia (4). Cuánto se aparta cada uno de lo real,
       cuánto queda del sueldo (en verde si llega al ahorro) y cuánto quedaría en cuentas, con los otros ingresos que
       tengas apuntados.</p>
+    <div class="pz-tabla-btn"><button type="button" class="btn pequeno" data-tabla="comparar">▦ Ver en tabla</button></div>
     <div class="pz-comp-fin">
       <span class="k">Al cierre de ${esc(nombreMes(ultimo.mes))} tendrías en cuentas</span>
       ${ESCENARIOS.map((e, k) => `<div class="esc-${e.k}"><span><i class="pz-${e.k}"></i>${e.k === 'real' ? 'Solo lo real' : e.rotulo}</span>
@@ -18913,6 +18960,166 @@ function tarjetaSimulacion({ plan, quien }) {
     </div>
     <div class="pz-meses">${meses.join('')}</div>
     ${notaSimulacion(mesesCon(plan, quien, ESCENARIOS[2].gasto))}`;
+}
+
+/*
+ * La tabla de una tarjeta de Presupuesto, en una ventana: los meses en
+ * columnas y cada gasto (o categoría, o forma de pago) en una fila, como una
+ * hoja de cálculo. Abajo, el sueldo, lo que queda y lo que habría en cuentas.
+ * Se puede ver en dólares o en % del sueldo, y descargar para Excel.
+ */
+const TABLAS = {
+  real: { titulo: 'Lo real, mes a mes', lineas: (f) => lineasReales(f) },
+  sim: { titulo: 'Simulación: lo real + lo simulado', lineas: (f) => [...lineasReales(f), ...lineasPrevistas(f, 'simulacion')] },
+  comparar: { titulo: 'Comparar: los tres escenarios', lineas: (f) => [...lineasReales(f), ...lineasPrevistas(f, 'simulacion'), ...lineasPrevistas(f, 'comunes')] },
+  comunes: { titulo: 'Gastos comunes que calcula la app', lineas: (f) => lineasPrevistas(f, 'comunes') },
+};
+const TIPO_SIM = 'Simulado';
+const TIPO_COM = 'Común (app)';
+
+function lineasReales(f) {
+  return f.realLineas.map((l) => ({
+    detalle: l.detalle, monto: l.monto, categoria: l.categoria || 'Sin categoría',
+    tipo: l.aMano ? 'Pago fijo' : l.medio === 'Tarjeta' ? 'Tarjeta' : 'Efectivo y débito',
+  }));
+}
+function lineasPrevistas(f, origen) {
+  return f.lineas.filter((l) => l.origen === origen).map((l) => ({
+    detalle: l.detalle, monto: l.monto, categoria: l.categoria || l.detalle,
+    tipo: origen === 'simulacion' ? TIPO_SIM : TIPO_COM,
+  }));
+}
+
+function abrirTabla(cual, { plan, quien }) {
+  const def = TABLAS[cual];
+  const meses = plan.filas;
+  const ver = { por: 'gasto', unidad: 'dolar' };
+  const cuentas = meses.map((f) => cuentaDelMes(f, quien));
+
+  // Las filas de pie: lo que se compara con el sueldo, según la tarjeta.
+  const escenarios = {
+    real: [ESCENARIOS[0]],
+    sim: [ESCENARIOS[1]],
+    comparar: ESCENARIOS,
+    comunes: [],
+  }[cual];
+  const cierresDe = escenarios.map((e) => cierres(plan, quien, e.gasto));
+
+  const datos = () => {
+    const filas = new Map();
+    meses.forEach((f, i) => def.lineas(f).forEach((l) => {
+      const clave = ver.por === 'gasto' ? `${l.tipo}|${l.detalle}` : ver.por === 'categoria' ? l.categoria : l.tipo;
+      if (!filas.has(clave)) {
+        filas.set(clave, {
+          nombre: ver.por === 'gasto' ? l.detalle : clave,
+          tipo: ver.por === 'gasto' ? l.tipo : '',
+          valores: meses.map(() => 0),
+        });
+      }
+      filas.get(clave).valores[i] += l.monto;
+    }));
+    return [...filas.values()]
+      .map((x) => ({ ...x, valores: x.valores.map(redondear), total: redondear(x.valores.reduce((t, v) => t + v, 0)) }))
+      .sort((a, b) => b.total - a.total);
+  };
+
+  const pie = () => {
+    const filasPie = [];
+    const tot = meses.map((f) => redondear(def.lineas(f).reduce((t, l) => t + l.monto, 0)));
+    filasPie.push({ nombre: 'Total gasto', valores: tot, clase: 'total' });
+    if (cual === 'comparar') {
+      ESCENARIOS.forEach((e) => filasPie.push({ nombre: `Gasto ${e.k === 'real' ? 'real' : e.rotulo.toLowerCase()}`, valores: meses.map((f) => redondear(e.gasto(f))), clase: 'sub' }));
+    }
+    if (escenarios.length) {
+      filasPie.push({ nombre: 'Sueldo', valores: cuentas.map((c) => c.sueldo), clase: 'sueldo', sinPct: true });
+      escenarios.forEach((e, k) => filasPie.push({
+        nombre: `Queda del sueldo${escenarios.length > 1 ? ` ${e.k === 'real' ? 'real' : e.rotulo.toLowerCase()}` : ''}`,
+        valores: meses.map((f, i) => redondear(cuentas[i].sueldo - e.gasto(f))),
+        metas: cuentas.map((c) => c.meta), clase: 'queda',
+      }));
+      escenarios.forEach((e, k) => filasPie.push({
+        nombre: `En cuentas${escenarios.length > 1 ? ` ${e.k === 'real' ? 'real' : e.rotulo.toLowerCase()}` : ' al cierre'}`,
+        valores: cierresDe[k].map((x) => x.saldo), clase: 'cuentas', sinPct: true, sinTotal: true,
+      }));
+    }
+    return filasPie;
+  };
+
+  const celda = (v, i, fila = {}) => {
+    if (!v && !fila.clase) return '<td class="cero">—</td>';
+    const txt = ver.unidad === 'pct' && !fila.sinPct && cuentas[i].sueldo > 0
+      ? `${((v / cuentas[i].sueldo) * 100).toFixed(1).replace('.', ',')} %` : money(v);
+    const estado = fila.metas ? (v >= fila.metas[i] ? ' ok' : ' mal') : '';
+    return `<td class="${estado.trim()}">${txt}</td>`;
+  };
+
+  const pintar = (caja) => {
+    const filas = datos();
+    const conTipo = ver.por === 'gasto' && cual !== 'comunes';
+    caja.querySelector('.pz-hoja').innerHTML = `<table>
+      <thead><tr><th class="fija">${ver.por === 'gasto' ? 'Gasto' : ver.por === 'categoria' ? 'Categoría' : 'Forma de pago'}</th>
+        ${conTipo ? '<th class="tipo">Tipo</th>' : ''}
+        ${meses.map((f) => `<th>${esc(nombreMes(f.mes, true))}</th>`).join('')}<th>Total</th><th>Promedio</th></tr></thead>
+      <tbody>${filas.map((x) => `<tr>
+        <th class="fija">${esc(x.nombre)}</th>${conTipo ? `<td class="tipo">${esc(x.tipo)}</td>` : ''}
+        ${x.valores.map((v, i) => celda(v, i)).join('')}
+        <td class="tot">${money(x.total)}</td><td class="tot">${money(redondear(x.total / meses.length))}</td></tr>`).join('')
+  || `<tr><td colspan="${meses.length + 3}" class="vacio">Nada en estos meses.</td></tr>`}</tbody>
+      <tfoot>${pie().map((x) => `<tr class="${x.clase || ''}">
+        <th class="fija">${esc(x.nombre)}</th>${conTipo ? '<td class="tipo"></td>' : ''}
+        ${x.valores.map((v, i) => celda(v, i, x)).join('')}
+        <td class="tot">${x.sinTotal ? '' : money(redondear(x.valores.reduce((t, v) => t + v, 0)))}</td>
+        <td class="tot">${x.sinTotal ? '' : money(redondear(x.valores.reduce((t, v) => t + v, 0) / meses.length))}</td></tr>`).join('')}</tfoot>
+    </table>`;
+    caja.querySelector('.pz-hoja-nota').textContent = `${filas.length} ${filas.length === 1 ? 'fila' : 'filas'} · ${meses.length} meses`
+      + (ver.unidad === 'pct' ? ' · cada gasto en % del sueldo de su mes' : '');
+  };
+
+  const csv = () => {
+    const n = (v) => String(redondear(v)).replace('.', ',');
+    const filas = datos();
+    const cab = ['Fila', ...(ver.por === 'gasto' ? ['Tipo'] : []), ...meses.map((f) => nombreMes(f.mes)), 'Total'];
+    const lineasCsv = [cab, ...filas.map((x) => [x.nombre, ...(ver.por === 'gasto' ? [x.tipo] : []), ...x.valores.map(n), n(x.total)]),
+      ...pie().map((x) => [x.nombre, ...(ver.por === 'gasto' ? [''] : []), ...x.valores.map(n), x.sinTotal ? '' : n(x.valores.reduce((t, v) => t + v, 0))])];
+    return lineasCsv.map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+  };
+
+  const dlg = modal({
+    titulo: def.titulo,
+    cuerpo: `<div class="pz-hoja-ctl">
+        <div><span class="etq">Filas</span><div id="pzt-por"></div></div>
+        <div><span class="etq">Valores</span><div id="pzt-unidad"></div></div>
+      </div>
+      <div class="pz-hoja" tabindex="0"></div>
+      <p class="pista pz-hoja-nota"></p>`,
+    aceptar: 'Cerrar',
+    soloCerrar: true,
+    alEnviar: () => {},
+    alAbrir(form) {
+      form.closest('dialog').classList.add('pz-dialogo');
+      const pie = form.querySelector('.modal-pie');
+      const bajar = document.createElement('button');
+      bajar.type = 'button';
+      bajar.className = 'btn';
+      bajar.style.marginRight = 'auto';
+      bajar.textContent = 'Descargar para Excel';
+      bajar.addEventListener('click', () => {
+        descargar(new Blob([`﻿${csv()}`], { type: 'text/csv;charset=utf-8' }),
+          `presupuesto_${cual}_${meses[0].mes}_${meses[meses.length - 1].mes}.csv`);
+      });
+      pie.prepend(bajar);
+      $('#pzt-por', form).appendChild(segmentado(
+        [{ valor: 'gasto', texto: 'Gasto' }, { valor: 'categoria', texto: 'Categoría' }, { valor: 'tipo', texto: 'Forma de pago' }],
+        ver.por, (v) => { ver.por = v; pintar(form); },
+      ));
+      $('#pzt-unidad', form).appendChild(segmentado(
+        [{ valor: 'dolar', texto: '$' }, { valor: 'pct', texto: '% del sueldo' }],
+        ver.unidad, (v) => { ver.unidad = v; pintar(form); },
+      ));
+      pintar(form);
+    },
+  });
+  return dlg;
 }
 
 /** Lo simulado de un mes, para el detalle de «Real + simulado». */
@@ -18933,6 +19140,7 @@ function tarjetaComunes({ comunes, suma }) {
   return `<header><h2><span class="pz-num com">4</span>Comunes</h2><span class="pista">Lo calcula la app</span></header>
     <p class="pz-sub">Lo que la app ve que se repite en tu historial. <b>Puede pasar o no:</b> es una estimación.
       Cuando la compra ocurre, pasa a «Lo real». «Dejar fuera» lo saca de la proyección (3).</p>
+    <div class="pz-tabla-btn"><button type="button" class="btn pequeno" data-tabla="comunes">▦ Ver en tabla</button></div>
 
     ${listaPlegable('comunes', 'Gastos que se repiten', comunes.length
     ? `${comunes.length} · ${money(suma(comunes))} al mes` : 'ninguno',
