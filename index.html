@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-q2InnfnNkKM0ewZ99fbkc6DVjBUccaqx8eL4Y++aBd4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-gr3br+1XGfR1OU43nBtf00MOBZ8D4puGhIW/Je/WwVg='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3872,10 +3872,12 @@ body.velada .cabecera { filter: blur(18px); }
 dialog.pz-dialogo { width: min(1100px, calc(100vw - 12px)); max-height: 94vh; background: var(--superficie-solida); }
 dialog.pz-dialogo .modal-cab, dialog.pz-dialogo .modal-pie { background: var(--superficie-solida); }
 dialog.pz-dialogo .modal-cuerpo { padding: 12px; }
-.pz-hoja-ctl { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; }
+.pz-hoja-ctl { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 8px; }
+.pz-hoja-ctl .segmentado button, .pz-hoja-ctl [role="tablist"] button { padding-top: 5px; padding-bottom: 5px; }
+dialog.pz-dialogo .modal-pie { z-index: 4; }
 .pz-hoja-ctl .etq { display: block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tinta-3); margin-bottom: 4px; }
 .pz-hoja {
-  overflow: auto; max-height: calc(94vh - 300px); min-height: 180px;
+  overflow: auto; max-height: calc(94vh - 290px); min-height: 180px; position: relative; z-index: 0;
   border: 1px solid var(--borde); border-radius: 10px; background: var(--superficie-solida);
 }
 .pz-hoja table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -3942,7 +3944,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'a466c29046';
+window.__VERSION_APP__ = '95ad0a7f91';
 
 M["cerradura"] = (function () {
 /**
@@ -11377,11 +11379,11 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
   }
 
   // Lo ya apuntado: las cuotas son de tarjeta y los gastos sueltos, de efectivo.
-  const apuntar = (m, medio, monto, detalle, fecha, nota, proposito = '', categoria = '') => {
+  const apuntar = (m, medio, monto, detalle, fecha, nota, proposito = '', categoria = '', usuario = '') => {
     m.comprometido += monto;
     m.medios[medio] += monto;
     m.reales[medio] += monto;
-    m.realLineas.push({ detalle, monto, medio, fecha, nota, proposito, aMano: false, categoria });
+    m.realLineas.push({ detalle, monto, medio, fecha, nota, proposito, aMano: false, categoria, usuario });
   };
 
   for (const c of db.cuotas) {
@@ -11395,7 +11397,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
       // La fecha que interesa es la de la compra: el mes de la cuota ya lo
       // dice la fila que se ha desplegado.
       compra?.fecha, enCuotas ? `cuota ${c.n_cuota} de ${compra.cuotas}` : '',
-      compra?.proposito || '', compra?.categoria || c.categoria || '');
+      compra?.proposito || '', compra?.categoria || c.categoria || '', c.usuario || compra?.usuario || '');
   }
   const recs = recurrencias(quien);
   // Una letra atrasada cuenta en el mes de la letra, no en el del pago.
@@ -11406,7 +11408,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
     const medio = medioManual.get(claveGasto(g.detalle)) || medioDe(g.cuenta);
     apuntar(m, MEDIOS.includes(medio) ? medio : 'Efectivo',
       Number(g.monto) || 0, g.detalle || g.categoria || 'Gasto', g.fecha,
-      '', g.proposito || '', g.categoria || '');
+      '', g.proposito || '', g.categoria || '', g.usuario || '');
   }
 
   const usadas = [];
@@ -11445,6 +11447,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
       });
       casilla.lineas.push({
         clave: r.clave, detalle: r.detalle, monto, cuando, reparto: r.reparto, origen, categoria: r.categoria || '',
+        usuario: r.usuario || '',
       });
       if (conocido) {
         casilla.realLineas.push({
@@ -11454,6 +11457,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
           nota: cuando,
           aMano: true,
           categoria: r.categoria || '',
+          usuario: r.usuario || '',
         });
       }
       aporta = true;
@@ -18986,24 +18990,30 @@ const TIPO_COM = 'Común (app)';
 const ORDEN_TIPO = ['Pago fijo', 'Tarjeta', 'Efectivo y débito', TIPO_SIM, TIPO_COM];
 const posTipo = (t) => { const i = ORDEN_TIPO.indexOf(t); return i < 0 ? ORDEN_TIPO.length : i; };
 
+/** De quién es una línea: J, C o de los dos. */
+const deQuien = (u) => (u === 'J' || u === 'C' ? u : 'J y C');
+
 function lineasReales(f) {
   return f.realLineas.map((l) => ({
-    detalle: l.detalle, monto: l.monto, categoria: l.categoria || 'Sin categoría',
+    detalle: l.detalle, monto: l.monto, categoria: l.categoria || 'Sin categoría', de: deQuien(l.usuario),
     tipo: l.aMano ? 'Pago fijo' : l.medio === 'Tarjeta' ? 'Tarjeta' : 'Efectivo y débito',
   }));
 }
 function lineasPrevistas(f, origen) {
   return f.lineas.filter((l) => l.origen === origen).map((l) => ({
-    detalle: l.detalle, monto: l.monto, categoria: l.categoria || l.detalle,
+    detalle: l.detalle, monto: l.monto, categoria: l.categoria || l.detalle, de: deQuien(l.usuario),
     tipo: origen === 'simulacion' ? TIPO_SIM : TIPO_COM,
   }));
 }
 
-function abrirTabla(cual, { plan, quien }) {
+function abrirTabla(cual, contexto) {
   const def = TABLAS[cual];
-  const meses = plan.filas;
-  const ver = { por: 'gasto', unidad: 'dolar' };
-  const cuentas = meses.map((f) => cuentaDelMes(f, quien));
+  // De quién: arranca en lo elegido en Presupuesto y se cambia dentro.
+  const ver = { por: 'gasto', unidad: 'dolar', quien: contexto.quien };
+  let plan = contexto.plan;
+  let meses = plan.filas;
+  let cuentas = [];
+  let cierresDe = [];
 
   // Las filas de pie: lo que se compara con el sueldo, según la tarjeta.
   const escenarios = {
@@ -19012,15 +19022,26 @@ function abrirTabla(cual, { plan, quien }) {
     comparar: ESCENARIOS,
     comunes: [],
   }[cual];
-  const cierresDe = escenarios.map((e) => cierres(plan, quien, e.gasto));
+  const cargar = () => {
+    if (ver.quien !== contexto.quien || plan !== contexto.plan) {
+      plan = ver.quien === contexto.quien ? contexto.plan
+        : proyeccion(contexto.plan.filas.map((f) => f.mes), { quien: ver.quien });
+    }
+    meses = plan.filas;
+    cuentas = meses.map((f) => cuentaDelMes(f, ver.quien));
+    cierresDe = escenarios.map((e) => cierres(plan, ver.quien, e.gasto));
+  };
+  cargar();
 
   const datos = () => {
     const filas = new Map();
     meses.forEach((f, i) => def.lineas(f).forEach((l) => {
-      const clave = ver.por === 'gasto' ? `${l.tipo}|${l.detalle}` : ver.por === 'categoria' ? l.categoria : l.tipo;
+      const clave = ver.por === 'gasto' ? `${l.tipo}|${l.detalle}|${ver.quien === 'Ambos' ? l.de : ''}`
+        : ver.por === 'categoria' ? l.categoria : l.tipo;
       if (!filas.has(clave)) {
         filas.set(clave, {
           nombre: ver.por === 'gasto' ? l.detalle : clave,
+          de: l.de,
           tipo: ver.por === 'gasto' ? l.tipo : ver.por === 'tipo' ? clave : '',
           valores: meses.map(() => 0),
           porTipo: {},
@@ -19095,42 +19116,48 @@ function abrirTabla(cual, { plan, quien }) {
 
   const pintar = (caja) => {
     const filas = datos();
-    const conTipo = ver.por === 'gasto' && cual !== 'comunes';
+    // El tipo ya lo dice el título de cada grupo: no hace falta otra columna.
+    const conTipo = false;
+    const conDe = ver.por === 'gasto' && ver.quien === 'Ambos';
     const lista = conGrupos(filas);
     caja.querySelector('.pz-hoja').innerHTML = `<table>
       <thead><tr><th class="fija">${ver.por === 'gasto' ? 'Gasto' : ver.por === 'categoria' ? 'Categoría' : 'Forma de pago'}</th>
-        ${conTipo ? '<th class="tipo">Tipo</th>' : ''}
+        ${conDe ? '<th class="tipo">De</th>' : ''}${conTipo ? '<th class="tipo">Tipo</th>' : ''}
         ${meses.map((f) => `<th>${esc(nombreMes(f.mes, true))}</th>`).join('')}<th>Total</th><th>Promedio</th></tr></thead>
       <tbody>${lista.map((x) => `<tr${x.grupo ? ' class="grupo"' : ''}>
-        <th class="fija">${esc(x.nombre)}${x.grupo ? ` <small>${x.n}</small>` : ''}</th>${conTipo ? `<td class="tipo">${x.grupo ? '' : esc(x.tipo)}</td>` : ''}
+        <th class="fija">${esc(x.nombre)}${x.grupo ? ` <small>${x.n}</small>` : ''}</th>${conDe ? `<td class="tipo">${x.grupo ? '' : esc(x.de)}</td>` : ''}${conTipo ? `<td class="tipo">${x.grupo ? '' : esc(x.tipo)}</td>` : ''}
         ${x.valores.map((v, i) => celda(v, i)).join('')}
         <td class="tot">${money(x.total)}</td><td class="tot">${money(redondear(x.total / meses.length))}</td></tr>`).join('')
   || `<tr><td colspan="${meses.length + 3}" class="vacio">Nada en estos meses.</td></tr>`}</tbody>
       <tfoot>${pie().map((x) => `<tr class="${x.clase || ''}">
-        <th class="fija">${esc(x.nombre)}</th>${conTipo ? '<td class="tipo"></td>' : ''}
+        <th class="fija">${esc(x.nombre)}</th>${conDe ? '<td class="tipo"></td>' : ''}${conTipo ? '<td class="tipo"></td>' : ''}
         ${x.valores.map((v, i) => celda(v, i, x)).join('')}
         <td class="tot">${x.sinTotal ? '' : money(redondear(x.valores.reduce((t, v) => t + v, 0)))}</td>
         <td class="tot">${x.sinTotal ? '' : money(redondear(x.valores.reduce((t, v) => t + v, 0) / meses.length))}</td></tr>`).join('')}</tfoot>
     </table>`;
+    caja.closest('dialog').querySelector('.modal-cab h2').textContent = `${def.titulo} · ${ver.quien === 'Ambos' ? 'J y C' : ver.quien}`;
     caja.querySelector('.pz-hoja-nota').textContent = `${filas.length} ${filas.length === 1 ? 'fila' : 'filas'} · ${meses.length} meses`
+      + (ver.quien === 'Ambos' ? ' · sueldo de J + sueldo de C' : '')
       + (ver.unidad === 'pct' ? ' · cada gasto en % del sueldo de su mes' : '');
   };
 
   const csv = () => {
     const n = (v) => String(redondear(v)).replace('.', ',');
     const filas = conGrupos(datos());
-    const cab = ['Fila', ...(ver.por === 'gasto' ? ['Tipo'] : []), ...meses.map((f) => nombreMes(f.mes)), 'Total'];
+    const conDe = ver.por === 'gasto' && ver.quien === 'Ambos';
+    const cab = ['Fila', ...(conDe ? ['De'] : []), ...(ver.por === 'gasto' ? ['Tipo'] : []), ...meses.map((f) => nombreMes(f.mes)), 'Total'];
     const lineasCsv = [cab, ...filas.map((x) => [x.grupo ? `${x.nombre.toUpperCase()} (subtotal)` : x.nombre,
-      ...(ver.por === 'gasto' ? [x.grupo ? '' : x.tipo] : []), ...x.valores.map(n), n(x.total)]),
-      ...pie().map((x) => [x.nombre, ...(ver.por === 'gasto' ? [''] : []), ...x.valores.map(n), x.sinTotal ? '' : n(x.valores.reduce((t, v) => t + v, 0))])];
+      ...(conDe ? [x.grupo ? '' : x.de] : []), ...(ver.por === 'gasto' ? [x.grupo ? '' : x.tipo] : []), ...x.valores.map(n), n(x.total)]),
+      ...pie().map((x) => [x.nombre, ...(conDe ? [''] : []), ...(ver.por === 'gasto' ? [''] : []), ...x.valores.map(n), x.sinTotal ? '' : n(x.valores.reduce((t, v) => t + v, 0))])];
     return lineasCsv.map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
   };
 
   const dlg = modal({
     titulo: def.titulo,
     cuerpo: `<div class="pz-hoja-ctl">
-        <div><span class="etq">Filas</span><div id="pzt-por"></div></div>
+        <div><span class="etq">De quién</span><div id="pzt-quien"></div></div>
         <div><span class="etq">Valores</span><div id="pzt-unidad"></div></div>
+        <div><span class="etq">Filas</span><div id="pzt-por"></div></div>
       </div>
       <div class="pz-hoja" tabindex="0"></div>
       <p class="pista pz-hoja-nota"></p>`,
@@ -19147,9 +19174,13 @@ function abrirTabla(cual, { plan, quien }) {
       bajar.textContent = 'Descargar para Excel';
       bajar.addEventListener('click', () => {
         descargar(new Blob([`﻿${csv()}`], { type: 'text/csv;charset=utf-8' }),
-          `presupuesto_${cual}_${meses[0].mes}_${meses[meses.length - 1].mes}.csv`);
+          `presupuesto_${cual}_${ver.quien === 'Ambos' ? 'JyC' : ver.quien}_${meses[0].mes}_${meses[meses.length - 1].mes}.csv`);
       });
       pie.prepend(bajar);
+      $('#pzt-quien', form).appendChild(segmentado(
+        [{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' }, { valor: 'Ambos', texto: 'Ambos' }],
+        ver.quien, (v) => { ver.quien = v; cargar(); pintar(form); },
+      ));
       $('#pzt-por', form).appendChild(segmentado(
         [{ valor: 'gasto', texto: 'Gasto' }, { valor: 'categoria', texto: 'Categoría' }, { valor: 'tipo', texto: 'Forma de pago' }],
         ver.por, (v) => { ver.por = v; pintar(form); },
