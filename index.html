@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-eXcwIWY1RfCp0uN4pqRHa79oim3630mNtXiaKXSK4ko='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-KyScqaMP0rEROWoYrxVzKTmiZnZhMjsdbcxe+1mI0QE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3947,6 +3947,13 @@ dialog.pz-dialogo .modal-pie { z-index: 4; }
 .cm-items b { font-weight: 640; color: var(--tinta); white-space: nowrap; }
 .cm-pie { margin: 8px 0 0; font-size: 11.5px; color: var(--tinta-3); }
 
+/* Simular un gasto: ventana opaca, para leerla sin la página de detrás. */
+dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { background: var(--superficie-solida); }
+.ps-cuota { padding: 10px 0; font-size: 15px; font-weight: 700; color: var(--tinta); font-variant-numeric: tabular-nums; }
+.ps-dialogo .modal-pie { gap: 6px; }
+.ps-dialogo .modal-pie .btn { padding-left: 14px; padding-right: 14px; }
+.ps-dialogo .enlace { display: inline; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--acento); font: inherit; text-decoration: underline; cursor: pointer; }
+
 </style>
 </head>
 <body>
@@ -3979,7 +3986,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '23590ec466';
+window.__VERSION_APP__ = '4b72da6d98';
 
 M["cerradura"] = (function () {
 /**
@@ -18503,7 +18510,7 @@ M["views/plan"] = (function () {
 const {db, guardar, categoriasGasto, cuentasBancarias, tarjetas, upsert, nuevoId, capitalizar} = M["store"];
 const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes, hoyLocal, ahorradoAl} = M["calc"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo, confirmar, descargar} = M["ui"];
-const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago, esSimulacion, sueldoDelMes, porcentajeAhorro, claveGasto, otrosIngresos} = M["plan"];
+const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago, esSimulacion, sueldoDelMes, porcentajeAhorro, claveGasto, otrosIngresos, fijosManuales} = M["plan"];
 const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
 const vistaTarjetas = M["views/tarjetas"];
 const {plegable} = M["pliegue"];
@@ -18720,13 +18727,14 @@ function render(raiz, { irA } = {}) {
   $('#btn-fijo', raiz).addEventListener('click', () => formFijo({
     esNuevo: true, manual: true, simulacion: false, clase: 'plazos', medio: 'Préstamo',
   }, recargar));
-  $('#btn-simular', raiz).addEventListener('click', () => formFijo({
-    esNuevo: true, manual: true, simulacion: true, clase: 'plazos', medio: 'Tarjeta', cargo: 'Diferido',
-  }, recargar));
+  $('#btn-simular', raiz).addEventListener('click', () => formSimulacion(null, recargar));
   $$('[data-editar]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => {
       const r = todas.find((x) => x.clave === btn.dataset.editar);
-      if (r) formFijo(r, recargar);
+      if (!r) return;
+      // Una simulación tiene su propio formulario, corto: qué, cuánto y cómo se paga.
+      if (r.manual && esSimulacion(r)) formSimulacion(r, recargar);
+      else formFijo(r, recargar);
     });
   });
 
@@ -19653,6 +19661,154 @@ const CADENCIAS = [
   { valor: 182, texto: 'Cada 6 meses' },
   { valor: 365, texto: 'Una vez al año' },
 ];
+
+/**
+ * Simular un gasto, o cambiar uno simulado: qué es, cuánto cuesta y cómo se
+ * pagaría —en efectivo o con tarjeta, de una vez o en cuotas, y desde qué
+ * mes—. Es el formulario de pagos fijos reducido a lo que importa al probar
+ * («¿y si lo difiero a 6 meses en vez de 3?»): sin cuotas ya pagadas ni
+ * periodicidades, y con el nombre editable. Se guarda como siempre (pago
+ * único o a plazos, `simulacion: true`), así que «Ejecutar» y las tablas lo
+ * leen igual que antes.
+ */
+function formSimulacion(r, alTerminar) {
+  const nuevo = !r;
+  const mesHoy = hoyLocal().slice(0, 7);
+  const misTarjetas = tarjetas();
+  const enCuotas = r ? r.clase === 'plazos' && Number(r.cuotas) > 1 : true;
+  const medio0 = r?.medio === 'Tarjeta' || !r ? 'Tarjeta' : 'Efectivo';
+  const total0 = r ? (r.clase === 'plazos' ? (r.total ?? r.monto * r.cuotas) : r.monto) : '';
+  const cuotas0 = r?.clase === 'plazos' ? Number(r.cuotas) : 3;
+  const mes0 = (r?.clase === 'plazos' ? r.desdeMes : r?.mes) || mesHoy;
+  let medio = medio0;
+  let forma = enCuotas ? 'cuotas' : 'una';
+
+  const dlg = modal({
+    titulo: nuevo ? 'Simular un gasto' : `Cambiar «${r.detalle}»`,
+    cuerpo: `
+      <div class="campo ancho"><label for="pf-detalle">Qué es</label>
+        <input id="pf-detalle" name="detalle" required placeholder="Repuesto del carro" value="${esc(r?.detalle || '')}"></div>
+      <div class="filtros">
+        ${campoMonto('pf-total', 'total', { etiqueta: 'Cuánto cuesta en total', valor: String(total0).replace('.', ','), requerido: true })}
+        <div class="campo"><label for="pf-desde">Desde qué mes</label>
+          <input id="pf-desde" name="desdeMes" type="month" value="${esc(mes0)}" required></div>
+      </div>
+      <div class="campo ancho"><label>Cómo se paga</label><div id="ps-medio"></div></div>
+      <div class="filtros" id="ps-caja-tarjeta">
+        <div class="campo ancho"><label for="ps-tarjeta">Con qué tarjeta</label>
+          <select id="ps-tarjeta" name="tarjeta">${opciones(misTarjetas.map((t) => ({ valor: t.id, texto: t.nombre })), r?.tarjeta || misTarjetas[0]?.id)}</select></div>
+      </div>
+      <div class="campo ancho"><label>De una vez o en cuotas</label><div id="ps-forma"></div></div>
+      <div class="filtros" id="ps-caja-cuotas">
+        <div class="campo"><label for="pf-cuotas">Nº de cuotas</label>
+          <input id="pf-cuotas" name="cuotas" type="number" inputmode="numeric" min="2" max="48" step="1" value="${esc(String(cuotas0 > 1 ? cuotas0 : 3))}"></div>
+        <div class="campo"><label>Cuota de cada mes</label><div class="ps-cuota" id="ps-cuota">—</div></div>
+      </div>
+      <div class="filtros">
+        ${campoCategoria('pf-cat', categoriasGasto(), r?.categoria)}
+        <div class="campo"><label for="pf-quien">De quién es</label>
+          <select id="pf-quien" name="usuario">${opciones([{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' },
+    { valor: '', texto: 'De los dos' }], r?.usuario ?? (estado.quien === 'Ambos' ? '' : estado.quien))}</select></div>
+      </div>
+      <div class="previsualizacion" id="ps-preview"></div>
+      <p class="pista">Es una simulación: no cuenta como real. Cuando lo compres de verdad, «Ejecutar» lo registra.
+        ${nuevo ? '' : '<button type="button" class="enlace" id="ps-a-fijo">¿Lo pagarás sí o sí? Pásalo a pagos fijos</button>'}</p>`,
+    aceptar: nuevo ? 'Simular' : 'Guardar',
+    alAbrir(form) {
+      form.closest('dialog').classList.add('ps-dialogo');
+      conectarCategoria(form, 'pf-cat');
+      const refrescar = () => {
+        const conTarjeta = medio === 'Tarjeta';
+        $('#ps-caja-tarjeta', form).hidden = !conTarjeta;
+        $('#ps-tarjeta', form).disabled = !conTarjeta;
+        const cuotas = forma === 'cuotas';
+        $('#ps-caja-cuotas', form).hidden = !cuotas;
+        $('#pf-cuotas', form).disabled = !cuotas;
+        const total = redondear(aNumero($('#pf-total', form).value));
+        const n = Math.max(2, Math.round(Number($('#pf-cuotas', form).value) || 2));
+        const desde = $('#pf-desde', form).value || mesHoy;
+        const cuota = redondear(total / n);
+        const ultima = redondear(total - cuota * (n - 1));
+        $('#ps-cuota', form).textContent = cuotas && total ? money(cuota) : '—';
+        const donde = conTarjeta ? misTarjetas.find((t) => t.id === $('#ps-tarjeta', form).value)?.nombre || 'la tarjeta' : 'efectivo o débito';
+        $('#ps-preview', form).innerHTML = !total ? 'Escribe cuánto cuesta para ver cómo se repartiría.'
+          : cuotas
+            ? `<strong>${n} cuotas de ${money(cuota)}</strong>${Math.abs(ultima - cuota) >= 0.005 ? ` (la última, ${money(ultima)})` : ''}
+              con ${esc(donde)}, de ${esc(nombreMes(desde))} a ${esc(nombreMes(sumarMeses(desde, n - 1)))}.`
+            : `<strong>Un solo pago de ${money(total)}</strong> con ${esc(donde)} en ${esc(nombreMes(desde))}.`;
+      };
+      $('#ps-medio', form).appendChild(segmentado(
+        [{ valor: 'Tarjeta', texto: 'Tarjeta de crédito' }, { valor: 'Efectivo', texto: 'Efectivo o débito' }],
+        medio, (v) => { medio = v; refrescar(); },
+      ));
+      $('#ps-forma', form).appendChild(segmentado(
+        [{ valor: 'una', texto: 'De una vez' }, { valor: 'cuotas', texto: 'En cuotas' }],
+        forma, (v) => { forma = v; refrescar(); },
+      ));
+      ['input', 'change'].forEach((e) => form.addEventListener(e, refrescar));
+      refrescar();
+      $('#ps-a-fijo', form)?.addEventListener('click', () => {
+        dlg.close();
+        dlg.remove();
+        formFijo({ ...r, simulacion: false }, alTerminar);
+      });
+      if (!nuevo) {
+        const pie = form.querySelector('.modal-pie');
+        const borrar = document.createElement('button');
+        borrar.type = 'button';
+        borrar.className = 'btn pequeno peligro';
+        borrar.style.marginRight = 'auto';
+        borrar.textContent = 'Quitar';
+        borrar.addEventListener('click', () => {
+          borrarManual(r.id);
+          guardarAjuste(r.clave, null);
+          guardar();
+          dlg.close();
+          dlg.remove();
+          brindis(`«${r.detalle}» quitado de la simulación`);
+          alTerminar?.();
+        });
+        pie.prepend(borrar);
+      }
+    },
+    alEnviar(d) {
+      const total = redondear(aNumero(d.total));
+      if (!(total > 0)) return false;
+      const desde = d.desdeMes || mesHoy;
+      const comun = {
+        detalle: capitalizar(d.detalle),
+        categoria: categoriaElegida(d),
+        medio,
+        tarjeta: medio === 'Tarjeta' ? d.tarjeta || '' : '',
+        usuario: d.usuario,
+        simulacion: true,
+        tipo: 'Fijo',
+      };
+      let fila;
+      if (forma === 'cuotas') {
+        const cuotas = Math.max(2, Math.min(48, Math.round(Number(d.cuotas) || 2)));
+        fila = {
+          ...comun, clase: 'plazos', total, monto: redondear(total / cuotas), cuotas, desdeMes: desde,
+          cargo: 'Diferido', cadencia: 30, pagadasInicio: 0, pagos: [],
+        };
+      } else {
+        fila = { ...comun, clase: 'unico', monto: total, mes: desde, cargo: 'Corriente', cadencia: 0 };
+      }
+      if (nuevo) {
+        guardarManual({ ...fila, id: `${fila.clase === 'plazos' ? 'plazo' : 'unico'}-${Date.now().toString(36)}`, desde: hoyLocal(), activo: true });
+      } else {
+        // Se rehace la fila: lo que ya no aplica (cuotas de un pago único, mes de un plazo) no queda.
+        const resto = { ...(fijosManuales().find((x) => x.id === r.id) || {}) };
+        ['mes', 'desdeMes', 'cuotas', 'total', 'pagadasInicio', 'pagos'].forEach((k) => { delete resto[k]; });
+        guardarManual({ ...resto, ...fila, id: r.id, activo: true });
+      }
+      guardar();
+      brindis(nuevo ? 'Simulación añadida' : 'Simulación actualizada');
+      alTerminar?.();
+    },
+  });
+  return dlg;
+}
 
 /**
  * Corregir un gasto periódico, o dar de alta uno nuevo.
