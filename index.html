@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-KyScqaMP0rEROWoYrxVzKTmiZnZhMjsdbcxe+1mI0QE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-bNaEJjWn/IkdOIYUXwFsdTFWQnRdrgqc4l+oQZDMuI4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3954,6 +3954,24 @@ dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { 
 .ps-dialogo .modal-pie .btn { padding-left: 14px; padding-right: 14px; }
 .ps-dialogo .enlace { display: inline; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--acento); font: inherit; text-decoration: underline; cursor: pointer; }
 
+/* Combustible y kilómetros: cada mes se despliega con sus recargas. */
+.lista.compacta li.mes-recargas { display: block; padding: 0; }
+.mes-recargas > details > summary {
+  display: flex; align-items: center; gap: 12px; padding: 7px 0; cursor: pointer; list-style: none;
+}
+.mes-recargas > details > summary::-webkit-details-marker { display: none; }
+.mes-recargas > details > summary .principal { flex: 1; min-width: 0; }
+.mes-recargas > details > summary .titulo::before { content: '›'; display: inline-block; width: 12px; color: var(--tinta-3); transition: transform 0.15s; }
+.mes-recargas > details[open] > summary .titulo::before { transform: rotate(90deg); }
+.recargas { width: 100%; border-collapse: collapse; margin: 2px 0 4px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.recargas th { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tinta-3); text-align: right; padding: 4px 4px; background: none; border: 0; position: static; }
+.recargas th:first-child, .recargas td:first-child { text-align: left; }
+.recargas td { text-align: right; padding: 6px 4px; border-top: 1px solid var(--grid); color: var(--tinta-2); vertical-align: top; background: none; }
+.recargas td b { color: var(--tinta); font-weight: 640; }
+.recargas td small { display: block; font-size: 10.5px; color: var(--tinta-3); }
+.recargas .sin { color: var(--tinta-3); font-size: 11px; }
+.recargas-nota { margin: 0 0 8px; font-size: 11px; }
+
 </style>
 </head>
 <body>
@@ -3986,7 +4004,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '4b72da6d98';
+window.__VERSION_APP__ = '5a998c9606';
 
 M["cerradura"] = (function () {
 /**
@@ -5592,6 +5610,61 @@ function detalleDeGastos(meses, filtros = {}) {
  * Si no hay lecturas del odómetro, se vuelve a lo de antes: la diferencia
  * entre un repostaje con km y el anterior.
  */
+/**
+ * Cada recarga de combustible y lo que se anduvo desde la anterior: los días
+ * que pasaron y los km que marcó el odómetro entre una y otra.
+ *
+ * Las recargas del mismo día van juntas (dos cargas el 17 de septiembre son
+ * una parada). El odómetro de cada una sale de las lecturas que encajan
+ * (`lecturasParaMedir`): si ese día hay lectura —la que se escribe al
+ * repostar— es la medida; si no, se interpola entre la de antes y la de
+ * después y va marcada como estimada. Sin lecturas a los dos lados no se
+ * inventa: los km quedan en blanco.
+ *
+ * Es el carro, de los dos: los km se miden con todas las recargas; `usuario`
+ * solo decide cuáles se enseñan.
+ *
+ * @returns {Array<{fecha, monto, quien, odometro, estimado, km, dias, kmDia, porKm}>} de la más antigua a la más reciente
+ */
+function entreRecargas(filtros = {}) {
+  const esCombustible = (c) => String(c || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim() === 'combustible';
+  const dias = new Map();
+  const anotar = (g, monto) => {
+    const fecha = String(g.fecha || '').slice(0, 10);
+    if (!esCombustible(g.categoria) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
+    if (!dias.has(fecha)) dias.set(fecha, { fecha, monto: 0, quien: new Set(), cargas: 0 });
+    const d = dias.get(fecha);
+    d.monto += Number(monto) || 0;
+    d.cargas += 1;
+    if (g.usuario) d.quien.add(g.usuario);
+  };
+  db.gastosTarjeta.forEach((g) => anotar(g, g.monto_total));
+  db.gastosEfectivo.forEach((g) => anotar(g, g.monto));
+  const lecturas = lecturasParaMedir();
+  const conLectura = new Set(lecturas.map((l) => l.fecha));
+  const lista = [...dias.values()].sort((a, b) => a.fecha.localeCompare(b.fecha)).map((d) => {
+    const km = interpolarKm(lecturas, d.fecha, { estricto: true });
+    return {
+      fecha: d.fecha, monto: redondear(d.monto), cargas: d.cargas,
+      quien: [...d.quien].sort().join(' y '), usuarios: d.quien,
+      odometro: km === null ? null : Math.round(km), estimado: km !== null && !conLectura.has(d.fecha),
+    };
+  });
+  lista.forEach((r, i) => {
+    const previa = lista[i - 1];
+    r.dias = previa ? diasEntre(previa.fecha, r.fecha) : null;
+    r.km = previa && previa.odometro !== null && r.odometro !== null && r.odometro >= previa.odometro
+      ? r.odometro - previa.odometro : null;
+    r.estimadoKm = r.km !== null && (r.estimado || previa.estimado);
+    r.kmDia = r.km !== null && r.dias > 0 ? Math.round((r.km / r.dias) * 10) / 10 : null;
+    // Lo cargado la vez anterior es lo que se gastó en este tramo.
+    r.porKm = r.km > 0 ? redondear(previa.monto / r.km) : null;
+  });
+  const u = filtros.usuario;
+  return !u || u === 'ambos' ? lista : lista.filter((r) => r.usuarios.has(u));
+}
+
 function recorridoCombustible(filtros = {}) {
   const esCombustible = (c) => String(c || '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -7453,7 +7526,7 @@ function yaApuntado({ fecha, monto, detalle, usuario, excluir = '' }) {
   return comprasComparables().find((x) => x.clave !== excluir && mismaCompra(nuevo, x)) || null;
 }
 
-return { CLAVE_NO_REPETIDOS, DESVIO_GRAVE, ES_FINANCIACION, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, esFinanciacion, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasParaMedir, lecturasRevisadas, marcarNoRepetidos, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, posiblesRepetidos, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso, yaApuntado };
+return { CLAVE_NO_REPETIDOS, DESVIO_GRAVE, ES_FINANCIACION, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, entreRecargas, esFinanciacion, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasParaMedir, lecturasRevisadas, marcarNoRepetidos, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, posiblesRepetidos, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso, yaApuntado };
 })();
 
 M["charts"] = (function () {
@@ -14924,7 +14997,7 @@ M["views/resumen"] = (function () {
 /** Vista «Resumen»: la foto del mes en curso y del acumulado histórico. */
 
 const {db, tarjetas, usuarios, guardar} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, pagoDeTarjeta, topesDelMes, umbralAviso, comprometidoEnMes, realismoDeTopes, hoyLocal} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, entreRecargas, pagoDeTarjeta, topesDelMes, umbralAviso, comprometidoEnMes, realismoDeTopes, hoyLocal} = M["calc"];
 const {dona, columnas, medidor, alRedimensionar} = M["charts"];
 const {crear, esc, $, segmentado, opciones, modal, brindis, aNumero, campoMonto} = M["ui"];
 const {cuentaDelSueldo, guardarAjusteSueldo, sueldoEsperado, porcentajeAhorro} = M["plan"];
@@ -15687,6 +15760,25 @@ function seccionCombustible(filtros) {
   const meses = [...r.meses].reverse().slice(0, 12);
   const maxKm = Math.max(...meses.map((m) => m.km), 1);
   const miles = (n) => n.toLocaleString('es-EC');
+  // Las recargas de cada mes, con lo andado desde la anterior.
+  const recargas = entreRecargas(filtros);
+  const delMes = (mes) => recargas.filter((x) => x.fecha.slice(0, 7) === mes).reverse();
+  const listaRecargas = (mes) => {
+    const xs = delMes(mes);
+    if (!xs.length) return '<p class="vacio">Sin recargas este mes.</p>';
+    return `<table class="recargas">
+      <thead><tr><th>Recarga</th><th>Días</th><th>Km recorridos</th></tr></thead>
+      <tbody>${xs.map((x) => `<tr>
+        <td><b>${esc(textoFecha(x.fecha).replace(/ de \d{4}$/, ''))}</b><small>${money(x.monto)}${x.cargas > 1 ? ` · ${x.cargas} cargas` : ''}${x.quien ? ` · ${esc(x.quien)}` : ''}</small></td>
+        <td>${x.dias === null ? '—' : x.dias === 0 ? 'mismo día' : `${x.dias} ${x.dias === 1 ? 'día' : 'días'}`}</td>
+        <td>${x.km === null ? '<span class="sin">sin lectura</span>'
+    : `<b>${x.estimadoKm ? '~' : ''}${miles(x.km)} km</b><small>${[x.kmDia !== null ? `${String(x.kmDia).replace('.', ',')} km/día` : '',
+      x.porKm !== null ? `${money(x.porKm)}/km` : ''].filter(Boolean).join(' · ')}</small>`}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <p class="pista recargas-nota">Días y km desde la recarga anterior, según el odómetro${xs.some((x) => x.estimadoKm)
+    ? '; con ~, estimados entre dos lecturas' : ''}. El $/km divide lo cargado la vez anterior entre esos km.</p>`;
+  };
 
   return `${cab}
     <div class="rejilla kpis">
@@ -15710,10 +15802,12 @@ function seccionCombustible(filtros) {
     const dif = previo && previo.km > 0 && m.km > 0 && !m.parcial && !previo.parcial
       && !m.estimado && !previo.estimado
       ? ((m.km - previo.km) / previo.km) * 100 : null;
+    const n = delMes(m.mes).length;
     return `
-      <li>
+      <li class="mes-recargas"><details>
+        <summary>
         <div class="principal">
-          <div class="titulo">${esc(nombreMes(m.mes))}</div>
+          <div class="titulo">${esc(nombreMes(m.mes))}${n ? ` <span class="chip">${n} ${n === 1 ? 'recarga' : 'recargas'}</span>` : ''}</div>
           <div class="barra-jc" role="presentation">
             <span style="flex:${m.km};background:var(--serie-2)"></span>
             <span style="flex:${Math.max(0, maxKm - m.km)};background:transparent"></span>
@@ -15725,8 +15819,11 @@ function seccionCombustible(filtros) {
   dif === null ? '' : ` · ${dif >= 0 ? '↗' : '↘'} ${Math.abs(dif).toFixed(0)} % vs. mes previo`}</div>
         </div>
         <div class="monto">${m.km > 0 ? `${m.estimado ? '~' : ''}${miles(m.km)}` : '—'}<span class="pie">km</span></div>
-      </li>`;
-  }).join('')}</ul>`;
+        </summary>
+        ${listaRecargas(m.mes)}
+      </details></li>`;
+  }).join('')}</ul>
+    <p class="pista">Toca un mes para ver cada recarga: los días y los km desde la anterior.</p>`;
 }
 
 return { render };
