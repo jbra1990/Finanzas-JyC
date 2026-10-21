@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-hhQUCNnxXSon/nAUk95HTGDQFo/lsMkfU4OEHxhLSts='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-foUG2jRUNY+beGhwyODzswRgbt5m94jIR+sAH+6Rw2U='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4054,7 +4054,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'dc943e3954';
+window.__VERSION_APP__ = '480cb4161c';
 
 M["cerradura"] = (function () {
 /**
@@ -11529,6 +11529,8 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
     fijos: 0,
     simulacion: 0,
     comunes: 0,
+    // Lo mismo, por bolsillo: la tarjeta se paga al mes siguiente, el resto en el mes.
+    porOrigen: { fijos: cero(), simulacion: cero(), comunes: cero() },
   }]));
 
   /*
@@ -11633,6 +11635,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
       casilla[origen] += monto;
       // Se reparte por medio en la misma proporción que el historial.
       Object.entries(r.reparto || { Efectivo: 1 }).forEach(([medio, parte]) => {
+        if (casilla.porOrigen[origen][medio] !== undefined) casilla.porOrigen[origen][medio] += monto * parte;
         if (casilla.medios[medio] !== undefined) casilla.medios[medio] += monto * parte;
         if (conocido && casilla.reales[medio] !== undefined) {
           casilla.reales[medio] += monto * parte;
@@ -15874,7 +15877,12 @@ function chipsReparto(partes, total) {
 function seccionProximos(mes) {
   const filas = [];
 
-  tarjetas().forEach((t) => {
+  /*
+   * Lo que vence: el consumo del mes anterior (se paga en este) si aún no se
+   * pagó, y el del mes que se mira (se paga en el siguiente). Antes solo salía
+   * el segundo, y el pago más urgente —el de este mes— no estaba en la lista.
+   */
+  tarjetas().forEach((t) => [sumarMeses(mes, -1), mes].forEach((mes) => {
     const monto = pagoDelMes(t.id, mes, 'ambos');
     /*
      * Una tarjeta ya pagada no es un movimiento «próximo»: sale de esta lista
@@ -15897,7 +15905,7 @@ function seccionProximos(mes) {
         monto: -monto,
       });
     }
-  });
+  }));
 
   const hoy = hoyLocal();
   db.inversiones
@@ -18947,7 +18955,7 @@ M["views/plan"] = (function () {
  */
 
 const {db, guardar, categoriasGasto, cuentasBancarias, tarjetas, upsert, nuevoId, capitalizar} = M["store"];
-const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes, hoyLocal, ahorradoAl} = M["calc"];
+const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes, hoyLocal, ahorradoAl, pagoDelMes, pagoDeTarjeta} = M["calc"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo, confirmar, descargar} = M["ui"];
 const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago, esSimulacion, sueldoDelMes, porcentajeAhorro, claveGasto, otrosIngresos, fijosManuales} = M["plan"];
 const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
@@ -19310,7 +19318,7 @@ function cabezaMes(f, c, gasto, rotuloGasto) {
 
 function tarjetaReal({ plan, quien, pagosFijos, suma }) {
   const enCuentas = ahorradoAl(hoyLocal());
-  const cierre = cierres(plan, quien, (f) => f.real);
+  const cierre = cierres(plan, quien);
   const filas = plan.filas.map((f, i) => {
     const c = cuentaDelMes(f, quien);
     const { fijos, tarjeta, efectivo } = partesReales(f);
@@ -19319,7 +19327,7 @@ function tarjetaReal({ plan, quien, pagosFijos, suma }) {
       <summary>
         <div class="pz-mes-cab">${cabezaMes(f, c, f.real, 'gasto')}</div>
         ${barraMes([[tarjeta, 'tarjeta', 'Tarjeta'], [efectivo, 'efectivo', 'Efectivo y débito'], [fijos, 'fijo', 'Pagos fijos']], c.sueldo, c.limite)}
-        <div class="pz-mes-pie"><span>En cuentas al cierre del mes</span><span>≈ <b>${money(saldo)}</b></span></div>
+        <div class="pz-mes-pie"><span>En cuentas al cierre del mes${cierre[i].poliza > 0 ? ' <small>(con la póliza que vence)</small>' : ''}</span><span>≈ <b>${money(saldo)}</b></span></div>
       </summary>
       <div class="caja-desglose">${detalleReal(f)}</div>
     </details>`;
@@ -19329,7 +19337,8 @@ function tarjetaReal({ plan, quien, pagosFijos, suma }) {
   const queda0 = redondear(c0.sueldo - f0.real);
   return `<header><h2><span class="pz-num real">1</span>Lo real</h2><span class="pista">Lo que sí o sí</span></header>
     <p class="pz-sub">Lo ya registrado (tarjeta, efectivo y débito) y los <b>pagos fijos</b> que sabes que
-      vienen, como la letra de un préstamo. <b>Sin estimaciones.</b> Toca un mes para ver el detalle.</p>
+      vienen, como la letra de un préstamo. <b>Sin estimaciones.</b> Toca un mes para ver el detalle.
+      «En cuentas al cierre» cuenta la tarjeta cuando se paga: el consumo de un mes, al siguiente.</p>
     <div class="pz-tabla-btn"><button type="button" class="btn pequeno" data-tabla="real">▦ Ver en tabla</button></div>
     <div class="pz-kpis">
       <div><span class="k">En cuentas hoy</span><span class="v">${money(enCuentas)}</span></div>
@@ -19348,27 +19357,58 @@ function tarjetaReal({ plan, quien, pagosFijos, suma }) {
 }
 
 /**
- * Lo que habría en cuentas al cerrar cada mes si se gasta `gasto(f)`.
+ * Lo que habría en cuentas al cerrar cada mes en un escenario.
  *
  * Se parte de lo que hay hoy en bancos y efectivo (sin lo invertido) y, mes a
  * mes, entra el sueldo y los otros ingresos apuntados que aún no llegaron, y
- * sale lo gastado. Del mes en curso, lo que ya salió por efectivo o débito ya
- * está descontado del saldo; lo demás —tarjeta, pagos fijos, lo simulado, lo
- * común— se da por pagado en el mes.
+ * sale lo que se paga ESE mes:
+ *   · lo de efectivo, débito y préstamos, en su mes (del mes en curso, lo que
+ *     ya salió ya está descontado del saldo; sale lo pendiente);
+ *   · la tarjeta, al mes siguiente: las cuotas de octubre se pagan en
+ *     noviembre. En el mes en curso sale el estado del mes anterior que aún no
+ *     se haya pagado. Antes se restaban las cuotas del propio mes, y octubre
+ *     salía con ~$800 de más (los $1.372,04 de septiembre de Pichincha se
+ *     pagan el 19 de octubre).
+ * `partes` dice qué entra en el escenario: lo simulado y lo común (lo real, siempre).
  */
-function cierres(plan, quien, gasto) {
+function cierres(plan, quien, { simulacion = false, comunes = false } = {}) {
   const hoy = hoyLocal();
+  const mes0 = plan.filas[0]?.mes;
   let saldo = ahorradoAl(hoy);
+  const tarjetaDe = (f) => redondear((f.reales.Tarjeta - f.aMano.Tarjeta) + (f.aMano.Tarjeta || 0)
+    + (simulacion ? f.porOrigen.simulacion.Tarjeta : 0) + (comunes ? f.porOrigen.comunes.Tarjeta : 0));
+  const restoDe = (f, pendiente) => {
+    const cash = (k) => (pendiente ? (f.aMano[k] || 0) : f.reales[k])
+      + (simulacion ? f.porOrigen.simulacion[k] : 0) + (comunes ? f.porOrigen.comunes[k] : 0);
+    return redondear(cash('Efectivo') + cash('Préstamo'));
+  };
+  // El estado del mes anterior al primero: lo que vence ahora y aún no se pagó.
+  const previo = mes0 ? sumarMeses(mes0, -1) : null;
+  const deQuien = quien === 'Ambos' ? 'ambos' : quien;
+  const porPagarPrevio = previo ? redondear(tarjetas()
+    .filter((t) => !pagoDeTarjeta(t.id, previo))
+    .reduce((t, x) => t + pagoDelMes(x.id, previo, deQuien), 0)) : 0;
+  // Las pólizas que vencen y vuelven a una cuenta (mientras sigan activas: al
+  // liquidarlas, el dinero ya está en el saldo de hoy).
+  const polizas = (m) => redondear(db.inversiones
+    .filter((p) => p.estado === 'Activa' && String(p.fecha_vencimiento || '').slice(0, 7) === m)
+    .reduce((t, p) => t + (Number(p.valor_final) || Number(p.capital) || 0), 0));
+  const vencidas = redondear(db.inversiones
+    .filter((p) => p.estado === 'Activa' && mes0 && String(p.fecha_vencimiento || '').slice(0, 7) < mes0)
+    .reduce((t, p) => t + (Number(p.valor_final) || Number(p.capital) || 0), 0));
   return plan.filas.map((f, i) => {
     const c = cuentaDelMes(f, quien);
-    const extra = otrosIngresos(f.mes, quien, hoy);
-    const total = redondear(gasto(f));
+    const poliza = polizas(f.mes) + (i === 0 ? vencidas : 0);
+    const extra = redondear(otrosIngresos(f.mes, quien, hoy) + poliza);
+    const tarjeta = i === 0 ? porPagarPrevio : tarjetaDe(plan.filas[i - 1]);
+    const resto = restoDe(f, i === 0 && f.mes === claveMesHoy(hoy));
     saldo = i === 0
-      ? redondear(saldo + (c.sueldo - c.cobrado) + extra - (total - partesReales(f).efectivo))
-      : redondear(saldo + c.sueldo + extra - total);
-    return { saldo, extra };
+      ? redondear(saldo + (c.sueldo - c.cobrado) + extra - tarjeta - resto)
+      : redondear(saldo + c.sueldo + extra - tarjeta - resto);
+    return { saldo, extra, tarjeta, resto, poliza };
   });
 }
+const claveMesHoy = (hoy) => hoy.slice(0, 7);
 
 /**
  * Una lista dentro de una tarjeta, plegada: el título dice qué hay y cuánto
@@ -19426,7 +19466,7 @@ function mesesCon(plan, quien, total) {
 function tarjetaRealSim({ plan, quien, simulados }) {
   const meses = mesesCon(plan, quien, (f) => f.real + f.simulacion);
   // Como en «Lo real», y además sale lo simulado.
-  const cierre = cierres(plan, quien, (f) => f.real + f.simulacion);
+  const cierre = cierres(plan, quien, { simulacion: true });
   const filas = meses.map(({ f, c, proy }, i) => {
     const { saldo } = cierre[i];
     return `<details class="pz-mes" data-mes="${esc(f.mes)}">
@@ -19466,13 +19506,13 @@ function tarjetaRealSim({ plan, quien, simulados }) {
  * %), y cuánto quedaría del sueldo y en cuentas en cada caso.
  */
 const ESCENARIOS = [
-  { k: 'real', rotulo: 'Real', gasto: (f) => f.real },
-  { k: 'simulado', rotulo: '+ Simulado', gasto: (f) => f.real + f.simulacion },
-  { k: 'comunes', rotulo: '+ Comunes', gasto: (f) => f.real + f.simulacion + f.comunes },
+  { k: 'real', rotulo: 'Real', gasto: (f) => f.real, partes: {} },
+  { k: 'simulado', rotulo: '+ Simulado', gasto: (f) => f.real + f.simulacion, partes: { simulacion: true } },
+  { k: 'comunes', rotulo: '+ Comunes', gasto: (f) => f.real + f.simulacion + f.comunes, partes: { simulacion: true, comunes: true } },
 ];
 
 function tarjetaSimulacion({ plan, quien }) {
-  const cierre = ESCENARIOS.map((e) => cierres(plan, quien, e.gasto));
+  const cierre = ESCENARIOS.map((e) => cierres(plan, quien, e.partes));
   const ultimo = plan.filas[plan.filas.length - 1];
   const total = (e) => redondear(plan.filas.reduce((t, f) => t + e.gasto(f), 0));
   const pctDe = (x, base) => (base > 0 ? `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x / base) * 100)} %` : '');
@@ -19495,7 +19535,8 @@ function tarjetaSimulacion({ plan, quien }) {
     return `<details class="pz-mes pz-comp" data-mes="${esc(f.mes)}">
       <summary>
         <div class="pz-comp-cab"><span class="pz-mes-nombre">${esc(nombreMes(f.mes))}</span>
-          <small>sueldo ${money(c.sueldo)}${extra > 0 ? ` + otros ingresos ${money(extra)}` : ''}</small></div>
+          <small>sueldo ${money(c.sueldo)}${extra - cierre[0][i].poliza > 0.004 ? ` + otros ingresos ${money(redondear(extra - cierre[0][i].poliza))}` : ''}${
+  cierre[0][i].poliza > 0 ? ` + póliza ${money(cierre[0][i].poliza)}` : ''}</small></div>
         <table class="pz-comp-tabla">
           <thead><tr><th></th><th>Gasto</th><th>Queda sueldo</th><th>En cuentas</th></tr></thead>
           <tbody>${filas}</tbody>
@@ -19579,7 +19620,7 @@ function abrirTabla(cual, contexto) {
     }
     meses = plan.filas;
     cuentas = meses.map((f) => cuentaDelMes(f, ver.quien));
-    cierresDe = escenarios.map((e) => cierres(plan, ver.quien, e.gasto));
+    cierresDe = escenarios.map((e) => cierres(plan, ver.quien, e.partes));
   };
   cargar();
 
@@ -22426,7 +22467,7 @@ M["app"] = (function () {
 
 const {db, cargar, alCambiar, almacenamiento, instantaneaSinSecretos, guardar, tarjetas} = M["store"];
 const {iniciarSync, empujarDiferido, alCambiarSync, estadoSync, configurado} = M["sync"];
-const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta, hoyLocal} = M["calc"];
+const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta, hoyLocal, sumarMeses, pagoDeTarjeta, fechaPagoMes, diasEntre, textoFecha} = M["calc"];
 const archivoExcel = M["archivo"];
 const {crearCajon} = M["cajon"];
 const {pedirClave, vigilar} = M["pantalla_llave"];
@@ -22522,9 +22563,21 @@ function avisosPendientes() {
 
   const mes = mesActual();
   tarjetas().forEach((t) => {
-    const pago = pagoDelMes(t.id, mes, 'ambos');
-    if (pago > 0) {
-      lista.push({ nivel: 'info', texto: `${t.nombre}: a pagar en ${nombreMes(mes)} ${money(pago)}.` });
+    /*
+     * Lo que vence ESTE mes es el consumo del mes anterior: las cuotas de
+     * septiembre se pagan en octubre. Antes decía «a pagar en octubre» con las
+     * cuotas de octubre, que se pagan en noviembre. Pagado, ya no se avisa.
+     */
+    const previo = sumarMeses(mes, -1);
+    const pago = pagoDelMes(t.id, previo, 'ambos');
+    if (pago > 0 && !pagoDeTarjeta(t.id, previo)) {
+      const vence = fechaPagoMes(previo, t.id);
+      const dias = vence ? diasEntre(hoyLocal(), vence) : null;
+      lista.push({
+        nivel: dias !== null && dias < 0 ? 'critico' : dias !== null && dias <= 3 ? 'alerta' : 'info',
+        texto: `${t.nombre}: ${dias !== null && dias < 0 ? 'venció' : 'vence'} ${vence ? `el ${textoFecha(vence).replace(/ de \d{4}$/, '')}` : `en ${nombreMes(mes)}`} `
+          + `${money(pago)} (consumo de ${nombreMes(previo)}).`,
+      });
     }
     const est = estadoTarjeta(t.id);
     const uso = est.cupo ? (est.utilizado / est.cupo) * 100 : 0;
