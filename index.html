@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-foUG2jRUNY+beGhwyODzswRgbt5m94jIR+sAH+6Rw2U='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-4HbOTozI/5NhF/p0LTRAm4iMIx5Tuf66xHjwS3trMGk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4022,6 +4022,292 @@ dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { 
 .lim-desplegable .pz-lista-res b.mal { color: var(--critico); }
 .lim-desplegable .pz-lista-res b.cerca { color: var(--alerta); }
 
+/* =============================================================================
+   Rediseño: Hoy · Mes · Próximos · Tarjetas · Más
+   -----------------------------------------------------------------------------
+   Cada pantalla contesta una pregunta, con una respuesta arriba y como mucho
+   tres cifras. Lo demás, detrás de un toque: «¿De dónde sale?» abre la cuenta
+   línea por línea en una hoja que sube desde abajo.
+   ========================================================================== */
+
+/* --- La barra de abajo ---------------------------------------------------- */
+
+.app { padding-bottom: calc(118px + env(safe-area-inset-bottom)); }
+.nav {
+  justify-content: center;
+  padding: 0 calc(10px + env(safe-area-inset-right)) 0 calc(10px + env(safe-area-inset-left));
+  bottom: calc(12px + env(safe-area-inset-bottom));
+}
+.nav-barra {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr) auto repeat(3, 1fr);
+  align-items: center;
+  gap: 2px;
+  width: min(100%, 520px);
+  padding: 6px 6px;
+  border-radius: var(--radio-pill);
+  background: var(--vidrio);
+  border: 1px solid var(--vidrio-borde);
+  box-shadow: var(--sombra-nav), inset 0 1px 0 var(--vidrio-brillo);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
+}
+.nav-tab {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 0; min-height: 46px; padding: 4px 2px;
+  border: 0; border-radius: 16px; background: transparent;
+  color: var(--vidrio-tinta); font: inherit; font-size: 10px; font-weight: 560; letter-spacing: -0.01em;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.nav-tab svg { width: 21px; height: 21px; }
+.nav-tab span { max-width: 100%; overflow: hidden; text-overflow: clip; white-space: nowrap; }
+.nav-tab[aria-current="page"] { color: var(--vidrio-tinta-viva); background: var(--superficie-3); font-weight: 640; }
+.nav-tab:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
+.nav .nav-barra .nav-mas { width: 48px; height: 48px; margin: -14px 2px 0; }
+@media (min-width: 860px) {
+  .nav { left: 0; right: 0; bottom: 18px; justify-content: center; }
+}
+
+/* --- Hoy ------------------------------------------------------------------ */
+
+.hoy-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.hoy-cab .segmentado button { min-height: 28px; padding: 0 12px; font-size: 12px; }
+.panel .hoy-cifra { margin: 10px 0 6px; }
+.hoy-frase { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--panel-tinta-2); text-wrap: pretty; }
+.hoy-frase b { color: var(--panel-tinta); }
+.hoy-tres { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.hoy-tres > button, .hoy-tres > div {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0;
+  padding: 9px 10px; border-radius: var(--radio-s);
+  background: rgba(255, 255, 255, 0.09); border: 1px solid rgba(255, 255, 255, 0.10);
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.hoy-tres > div { cursor: default; background: var(--superficie-2); border-color: var(--borde); }
+.hoy-tres .etq { font-size: 9.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--panel-tinta-2); }
+.tarjeta .hoy-tres .etq { color: var(--tinta-3); }
+.hoy-tres b { font-size: 14.5px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; white-space: nowrap; }
+.hoy-tres small { font-size: 11px; line-height: 1.3; color: var(--panel-tinta-2); }
+.hoy-tres b.cerca { color: var(--alerta); }
+.hoy-tres b.ok { color: var(--ok-texto); }
+.hoy-donde {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 4px 0;
+  border: 0; background: none; color: #bcd8ff; font: inherit; font-size: 13px; cursor: pointer;
+}
+.tarjeta .hoy-donde { color: var(--acento); }
+.hoy-donde i, .cas-pie i {
+  display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 50%;
+  border: 1.5px solid currentColor; font-style: normal; font-size: 10.5px; font-weight: 700;
+}
+.hoy-linea { margin: 12px 0 0; font-size: 13.5px; color: var(--tinta-2); line-height: 1.5; }
+.hoy-linea b { color: var(--tinta); font-variant-numeric: tabular-nums; }
+
+.atencion { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.atencion button {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 11px; width: 100%;
+  padding: 11px 12px; border-radius: var(--radio-s); border: 1px solid var(--borde);
+  background: var(--superficie-2); color: var(--tinta); font: inherit; text-align: left; cursor: pointer;
+}
+.atencion-icono {
+  display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  font-style: normal; font-weight: 800; font-size: 14px;
+  color: var(--acento); background: var(--acento-suave);
+}
+.nivel-alerta .atencion-icono { color: var(--alerta); background: color-mix(in srgb, var(--alerta) 18%, transparent); }
+.nivel-critico .atencion-icono { color: var(--critico); background: color-mix(in srgb, var(--critico) 18%, transparent); }
+.atencion-txt { display: flex; flex-direction: column; min-width: 0; }
+.atencion-txt b { font-size: 13.5px; font-weight: 620; }
+.atencion-txt small { font-size: 12px; color: var(--tinta-3); }
+.atencion-monto { font-weight: 720; font-size: 13.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.atencion-monto.mal { color: var(--critico); }
+.atencion-monto.bien { color: var(--ok-texto); }
+
+/* --- «¿De dónde sale?»: la hoja que sube desde abajo ---------------------- */
+
+dialog.hoja .modal-cab h2 { font-size: 12px; font-weight: 640; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tinta-2); }
+@media (max-width: 640px) {
+  dialog.hoja {
+    width: 100%; max-width: none; margin: auto 0 0; max-height: 86vh;
+    border-radius: var(--radio-xl) var(--radio-xl) 0 0; border-bottom: 0;
+  }
+  dialog.hoja .modal-cab::before {
+    content: ''; position: absolute; top: 6px; left: 50%; width: 38px; height: 4px; margin-left: -19px;
+    border-radius: 3px; background: var(--borde-fuerte);
+  }
+}
+.hoja-cuenta { list-style: none; margin: 0; padding: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+.hoja-cuenta li {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 9px 0; border-top: 1px dashed var(--borde);
+}
+.hoja-cuenta li:first-child { border-top: 0; }
+.hoja-cuenta li > span { min-width: 0; }
+.hoja-cuenta li small { color: var(--tinta-3); font-size: 12px; }
+.hoja-cuenta li b { white-space: nowrap; }
+.hoja-cuenta li.sub { padding: 4px 0 4px 14px; border-top: 0; font-size: 12.5px; color: var(--tinta-2); }
+.hoja-cuenta li.sub b { font-weight: 540; }
+.hoja-cuenta li.total { border-top: 1px solid var(--borde-fuerte); font-weight: 720; }
+.hoja-cuenta li.final b { font-size: 15px; }
+.hoja-nota { margin: 12px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--tinta-2); text-wrap: pretty; }
+.hoja-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+
+/* --- Mes: la cuenta en cascada --------------------------------------------- */
+
+.mes-mandos { gap: 10px; flex-wrap: wrap; }
+.mes-mandos .select-panel {
+  min-height: 36px; padding: 0 12px; border-radius: var(--radio-pill);
+  border: 1px solid var(--borde); background: var(--superficie-2); color: var(--tinta); font: inherit; font-size: 13px;
+}
+.cascada { list-style: none; margin: 0; padding: 0; }
+.cascada li + li { border-top: 1px solid var(--grid); }
+.cascada li.total { border-top: 1px solid var(--borde-fuerte); }
+.cascada button {
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  width: 100%; padding: 9px 0; border: 0; background: none; color: var(--tinta); font: inherit; text-align: left; cursor: pointer;
+}
+.cascada button:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; border-radius: 8px; }
+.cas-rot { display: flex; flex-direction: column; font-size: 14px; min-width: 0; }
+.cas-rot small { font-size: 11.5px; color: var(--tinta-3); line-height: 1.3; }
+.cas-rot small.mal { color: var(--critico); font-weight: 640; }
+.cascada li.total .cas-rot { font-weight: 720; }
+.cas-barra { display: block; height: 12px; border-radius: 6px; background: var(--superficie-2); overflow: hidden; }
+.cas-barra i { display: block; height: 100%; border-radius: 6px; }
+.cas-val { font-variant-numeric: tabular-nums; font-size: 14px; white-space: nowrap; text-align: right; }
+.cas-val.mal { color: var(--critico); }
+.cas-val.ok { color: var(--ok-texto); }
+.cas-sueldo { background: var(--serie-5); }
+.cas-fijos { background: color-mix(in srgb, var(--alerta) 80%, transparent); }
+.cas-consumo { background: var(--serie-2); }
+.cas-sobra { background: color-mix(in srgb, var(--tinta-2) 70%, transparent); }
+.cas-meta { background: var(--ok); }
+.cas-libre { background: var(--ok-texto); }
+.cas-pie { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 12.5px; color: var(--tinta-3); line-height: 1.45; }
+.cas-pie i { color: var(--acento); flex: none; }
+
+.lim-corta { list-style: none; margin: 0; padding: 0; }
+.lim-corta li {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px;
+  padding: 9px 0; border-top: 1px solid var(--grid);
+}
+.lim-corta li:first-child { border-top: 0; }
+.pz-lista .lim-corta { padding: 0 12px 6px; }
+.lc-cat { font-size: 14px; min-width: 0; }
+.lc-chip {
+  display: inline-block; margin-left: 4px; padding: 2px 8px; border-radius: var(--radio-pill);
+  font-size: 11px; font-weight: 700; vertical-align: 1px;
+}
+.lim-corta li.mal .lc-chip { color: var(--critico); background: color-mix(in srgb, var(--critico) 16%, transparent); }
+.lim-corta li.cerca .lc-chip { color: var(--alerta); background: color-mix(in srgb, var(--alerta) 16%, transparent); }
+.lc-cifra { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; }
+.lc-cifra b { font-size: 14px; }
+.lc-cifra small { font-size: 11.5px; color: var(--tinta-3); }
+.lc-barra { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: var(--superficie-2); overflow: hidden; }
+.lc-barra i { display: block; height: 100%; background: var(--serie-3); border-radius: 3px; }
+.lim-corta li.mal .lc-barra i { background: var(--critico); }
+.lim-corta li.cerca .lc-barra i { background: var(--alerta); }
+
+.fijos-grupos .pz-lista { margin: 8px 0 0; }
+.fijos-grupos .pz-lista-tit small { display: block; margin-left: 14px; font-weight: 400; font-size: 11.5px; color: var(--tinta-3); }
+.fijos-grupos .pz-lista-res { display: flex; flex-direction: column; align-items: flex-end; }
+.fijos-grupos .pz-lista-res b { color: var(--tinta); font-size: 13.5px; }
+.pz-lista-res small.cerca, .pz-lista-res .cerca { color: var(--alerta); }
+.lineas { list-style: none; margin: 0; padding: 0 12px 8px; font-size: 13px; }
+.lineas li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 6px 0; border-top: 1px solid var(--grid); }
+.lineas li span { display: flex; flex-direction: column; min-width: 0; }
+.lineas li small { color: var(--tinta-3); font-size: 11.5px; }
+.lineas li b { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+
+/* --- Próximos ------------------------------------------------------------- */
+
+.prox-mandos { gap: 10px; flex-wrap: wrap; }
+.prox-mandos > *:first-child { flex: 0 1 auto; }
+.prox-cols { display: flex; align-items: stretch; gap: 6px; height: 170px; margin: 6px 0 8px; }
+.prox-col {
+  flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 0; border: 0; background: none; color: var(--tinta-2); font: inherit; cursor: pointer;
+}
+.prox-col:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; border-radius: 8px; }
+.prox-pila {
+  position: relative; flex: 1; width: min(100%, 38px);
+  display: flex; flex-direction: column-reverse;
+  border-radius: 9px; background: var(--superficie-2); overflow: hidden;
+}
+.prox-pila > i:not(.prox-limite) { display: block; flex: none; width: 100%; }
+.prox-limite { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed var(--alerta); z-index: 2; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); }
+.prox-mes { font-size: 11.5px; }
+.prox-escenario { margin-bottom: 8px; }
+.prox-tabla { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.prox-tabla th, .prox-tabla td { padding: 9px 6px; text-align: right; border-top: 1px solid var(--grid); white-space: nowrap; }
+.prox-tabla thead th { border-top: 0; font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--tinta-3); font-weight: 640; }
+.prox-tabla th:first-child { text-align: left; font-weight: 560; }
+.prox-tabla tbody tr[data-prox-mes] { cursor: pointer; }
+.prox-tabla tbody tr[data-prox-mes]:hover, .prox-tabla tbody tr[data-prox-mes]:focus-visible { background: var(--superficie-2); outline: none; }
+.prox-tabla td.ok { color: var(--ok-texto); }
+.prox-tabla td.cerca { color: var(--alerta); }
+.prox-tabla td.mal { color: var(--critico); }
+.prox-tabla tr.tenue th, .prox-tabla tr.tenue td { color: var(--tinta-3); }
+.tabla-envoltura { overflow-x: auto; }
+.prox-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.prox-chip { cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 620; color: var(--tinta); padding: 6px 12px; }
+.prox-mas { margin: 4px 4px 16px; text-align: center; }
+.prox-mas .enlace, .tj-pie .enlace {
+  padding: 4px 0; border: 0; background: none; color: var(--acento); font: inherit; font-size: 13px; cursor: pointer;
+}
+
+/* --- Tarjetas: el resumen de arriba ----------------------------------------- */
+
+.tj-fila + .tj-fila { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--grid); }
+.tj-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.tj-cab h3 { font-size: 15.5px; }
+.tj-chip {
+  padding: 3px 10px; border-radius: var(--radio-pill); font-size: 12px; font-weight: 700; white-space: nowrap;
+  color: var(--tinta-2); background: var(--superficie-2);
+}
+.tj-chip.ok { color: var(--ok-texto); background: color-mix(in srgb, var(--ok) 16%, transparent); }
+.tj-chip.cerca { color: var(--alerta); background: color-mix(in srgb, var(--alerta) 16%, transparent); }
+.tj-chip.mal { color: var(--critico); background: color-mix(in srgb, var(--critico) 16%, transparent); }
+.tj-dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.tj-dos > div { display: flex; flex-direction: column; gap: 1px; }
+.tj-dos .der { align-items: flex-end; text-align: right; }
+.tj-dos .etq { font-size: 12px; color: var(--tinta-3); }
+.tj-dos b { font-size: 18px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.tj-dos small { font-size: 11.5px; color: var(--tinta-3); }
+.tj-cupo { display: flex; height: 8px; margin-top: 10px; border-radius: 4px; background: var(--superficie-2); overflow: hidden; }
+.tj-cupo i { display: block; height: 100%; }
+.tj-ya { background: var(--critico); }
+.tj-mes { background: var(--serie-3); }
+.tj-vienen { background: color-mix(in srgb, var(--alerta) 80%, transparent); }
+.tj-pie { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-top: 6px; font-size: 12.5px; color: var(--tinta-3); }
+.tj-pie b { color: var(--tinta); font-variant-numeric: tabular-nums; }
+.tj-ley { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 12px; font-size: 11.5px; color: var(--tinta-2); }
+.tj-ley i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.tj-detalle-tit {
+  margin: 22px 4px 4px; font-size: 11px; font-weight: 640; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--titulo-seccion); scroll-margin-top: 12px;
+}
+.pz-ley .prox-ley-limite { width: 14px; height: 0; border-radius: 0; border-top: 2px dashed var(--alerta); background: none; vertical-align: 3px; }
+/* La hoja y las tablas cortas: sólidas y sin el fondo de las tablas grandes. */
+dialog.hoja, dialog.hoja .modal-cab, dialog.hoja .modal-pie { background: var(--superficie-solida); }
+.prox-tabla th, .prox-tabla td { background: none; padding: 9px 5px; }
+.prox-tabla thead th { letter-spacing: 0.04em; font-size: 10px; }
+#tj-comprometido .prox-tabla th:first-child { white-space: normal; }
+/* Los mandos van dentro de la primera tarjeta: fuera quedaban sobre la franja clara. */
+.mes-mandos, .prox-mandos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.mes-mandos .select-panel { flex: 1 1 140px; min-width: 0; }
+.mes-mandos .segmentado button, .prox-mandos .segmentado button { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
+.hoy-tres b { font-size: clamp(12px, 3.7vw, 14.5px); }
+.hoy-tres > button, .hoy-tres > div { padding: 9px 8px; }
+@media (max-width: 360px) {
+  .nav-tab { font-size: 9px; letter-spacing: -0.02em; }
+  .nav .nav-barra .nav-mas { width: 44px; height: 44px; margin: -12px 0 0; }
+  .nav-barra { padding: 5px 4px; }
+}
+@media (max-width: 360px) {
+  .hoy-tres { gap: 6px; }
+  .hoy-tres > button, .hoy-tres > div { padding: 8px 6px; }
+  .hoy-tres b { font-size: 12px; }
+}
+
 </style>
 </head>
 <body>
@@ -4054,7 +4340,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '480cb4161c';
+window.__VERSION_APP__ = '17669b3516';
 
 M["cerradura"] = (function () {
 /**
@@ -8564,6 +8850,40 @@ function modal({ titulo, cuerpo, aceptar = 'Guardar', soloCerrar = false, alAbri
   return dlg;
 }
 
+/**
+ * «¿De dónde sale?»: la cuenta de una cifra, línea por línea, en una hoja que
+ * sube desde abajo. Sustituye a los párrafos que explicaban cada tarjeta.
+ *
+ * @param {object} o
+ * @param {string} o.titulo
+ * @param {Array<{rotulo: string, detalle?: string, valor: string, clase?: string}>} o.filas
+ *   `rotulo` y `valor` van escapados; `detalle` puede llevar HTML ya escapado.
+ *   `clase`: 'total' (una suma, con raya encima), 'sub' (un componente) o ''.
+ * @param {string} [o.nota] HTML ya escapado, debajo de la cuenta.
+ * @param {Array<{texto: string, alPulsar: function}>} [o.acciones] botones al pie.
+ */
+function deDondeSale({ titulo, filas, nota = '', acciones = [] }) {
+  return modal({
+    titulo,
+    cuerpo: `<ul class="hoja-cuenta">${filas.map((f) => `
+      <li class="${esc(f.clase || '')}"><span>${esc(f.rotulo)}${f.detalle ? ` <small>${f.detalle}</small>` : ''}</span>
+        <b>${esc(f.valor)}</b></li>`).join('')}</ul>
+      ${nota ? `<p class="hoja-nota">${nota}</p>` : ''}
+      ${acciones.length ? `<div class="hoja-acciones">${acciones.map((a, i) => `<button type="button" class="btn pequeno" data-hoja="${i}">${esc(a.texto)}</button>`).join('')}</div>` : ''}`,
+    aceptar: 'Cerrar',
+    soloCerrar: true,
+    alEnviar: () => {},
+    alAbrir(form, dlg) {
+      dlg.classList.add('hoja');
+      form.querySelectorAll('[data-hoja]').forEach((b) => b.addEventListener('click', () => {
+        dlg.close();
+        dlg.remove();
+        acciones[Number(b.dataset.hoja)].alPulsar();
+      }));
+    },
+  });
+}
+
 /** Confirmación simple con estilo propio (evita el `confirm` del sistema). */
 function confirmar(texto, alAceptar, { aceptar = 'Eliminar' } = {}) {
   modal({
@@ -8765,6 +9085,8 @@ function pedirArchivo(accept) {
 
 /** Iconos del menú inferior (trazo, 24×24). */
 const ICONOS = {
+  hoy: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  mas: '<circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/>',
   vehiculo: '<path d="M5 17h14M6.5 17a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm14 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM4 17v-4l2-5h12l2 5v4M6.5 13h11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   resumen: '<path d="M3 13h6V3H3v10Zm0 8h6v-6H3v6Zm8 0h10V11H11v10Zm0-18v6h10V3H11Z"/>',
   mensual: '<path d="M7 2v3M17 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
@@ -8777,7 +9099,7 @@ const ICONOS = {
   datos: '<path d="M12 7c4.4 0 8-1.1 8-2.5S16.4 2 12 2 4 3.1 4 4.5 7.6 7 12 7Zm8-2.5v15c0 1.4-3.6 2.5-8 2.5s-8-1.1-8-2.5v-15" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M20 12c0 1.4-3.6 2.5-8 2.5S4 13.4 4 12" fill="none" stroke="currentColor" stroke-width="1.8"/>',
 };
 
-return { $, $$, ICONOS, aNumero, alarma, avisoInfo, brindis, campoMonto, centrarElegido, confirmar, crear, descargar, esc, filaMovimiento, hoyISO, marcaNota, modal, notaFila, notaTexto, opciones, pedirArchivo, plegarMensajes, segmentado, vigilarMensajes };
+return { $, $$, ICONOS, aNumero, alarma, avisoInfo, brindis, campoMonto, centrarElegido, confirmar, crear, deDondeSale, descargar, esc, filaMovimiento, hoyISO, marcaNota, modal, notaFila, notaTexto, opciones, pedirArchivo, plegarMensajes, segmentado, vigilarMensajes };
 })();
 
 M["xlsx"] = (function () {
@@ -11546,11 +11868,13 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
   }
 
   // Lo ya apuntado: las cuotas son de tarjeta y los gastos sueltos, de efectivo.
-  const apuntar = (m, medio, monto, detalle, fecha, nota, proposito = '', categoria = '', usuario = '') => {
+  // `extra`: de qué tipo es la compra de tarjeta, o si es un pago hecho desde
+  // Presupuesto. Con eso se separa lo fijo del consumo (ver `cascadaDelMes`).
+  const apuntar = (m, medio, monto, detalle, fecha, nota, proposito = '', categoria = '', usuario = '', extra = {}) => {
     m.comprometido += monto;
     m.medios[medio] += monto;
     m.reales[medio] += monto;
-    m.realLineas.push({ detalle, monto, medio, fecha, nota, proposito, aMano: false, categoria, usuario });
+    m.realLineas.push({ detalle, monto, medio, fecha, nota, proposito, aMano: false, categoria, usuario, ...extra });
   };
 
   for (const c of db.cuotas) {
@@ -11564,7 +11888,8 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
       // La fecha que interesa es la de la compra: el mes de la cuota ya lo
       // dice la fila que se ha desplegado.
       compra?.fecha, enCuotas ? `cuota ${c.n_cuota} de ${compra.cuotas}` : '',
-      compra?.proposito || '', compra?.categoria || c.categoria || '', c.usuario || compra?.usuario || '');
+      compra?.proposito || '', compra?.categoria || c.categoria || '', c.usuario || compra?.usuario || '',
+      { tipo: compra?.tipo || 'Corriente' });
   }
   const recs = recurrencias(quien);
   // Una letra atrasada cuenta en el mes de la letra, no en el del pago.
@@ -11575,7 +11900,8 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
     const medio = medioManual.get(claveGasto(g.detalle)) || medioDe(g.cuenta);
     apuntar(m, MEDIOS.includes(medio) ? medio : 'Efectivo',
       Number(g.monto) || 0, g.detalle || g.categoria || 'Gasto', g.fecha,
-      '', g.proposito || '', g.categoria || '', g.usuario || '');
+      '', g.proposito || '', g.categoria || '', g.usuario || '',
+      { presupuesto: esPagoDePresupuesto(g) });
   }
 
   /*
@@ -12046,6 +12372,7 @@ function cuentaDelSueldo(mes = mesActual(), usuario = 'J') {
       : libre <= sueldo * 0.1 ? 'cerca' : 'bien';
 
   return {
+    fila,
     mes, usuario, sueldo, cobrado, porCobrar, esperado,
     gastado, totalGastado, pendientes, pendiente, letrasDeAntes, letrasPagadasDespues,
     queda, pct, ahorro, libre,
@@ -12055,6 +12382,92 @@ function cuentaDelSueldo(mes = mesActual(), usuario = 'J') {
     dias,
     alDia: dias > 0 && libre > 0 ? redondear(libre / dias) : 0,
     estado,
+  };
+}
+
+/*
+ * La cuenta del mes en cascada, con las mismas seis palabras en toda la app:
+ *
+ *   Sueldo − Fijos − Consumo = Te sobra − Meta de ahorro = Puedes gastar
+ *
+ * Es la misma cuenta que `cuentaDelSueldo`, partida de otra manera: en vez de
+ * por medio de pago (tarjeta, efectivo, por pagar), por si se puede recortar.
+ *   · FIJOS: lo que no se mueve aunque uno quiera. Las letras y pagos fijos
+ *     (pagados o por pagar), los préstamos, las cuotas de diferidos y las
+ *     suscripciones de la tarjeta.
+ *   · CONSUMO: el día a día, con tarjeta (compras corrientes) o en efectivo y
+ *     débito. Es donde se puede ahorrar.
+ * Fijos + Consumo suman exactamente lo gastado más lo por pagar del sueldo, así
+ * que «Te sobra» es el mismo número que «Te queda» en el detalle del sueldo.
+ *
+ * Con «Ambos», lo de los dos una sola vez (un gasto sin dueño no se cuenta dos
+ * veces) contra los dos sueldos y las dos metas.
+ */
+const GRUPOS_FIJOS = [
+  { clave: 'letras', rotulo: 'Letras y pagos fijos', pista: 'préstamos y lo escrito en Presupuesto' },
+  { clave: 'diferidos', rotulo: 'Cuotas de diferidos', pista: 'compras a plazos con tarjeta' },
+  { clave: 'suscripciones', rotulo: 'Suscripciones', pista: 'cargos mensuales de la tarjeta' },
+];
+
+/** Dónde va una línea de lo real: el grupo de fijos, o null si es consumo. */
+function grupoFijo(l) {
+  if (l.aMano || l.medio === 'Préstamo' || l.presupuesto) return 'letras';
+  if (l.tipo === 'Diferido') return 'diferidos';
+  if (l.tipo === 'Recurrente') return 'suscripciones';
+  return null;
+}
+
+function cascadaDelMes(mes = mesActual(), quien = 'J') {
+  const personas = quien === 'Ambos' ? ['J', 'C'] : [quien];
+  const cuentas = personas.map((u) => cuentaDelSueldo(mes, u));
+  const fila = quien === 'Ambos' ? proyeccion([mes], { quien: 'Ambos' }).filas[0] : cuentas[0].fila;
+  const suma = (k) => redondear(cuentas.reduce((t, c) => t + c[k], 0));
+  const sueldo = suma('sueldo');
+  const meta = suma('ahorro');
+
+  const lineas = (fila.realLineas || []).map((l) => ({
+    detalle: l.detalle, monto: redondear(l.monto), medio: l.medio, categoria: l.categoria || 'Sin categoría',
+    nota: l.nota || '', aMano: !!l.aMano, fecha: l.fecha || '', grupo: grupoFijo(l),
+  }));
+  const total = (xs) => redondear(xs.reduce((t, l) => t + l.monto, 0));
+  const ordenar = (xs) => [...xs].sort((a, b) => b.monto - a.monto);
+
+  const grupos = GRUPOS_FIJOS.map((g) => {
+    const xs = ordenar(lineas.filter((l) => l.grupo === g.clave));
+    return { ...g, lineas: xs, total: total(xs), porPagar: total(xs.filter((l) => l.aMano)) };
+  }).filter((g) => g.lineas.length);
+  const fijos = redondear(grupos.reduce((t, g) => t + g.total, 0));
+
+  const delConsumo = lineas.filter((l) => !l.grupo);
+  const tarjeta = total(delConsumo.filter((l) => l.medio === 'Tarjeta'));
+  const efectivo = total(delConsumo.filter((l) => l.medio !== 'Tarjeta'));
+  const consumo = redondear(tarjeta + efectivo);
+  // Por categoría, de mayor a menor: es como se lee el consumo.
+  const porCategoria = [...delConsumo.reduce((m, l) => {
+    const x = m.get(l.categoria) || { categoria: l.categoria, total: 0, lineas: [] };
+    x.total = redondear(x.total + l.monto);
+    x.lineas.push(l);
+    m.set(l.categoria, x);
+    return m;
+  }, new Map()).values()].sort((a, b) => b.total - a.total);
+
+  const teSobra = redondear(sueldo - fijos - consumo);
+  const puedes = redondear(teSobra - meta);
+  const ahorrado = redondear(Math.min(meta, Math.max(0, teSobra)));
+  const dias = cuentas[0].dias;
+
+  return {
+    mes, quien, sueldo, meta,
+    pct: personas.length === 1 ? cuentas[0].pct : (sueldo > 0 ? Math.round((meta / sueldo) * 100) : 0),
+    cobrado: suma('cobrado'), porCobrar: suma('porCobrar'),
+    cuentas,
+    fijos, grupos,
+    porPagar: redondear(grupos.reduce((t, g) => t + g.porPagar, 0)),
+    consumo, tarjeta, efectivo, porCategoria,
+    teSobra, puedes, libre: Math.max(0, puedes), pasado: puedes < 0,
+    ahorrado, faltaAhorro: redondear(meta - ahorrado),
+    pctMeta: meta > 0 ? Math.round((ahorrado / meta) * 100) : 100,
+    dias, alDia: dias > 0 && puedes > 0 ? redondear(puedes / dias) : 0,
   };
 }
 
@@ -12189,7 +12602,141 @@ function limitesConsumo(usuario = 'J', mes = mesActual()) {
   };
 }
 
-return { AVISO_LIMITE, ES_SUELDO, MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, compraQueLoCubre, cuentaDelSueldo, esSimulacion, estaExcluida, fijosManuales, guardarAjuste, guardarAjusteSueldo, guardarLimites, guardarManual, limitesConsumo, limitesGuardados, marcarPago, medioDe, mesesProyectados, otrosIngresos, porcentajeAhorro, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra, sueldoDelMes, sueldoEsperado };
+return { AVISO_LIMITE, ES_SUELDO, MEDIOS, ajustes, aplicarPresupuesto, borrarManual, cascadaDelMes, claveExcluida, claveGasto, compraQueLoCubre, cuentaDelSueldo, esSimulacion, estaExcluida, fijosManuales, guardarAjuste, guardarAjusteSueldo, guardarLimites, guardarManual, limitesConsumo, limitesGuardados, marcarPago, medioDe, mesesProyectados, otrosIngresos, porcentajeAhorro, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra, sueldoDelMes, sueldoEsperado };
+})();
+
+M["avisos"] = (function () {
+/**
+ * Lo que hay que mirar hoy, en una sola lista.
+ *
+ * La usan dos sitios: la campana del menú (con `texto`, una frase entera) y
+ * «Necesita atención» de Hoy (con `titulo`, `sub` y `monto`, para una fila).
+ * Es la misma lista: lo que avisa la campana es lo que sale en Hoy.
+ */
+
+const {db, almacenamiento, tarjetas} = M["store"];
+const {configurado, estadoSync} = M["sync"];
+const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta, hoyLocal, sumarMeses, pagoDeTarjeta, fechaPagoMes, diasEntre, textoFecha} = M["calc"];
+const {limitesConsumo} = M["plan"];
+/** '2026-10-18' → '18 oct'. */
+const fechaCorta = (f) => textoFecha(f).replace(/ de \d{4}$/, '').replace(/ de (\w{3})\w*$/, ' $1');
+const mesCorto = (m) => nombreMes(m).split(' ')[0].toLowerCase();
+
+/** Días que una póliza que vence se avisa antes. */
+const DIAS_POLIZA = 30;
+
+/**
+ * @param {string[]} [personas] de quién se miran los límites de consumo.
+ * @returns {Array<{nivel, texto, titulo, sub, monto, signo, ir}>} de lo más
+ *   urgente a lo menos. `nivel`: 'critico' | 'alerta' | 'info'.
+ */
+function avisosPendientes(personas = ['J', 'C']) {
+  const lista = [];
+
+  if (!almacenamiento.ok) {
+    lista.push({
+      nivel: 'critico', texto: 'Este navegador no está guardando los datos. Descarga un respaldo.',
+      titulo: 'Los datos no se están guardando', sub: 'descarga un respaldo en Datos', ir: 'datos',
+    });
+  }
+  if (configurado() && estadoSync.error) {
+    lista.push({
+      nivel: 'critico', texto: `La sincronización falló: ${estadoSync.error}`,
+      titulo: 'La sincronización falló', sub: String(estadoSync.error), ir: 'datos',
+    });
+  }
+
+  const mes = mesActual();
+  tarjetas().forEach((t) => {
+    /*
+     * Lo que vence ESTE mes es el consumo del mes anterior: las cuotas de
+     * septiembre se pagan en octubre. Antes decía «a pagar en octubre» con las
+     * cuotas de octubre, que se pagan en noviembre. Pagado, ya no se avisa.
+     */
+    const previo = sumarMeses(mes, -1);
+    const pago = pagoDelMes(t.id, previo, 'ambos');
+    if (pago > 0 && !pagoDeTarjeta(t.id, previo)) {
+      const vence = fechaPagoMes(previo, t.id);
+      const dias = vence ? diasEntre(hoyLocal(), vence) : null;
+      const vencio = dias !== null && dias < 0;
+      lista.push({
+        nivel: vencio ? 'critico' : dias !== null && dias <= 3 ? 'alerta' : 'info',
+        texto: `${t.nombre}: ${vencio ? 'venció' : 'vence'} ${vence ? `el ${textoFecha(vence).replace(/ de \d{4}$/, '')}` : `en ${nombreMes(mes)}`} `
+          + `${money(pago)} (consumo de ${nombreMes(previo)}).`,
+        titulo: `Pagar ${t.nombre}`,
+        sub: `${vencio ? 'venció' : 'vence'} ${vence ? `el ${fechaCorta(vence)}` : `en ${mesCorto(mes)}`} · consumo de ${mesCorto(previo)}`,
+        monto: money(pago),
+        ir: 'tarjetas',
+      });
+    }
+    const est = estadoTarjeta(t.id);
+    const uso = est.cupo ? (est.utilizado / est.cupo) * 100 : 0;
+    if (uso >= 80) {
+      lista.push({
+        nivel: uso >= 95 ? 'critico' : 'alerta',
+        texto: `${t.nombre} lleva usado el ${uso.toFixed(0)} % del cupo.`,
+        titulo: `${t.nombre}: cupo casi lleno`,
+        sub: `libres ${money(est.disponible)} de ${money(est.cupo)}`,
+        monto: `${uso.toFixed(0)} %`,
+        ir: 'tarjetas',
+      });
+    }
+  });
+
+  /*
+   * Los límites de consumo: lo que ya se pasó, lo que está al límite y lo
+   * que a este ritmo se va a pasar. Solo de quien tenga sueldo.
+   */
+  for (const u of personas) {
+    let L = null;
+    try { L = limitesConsumo(u, mes); } catch { L = null; }
+    if (!L || L.limite <= 0) continue;
+    const quien = personas.length > 1 ? `${u} · ` : '';
+    for (const f of L.avisos) {
+      lista.push({
+        nivel: f.estado === 'pasado' ? 'critico' : 'alerta',
+        texto: f.estado === 'pasado'
+          ? `${u} · ${f.categoria}: te pasaste del límite (${money(f.gastado)} de ${money(f.tope)}, ${money(-f.resto)} de más).`
+          : f.estado === 'limite'
+            ? `${u} · ${f.categoria}: al límite, ${Math.round(f.uso)} % (${money(f.gastado)} de ${money(f.tope)}; quedan ${money(f.resto)}).`
+            : `${u} · ${f.categoria}: a este ritmo llegas a ${money(f.ritmo)} y el límite es ${money(f.tope)}.`,
+        titulo: `${quien}${f.categoria}: ${f.estado === 'pasado' ? 'te pasaste' : f.estado === 'limite' ? 'al límite' : 'a este ritmo te pasas'}`,
+        sub: f.estado === 'ritmo'
+          ? `llegarías a ${money(f.ritmo)} de ${money(f.tope)}`
+          : `${money(f.gastado)} de ${money(f.tope)}`,
+        monto: f.estado === 'pasado' ? `+${money(-f.resto)}` : `${Math.round(f.uso)} %`,
+        signo: f.estado === 'pasado' ? 'mal' : '',
+        ir: 'mes',
+      });
+    }
+  }
+
+  // Las pólizas que vencen pronto: el dinero vuelve a una cuenta.
+  const hoy = hoyLocal();
+  db.inversiones
+    .filter((p) => p.estado === 'Activa' && p.fecha_vencimiento)
+    .map((p) => ({ p, dias: diasEntre(hoy, p.fecha_vencimiento) }))
+    .filter(({ dias }) => dias !== null && dias <= DIAS_POLIZA)
+    .sort((a, b) => a.dias - b.dias)
+    .forEach(({ p, dias }) => {
+      lista.push({
+        nivel: 'info',
+        // Solo para Hoy: la campana sigue avisando de lo que pide hacer algo.
+        soloHoy: true,
+        texto: `${p.institucion}: la póliza ${dias >= 0 ? 'vence' : 'venció'} el ${textoFecha(p.fecha_vencimiento)}.`,
+        titulo: dias >= 0 ? 'Vence tu póliza' : 'Venció tu póliza',
+        sub: `${fechaCorta(p.fecha_vencimiento)} · ${p.institucion || 'inversión'}${dias >= 0 ? ` · en ${dias} ${dias === 1 ? 'día' : 'días'}` : ''}`,
+        monto: money(Number(p.valor_final) || Number(p.capital) || 0),
+        signo: 'bien',
+        ir: 'inversiones',
+      });
+    });
+
+  const peso = { critico: 0, alerta: 1, info: 2 };
+  return lista.map((a, i) => ({ ...a, i })).sort((a, b) => peso[a.nivel] - peso[b.nivel] || a.i - b.i);
+}
+
+return { avisosPendientes };
 })();
 
 M["pdf"] = (function () {
@@ -16176,7 +16723,7 @@ function seccionCombustible(filtros) {
     <p class="pista">Toca un mes para ver cada recarga: los días y los km desde la anterior.</p>`;
 }
 
-return { render };
+return { formLimites, formSueldo, render };
 })();
 
 M["views/mensual"] = (function () {
@@ -17109,7 +17656,7 @@ M["views/tarjetas"] = (function () {
 /** Vista «Tarjetas»: cupo, consumo del mes, diferidos vivos y movimientos. */
 
 const {db, tarjetas, eliminar, guardar, quitarCuotas} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir, posiblesRepetidos, marcarNoRepetidos} = M["calc"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, pagoDeTarjeta, comprometidoEnMes, hoyLocal, diasEntre, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir, posiblesRepetidos, marcarNoRepetidos} = M["calc"];
 const {medidor, columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, aNumero, notaFila, marcaNota, notaTexto, centrarElegido, modal} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
@@ -17244,6 +17791,8 @@ function render(raiz) {
   ])].sort().reverse();
 
   raiz.innerHTML = `
+    ${resumenTarjetas(lista)}
+    <h2 class="tj-detalle-tit" id="tj-detalle">Detalle por tarjeta</h2>
     <div class="barra-accion">
       <div id="seg-tarjeta"></div>
       <button class="btn primario pequeno" id="btn-nuevo">+ Gasto</button>
@@ -17342,6 +17891,14 @@ function render(raiz) {
       </div>
       <div id="movs"></div>
     </section>`;
+
+  // «Detalle ›» de cada tarjeta del resumen: la elige y baja a su detalle.
+  $$('[data-tj-detalle]', raiz).forEach((b) => b.addEventListener('click', () => {
+    estado.tarjeta = b.dataset.tjDetalle;
+    estado.mes = mesActual();
+    render(raiz);
+    $('#tj-detalle', raiz)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
 
   // Controles
   $('#seg-tarjeta', raiz).appendChild(segmentado(
@@ -17521,6 +18078,84 @@ function render(raiz) {
     pintarMovs();
     campo.focus();
   });
+}
+
+/*
+ * Arriba de todo, las tarjetas de un vistazo, con dos cifras que no se pisan:
+ *   · PAGAR AHORA: el estado del mes anterior, que es lo que vence este mes;
+ *   · ESTE MES LLEVAS: el consumo del mes en curso, que se paga el que viene.
+ * Debajo, el cupo en una barra con lo mismo de colores, y una tabla corta con
+ * las cuotas que ya están comprometidas en los meses que vienen.
+ */
+function resumenTarjetas(lista) {
+  const mes = mesActual();
+  const previo = sumarMeses(mes, -1);
+  const hoy = hoyLocal();
+  const corta = (f) => textoFecha(f).replace(/ de \d{4}$/, '').replace(/ de (\w{3})\w*$/, ' $1');
+  const mesMin = (m) => nombreMes(m).split(' ')[0].toLowerCase();
+
+  const filas = lista.map((t) => {
+    const pagado = pagoDeTarjeta(t.id, previo);
+    const debe = pagado ? 0 : pagoDelMes(t.id, previo, 'ambos');
+    const vence = fechaPagoMes(previo, t.id);
+    const dias = vence ? diasEntre(hoy, vence) : null;
+    const lleva = pagoDelMes(t.id, mes, 'ambos');
+    const sePaga = fechaPagoMes(mes, t.id);
+    const est = estadoTarjeta(t.id);
+    const ahora = Math.min(debe, est.utilizado);
+    const esteMes = Math.min(lleva, Math.max(0, est.utilizado - ahora));
+    const vienen = Math.max(0, redondear(est.utilizado - ahora - esteMes));
+    const escala = Math.max(est.cupo, est.utilizado, 1);
+    const ancho = (v) => `${((v / escala) * 100).toFixed(2)}%`;
+    const chip = pagado ? `<span class="tj-chip ok">${esc(mesMin(previo))} pagado</span>`
+      : debe > 0 ? `<span class="tj-chip ${dias !== null && dias < 0 ? 'mal' : 'cerca'}">${dias !== null && dias < 0 ? 'venció' : 'vence'} ${esc(vence ? corta(vence) : '')}</span>`
+        : '<span class="tj-chip">nada por pagar</span>';
+    return `<div class="tj-fila">
+      <div class="tj-cab"><h3>${esc(t.nombre)}</h3>${chip}</div>
+      <div class="tj-dos">
+        <div><span class="etq">Pagar ahora${debe > 0 ? ` (${esc(mesMin(previo))})` : ''}</span><b>${money(debe)}</b></div>
+        <div class="der"><span class="etq">Este mes llevas</span><b>${money(lleva)}</b>
+          ${sePaga ? `<small>se paga el ${esc(corta(sePaga))}</small>` : ''}</div>
+      </div>
+      <div class="tj-cupo" role="img" aria-label="Por pagar ya ${esc(money(ahora))}; este mes ${esc(money(esteMes))}; cuotas que vienen ${esc(money(vienen))}; cupo ${esc(money(est.cupo))}">
+        <i class="tj-ya" style="width:${ancho(ahora)}"></i><i class="tj-mes" style="width:${ancho(esteMes)}"></i><i class="tj-vienen" style="width:${ancho(vienen)}"></i>
+      </div>
+      <div class="tj-pie"><span>Cupo libre <b>${money(est.disponible)}</b>${est.cupo ? ` de ${money(est.cupo)}` : ''}</span>
+        <button type="button" class="enlace" data-tj-detalle="${esc(t.id)}">Detalle ›</button></div>
+    </div>`;
+  });
+
+  // Lo ya comprometido en cuotas: de aquí en adelante, hasta que se acaba.
+  const meses = [];
+  // Seis meses como mucho: lo que sigue lo dice «Sin diferidos desde».
+  for (let i = 1; i <= 6; i += 1) {
+    const m = sumarMeses(mes, i);
+    const valores = lista.map((t) => comprometidoEnMes(m, t.id));
+    if (valores.every((v) => v <= 0)) break;
+    meses.push({ m, valores });
+  }
+  const tipos = new Map(db.gastosTarjeta.map((g) => [g.id, g.tipo]));
+  const ultimoDiferido = (id) => db.cuotas
+    .filter((c) => c.tarjeta === id && tipos.get(c.gasto_id) === 'Diferido' && c.mes > mes)
+    .reduce((u, c) => (c.mes > u ? c.mes : u), '');
+  const nombreCorto = (t) => t.nombre.replace(/^TC /, '');
+
+  return `<section class="tarjeta" id="tj-resumen">
+      <header><h2>Tus tarjetas</h2><span class="pista">${esc(nombreMes(mes))}</span></header>
+      ${filas.join('')}
+      <div class="tj-ley"><span><i class="tj-ya"></i>Por pagar ya</span><span><i class="tj-mes"></i>Este mes</span><span><i class="tj-vienen"></i>Cuotas que vienen</span></div>
+    </section>
+    ${meses.length ? `<section class="tarjeta" id="tj-comprometido">
+      <header><h2>Ya comprometido en cuotas</h2><span class="pista">Diferidos y suscripciones</span></header>
+      <div class="tabla-envoltura"><table class="prox-tabla">
+        <thead><tr><th>Mes</th>${lista.map((t) => `<th>${esc(nombreCorto(t))}</th>`).join('')}</tr></thead>
+        <tbody>${meses.map(({ m, valores }) => `<tr><th>${esc(nombreMes(m, true))}</th>${valores.map((v) => `<td>${v > 0 ? money(v) : '—'}</td>`).join('')}</tr>`).join('')}
+          <tr class="tenue"><th>Sin diferidos desde</th>${lista.map((t) => {
+    const u = ultimoDiferido(t.id);
+    return `<td>${u ? esc(nombreMes(sumarMeses(u, 1), true)) : 'ya'}</td>`;
+  }).join('')}</tr></tbody>
+      </table></div>
+    </section>` : ''}`;
 }
 
 function sumaPorTipo(tarjetaId, mes, usuario, tipo) {
@@ -20899,7 +21534,7 @@ function formPagar(r, alTerminar, irA) {
   });
 }
 
-return { render };
+return { ESCENARIOS, ORDEN_TIPO, abrirTabla, cierres, cuentaDelMes, formSimulacion, lineasPrevistas, lineasReales, render };
 })();
 
 M["views/analisis"] = (function () {
@@ -22462,17 +23097,561 @@ function formPlan(clave, alTerminar) {
 return { render };
 })();
 
+M["views/hoy"] = (function () {
+/**
+ * Vista «Hoy»: ¿cómo voy?
+ *
+ * Una respuesta arriba —cuánto se puede gastar sin tocar el ahorro— con tres
+ * cifras que la explican, la lista de lo que necesita atención y el dinero que
+ * hay. Cada cifra lleva su «¿De dónde sale?», con la cuenta línea por línea.
+ *
+ * La cuenta es la de `cascadaDelMes`, la misma de «Mes» y del detalle del
+ * sueldo: Sueldo − Fijos − Consumo = Te sobra − Meta de ahorro = Puedes gastar.
+ */
+
+const {mesActual, nombreMes, money, hoyLocal, redondear, totalInvertido, deudaTotalTarjetas, ahorradoAl, textoFecha} = M["calc"];
+const {esc, $, $$, segmentado, deDondeSale} = M["ui"];
+const {cascadaDelMes, proyeccion} = M["plan"];
+const {avisosPendientes} = M["avisos"];
+const {cierres} = M["views/plan"];
+const {formSueldo} = M["views/resumen"];
+const estado = { quien: 'J' };
+
+const mesCorto = (m) => nombreMes(m).split(' ')[0].toLowerCase();
+
+function render(raiz, { irA }) {
+  const mes = mesActual();
+  const k = cascadaDelMes(mes, estado.quien);
+  const recargar = () => render(raiz, { irA });
+
+  raiz.innerHTML = `
+    <section class="panel hoy-panel">
+      <div class="hoy-cab">
+        <span class="etiqueta">Puedes gastar sin tocar el ahorro</span>
+        <div id="hoy-quien"></div>
+      </div>
+      ${k.sueldo > 0 ? panelRespuesta(k) : `
+        <span class="cifra">—</span>
+        <span class="nota">No hay sueldo de ${esc(estado.quien)} en ${esc(mesCorto(mes))} ni de dónde estimarlo.</span>
+        <button type="button" class="hoy-donde" id="hoy-sueldo">Escribir el sueldo</button>`}
+    </section>
+
+    <section class="tarjeta" id="hoy-atencion"></section>
+
+    <section class="tarjeta" id="hoy-dinero"></section>`;
+
+  $('#hoy-quien', raiz).appendChild(segmentado(
+    [{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' }],
+    estado.quien, (v) => { estado.quien = v; recargar(); },
+  ));
+  $('#hoy-sueldo', raiz)?.addEventListener('click', () => formSueldo(mes, estado.quien, recargar));
+  $('#hoy-de-donde', raiz)?.addEventListener('click', () => hojaPuedesGastar(k, { irA, recargar }));
+  $$('[data-hoy-kpi]', raiz).forEach((b) => b.addEventListener('click', () => hojaPuedesGastar(k, { irA, recargar })));
+
+  pintarAtencion($('#hoy-atencion', raiz), irA, estado.quien);
+  pintarDinero($('#hoy-dinero', raiz), mes, k);
+}
+
+/** La cifra grande, la frase y los tres datos que la explican. */
+function panelRespuesta(k) {
+  const frase = k.teSobra < 0
+    ? `<b>Este mes no hay ahorro:</b> entre fijos y consumo pasas el sueldo por <b>${money(-k.teSobra)}</b>.`
+    : k.pasado
+      ? `Te pasaste <b>${money(-k.puedes)}</b> del límite de ${esc(mesCorto(k.mes))}. Lo que gastes desde hoy sale del ahorro.`
+      : `${k.alDia > 0 ? `Unos <b>${money(k.alDia)} al día</b> hasta fin de mes,` : 'Hasta fin de mes,'} y el ahorro del ${k.pct} % sigue completo.`;
+  return `
+    <span class="cifra hoy-cifra ${k.pasado ? 'neg' : ''}">${money(k.libre)}</span>
+    <p class="hoy-frase">${frase}</p>
+    <div class="hoy-tres">
+      <button type="button" data-hoy-kpi><span class="etq">Sueldo</span><b>${money(k.sueldo)}</b>
+        <small>${k.porCobrar > 0 ? `por cobrar ${money(k.porCobrar)}` : 'cobrado'}</small></button>
+      <button type="button" data-hoy-kpi><span class="etq">Salió / sale</span><b>${money(redondear(k.fijos + k.consumo))}</b>
+        <small>fijos + consumo</small></button>
+      <button type="button" data-hoy-kpi><span class="etq">Ahorras</span><b class="${k.faltaAhorro > 0 ? 'cerca' : 'ok'}">${money(k.ahorrado)}</b>
+        <small>de ${money(k.meta)} · ${k.pctMeta} %</small></button>
+    </div>
+    <button type="button" class="hoy-donde" id="hoy-de-donde"><i aria-hidden="true">?</i>¿De dónde sale?</button>`;
+}
+
+/** El detalle del sueldo esperado, en una línea. */
+function detalleSueldo(k) {
+  if (k.cuentas.length !== 1) return 'J + C';
+  const c = k.cuentas[0];
+  const e = c.esperado;
+  const base = e.base === 'quincena'
+    ? `quincena ${money(e.quincena.monto)} + fin de mes ${money(e.fin.monto)}`
+    : e.base === 'mio' ? 'el que escribiste'
+      : e.base === 'mediana' ? `mediana de ${e.meses} meses` : 'lo cobrado';
+  return c.porCobrar > 0 ? `${base}; cobrado ${money(c.cobrado)}` : base;
+}
+
+/** La cuenta de «Puedes gastar», línea por línea. */
+function hojaPuedesGastar(k, { irA, recargar } = {}) {
+  const grupos = k.grupos.map((g) => `${g.rotulo.toLowerCase()} ${money(g.total)}`).join(' + ');
+  deDondeSale({
+    titulo: `¿De dónde sale «Puedes gastar»? · ${k.quien === 'Ambos' ? 'J y C' : k.quien}`,
+    filas: [
+      { rotulo: `Sueldo de ${mesCorto(k.mes)}`, detalle: esc(detalleSueldo(k)), valor: money(k.sueldo) },
+      { rotulo: '− Fijos', detalle: esc(grupos || 'ninguno'), valor: money(k.fijos) },
+      { rotulo: '− Consumo', detalle: esc(`tarjeta ${money(k.tarjeta)} + efectivo y débito ${money(k.efectivo)}`), valor: money(k.consumo) },
+      { rotulo: '= Te sobra', valor: money(k.teSobra), clase: 'total' },
+      { rotulo: '− Meta de ahorro', detalle: esc(`${k.pct} % del sueldo`), valor: money(k.meta) },
+      {
+        rotulo: '= Puedes gastar', clase: 'total final',
+        valor: k.pasado ? `−${money(-k.puedes)} → ${money(0)}` : money(k.puedes),
+      },
+    ],
+    nota: `${k.porPagar > 0 ? `De los fijos, <b>${esc(money(k.porPagar))}</b> están por pagar este mes. ` : ''}
+      La tarjeta cuenta en el mes de su estado de cuenta (lo de ${esc(mesCorto(k.mes))} se paga el mes que viene).
+      Las mismas palabras y la misma cuenta en toda la app.`,
+    acciones: [
+      ...(irA ? [{ texto: 'Ver cada gasto', alPulsar: () => irA('mes') }] : []),
+      ...(k.cuentas.length === 1 ? [{ texto: 'Ajustar sueldo y ahorro', alPulsar: () => formSueldo(k.mes, k.quien, recargar) }] : []),
+    ],
+  });
+}
+
+/** «Necesita atención»: la misma lista que la campana, en filas. */
+function pintarAtencion(caja, irA, quien) {
+  // Los límites de consumo, solo de quien se mira; lo demás es de los dos.
+  const lista = avisosPendientes([quien]);
+  const icono = { critico: '!', alerta: '!', info: 'i' };
+  caja.innerHTML = `<header><h2>Necesita atención</h2>
+      <span class="pista">${lista.length ? `${lista.length} ${lista.length === 1 ? 'cosa' : 'cosas'}` : 'Nada'}</span></header>
+    ${lista.length ? `<ul class="atencion">${lista.map((a, i) => `
+      <li><button type="button" data-atencion="${i}" class="nivel-${esc(a.nivel)}">
+        <i class="atencion-icono" aria-hidden="true">${icono[a.nivel]}</i>
+        <span class="atencion-txt"><b>${esc(a.titulo || a.texto)}</b>${a.sub ? `<small>${esc(a.sub)}</small>` : ''}</span>
+        ${a.monto ? `<span class="atencion-monto ${esc(a.signo || '')}">${esc(a.monto)}</span>` : ''}
+      </button></li>`).join('')}</ul>`
+    : '<p class="vacio">Todo en orden: nada pendiente de mirar.</p>'}`;
+  $$('[data-atencion]', caja).forEach((b) => b.addEventListener('click', () => {
+    const a = lista[Number(b.dataset.atencion)];
+    if (a?.ir) irA(a.ir);
+  }));
+}
+
+/** «Tu dinero»: lo que hay hoy y lo que habría al cerrar el mes. */
+function pintarDinero(caja, mes, k) {
+  const hoy = hoyLocal();
+  const enCuentas = ahorradoAl(hoy);
+  const invertido = totalInvertido();
+  const deuda = deudaTotalTarjetas();
+  const patrimonio = redondear(enCuentas + invertido - deuda);
+  const plan = proyeccion([mes], { quien: estado.quien });
+  const cierre = cierres(plan, estado.quien)[0];
+
+  caja.innerHTML = `<header><h2>Tu dinero</h2><span class="pista">Hoy</span></header>
+    <div class="hoy-tres plano">
+      <div><span class="etq">En cuentas</span><b>${money(enCuentas)}</b></div>
+      <div><span class="etq">Invertido</span><b>${money(invertido)}</b></div>
+      <div><span class="etq">Debes tarjetas</span><b>${money(deuda)}</b></div>
+    </div>
+    <p class="hoy-linea">Patrimonio <b>${money(patrimonio)}</b> · a fin de ${esc(mesCorto(mes))} tendrías ≈ <b>${money(cierre.saldo)}</b> en cuentas</p>
+    <button type="button" class="hoy-donde" id="hoy-cierre"><i aria-hidden="true">?</i>¿De dónde sale?</button>`;
+
+  $('#hoy-cierre', caja).addEventListener('click', () => deDondeSale({
+    titulo: `¿Cuánto habría al cerrar ${mesCorto(mes)}? · ${estado.quien}`,
+    filas: [
+      { rotulo: 'En cuentas hoy', detalle: esc(`bancos y efectivo, sin lo invertido · ${textoFecha(hoy)}`), valor: money(enCuentas) },
+      ...(k.porCobrar > 0 ? [{ rotulo: '+ Sueldo por cobrar', valor: money(k.porCobrar) }] : []),
+      ...(cierre.extra - cierre.poliza > 0.004 ? [{ rotulo: '+ Otros ingresos apuntados', valor: money(redondear(cierre.extra - cierre.poliza)) }] : []),
+      ...(cierre.poliza > 0 ? [{ rotulo: '+ Póliza que vence', detalle: 'vuelve a la cuenta', valor: money(cierre.poliza) }] : []),
+      { rotulo: '− Tarjetas que vencen este mes', detalle: esc('el consumo del mes pasado, si no se pagó'), valor: money(cierre.tarjeta) },
+      { rotulo: '− Lo que falta pagar en efectivo', detalle: esc('letras y pagos fijos por pagar'), valor: money(cierre.resto) },
+      { rotulo: `= En cuentas a fin de ${mesCorto(mes)}`, valor: money(cierre.saldo), clase: 'total final' },
+    ],
+    nota: `Solo lo real, de ${esc(estado.quien)}: sin lo que simulas ni lo que la app estima. Lo que llevas
+      en tarjetas este mes (${esc(money(plan.filas[0].reales.Tarjeta))}) se paga el mes que viene.
+      Patrimonio = en cuentas + invertido − lo que debes en tarjetas.`,
+  }));
+}
+
+return { hojaPuedesGastar, render };
+})();
+
+M["views/mes"] = (function () {
+/**
+ * Vista «Mes»: ¿en qué se va?
+ *
+ * Una sola cuenta, de arriba abajo, con las palabras de toda la app:
+ *   Sueldo − Fijos − Consumo = Te sobra − Meta de ahorro = Puedes gastar
+ * Cada línea se toca y enseña sus gastos. Debajo, el consumo contra sus
+ * límites y los fijos del mes agrupados.
+ */
+
+const {mesActual, nombreMes, money, sumarMeses, rangoMeses, textoFecha} = M["calc"];
+const {esc, $, $$, segmentado, opciones, deDondeSale} = M["ui"];
+const {cascadaDelMes, limitesConsumo} = M["plan"];
+const {hojaPuedesGastar} = M["views/hoy"];
+const {formLimites, formSueldo} = M["views/resumen"];
+const estado = { quien: 'J', mes: '', limitesAbiertos: false };
+
+const mesCorto = (m) => nombreMes(m).split(' ')[0].toLowerCase();
+const fechaCorta = (f) => (f ? textoFecha(f).replace(/ de \d{4}$/, '') : '');
+
+function render(raiz, { irA }) {
+  const mes = estado.mes || mesActual();
+  const k = cascadaDelMes(mes, estado.quien);
+  const recargar = () => render(raiz, { irA });
+  const opcMes = rangoMeses(sumarMeses(mesActual(), -12), mesActual()).reverse()
+    .map((m) => ({ valor: m, texto: nombreMes(m) }));
+
+  raiz.innerHTML = `
+    <section class="tarjeta" id="mes-cuenta">
+      <div class="mes-mandos">
+        <select id="mes-mes" class="select-panel" aria-label="Mes que se mira">${opciones(opcMes, mes)}</select>
+        <div id="mes-quien"></div>
+      </div>
+      ${tarjetaCuenta(k)}
+    </section>
+    <section class="tarjeta" id="mes-limites"></section>
+    <section class="tarjeta" id="mes-fijos">${tarjetaFijos(k)}</section>`;
+
+  $('#mes-mes', raiz).addEventListener('change', (e) => { estado.mes = e.target.value; recargar(); });
+  $('#mes-quien', raiz).appendChild(segmentado(
+    [{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' }, { valor: 'Ambos', texto: 'Ambos' }],
+    estado.quien, (v) => { estado.quien = v; recargar(); },
+  ));
+
+  const hojas = {
+    sueldo: () => hojaSueldo(k, recargar),
+    fijos: () => hojaFijos(k),
+    consumo: () => hojaConsumo(k),
+    resto: () => hojaPuedesGastar(k, { recargar }),
+  };
+  $$('[data-linea]', raiz).forEach((b) => b.addEventListener('click', () => hojas[b.dataset.linea]()));
+
+  const lim = $('#mes-limites', raiz);
+  lim.innerHTML = tarjetaLimites(mes, estado.quien);
+  $('#mes-ajustar-limites', lim)?.addEventListener('click', () => formLimites(mes, estado.quien, recargar));
+  $('details', lim)?.addEventListener('toggle', (e) => { estado.limitesAbiertos = e.target.open; });
+}
+
+/** La cascada, con una barra por línea en la misma escala. */
+function tarjetaCuenta(k) {
+  if (k.sueldo <= 0 && !k.fijos && !k.consumo) {
+    return `<header><h2>La cuenta de ${esc(mesCorto(k.mes))}</h2></header>
+      <p class="vacio">Sin sueldo ni gastos en ${esc(nombreMes(k.mes))}.</p>`;
+  }
+  const escala = Math.max(k.sueldo, k.fijos + k.consumo, 1);
+  const barra = (v, clase, desde = 0) => `<span class="cas-barra" aria-hidden="true"><i class="${clase}"
+    style="margin-left:${((Math.max(0, desde) / escala) * 100).toFixed(2)}%;width:${((Math.max(0, v) / escala) * 100).toFixed(2)}%"></i></span>`;
+  const linea = (clave, rotulo, sub, v, clase, desde, extra = '') => `
+    <li class="${extra}"><button type="button" data-linea="${clave}">
+      <span class="cas-rot">${rotulo}${sub ? `<small>${sub}</small>` : ''}</span>
+      ${barra(v, clase, desde)}
+      <b class="cas-val">${money(v)}</b>
+    </button></li>`;
+  const quien = k.quien === 'Ambos' ? 'J y C' : k.quien;
+  return `<header><h2>La cuenta de ${esc(mesCorto(k.mes))}</h2><span class="pista">${esc(quien)}</span></header>
+    <ul class="cascada">
+      ${linea('sueldo', 'Sueldo', k.porCobrar > 0 ? `por cobrar ${money(k.porCobrar)}` : 'cobrado', k.sueldo, 'cas-sueldo', 0)}
+      ${linea('fijos', '− Fijos', esc(k.grupos.map((g) => g.rotulo.split(' ')[0].toLowerCase()).join(' + ') || 'ninguno'), k.fijos, 'cas-fijos', 0)}
+      ${linea('consumo', '− Consumo', `tarjeta ${money(k.tarjeta)} + efectivo ${money(k.efectivo)}`, k.consumo, 'cas-consumo', k.fijos)}
+      ${linea('resto', '= Te sobra', '', k.teSobra, 'cas-sobra', k.fijos + k.consumo, 'total')}
+      ${linea('resto', '− Meta de ahorro', `${k.pct} % del sueldo`, k.meta, 'cas-meta', k.sueldo - k.meta)}
+      <li class="total final"><button type="button" data-linea="resto">
+        <span class="cas-rot">= Puedes gastar${k.pasado ? `<small class="mal">te pasaste ${money(-k.puedes)}</small>`
+    : k.alDia > 0 ? `<small>unos ${money(k.alDia)} al día</small>` : ''}</span>
+        ${barra(k.libre, 'cas-libre', k.fijos + k.consumo)}
+        <b class="cas-val ${k.pasado ? 'mal' : 'ok'}">${money(k.libre)}</b>
+      </button></li>
+    </ul>
+    <p class="cas-pie"><i aria-hidden="true">?</i>Toca cualquier línea para ver de dónde sale.</p>`;
+}
+
+/** Los fijos del mes, en sus tres grupos, cada uno desplegable. */
+function tarjetaFijos(k) {
+  const cab = `<header><h2>Fijos de ${esc(mesCorto(k.mes))}</h2><span class="pista">${money(k.fijos)}</span></header>`;
+  if (!k.grupos.length) return `${cab}<p class="vacio">Ningún pago fijo este mes.</p>`;
+  return `${cab}<div class="fijos-grupos">${k.grupos.map((g) => `
+    <details class="pz-lista">
+      <summary><span class="pz-lista-tit">${esc(g.rotulo)}<small>${esc(nombres(g.lineas))}</small></span>
+        <span class="pz-lista-res"><b>${money(g.total)}</b>${g.porPagar > 0 ? `<small class="cerca">${money(g.porPagar)} por pagar</small>` : ''}</span></summary>
+      ${listaLineas(g.lineas)}
+    </details>`).join('')}</div>`;
+}
+
+/** «Avianca, Dacar, Syfy… (6)». */
+function nombres(lineas) {
+  const vistos = [...new Set(lineas.map((l) => String(l.detalle).split(/\s+/).slice(0, 2).join(' ')))];
+  return `${vistos.slice(0, 3).join(', ')}${vistos.length > 3 ? '…' : ''}${lineas.length > 1 ? ` (${lineas.length})` : ''}`;
+}
+
+function listaLineas(lineas) {
+  return `<ul class="lineas">${lineas.map((l) => `
+    <li><span>${esc(l.detalle)}<small>${esc([l.aMano ? 'por pagar' : '', l.grupo === 'suscripciones' ? '' : l.nota, fechaCorta(l.fecha), l.categoria].filter(Boolean).join(' · '))}</small></span>
+      <b>${money(l.monto)}</b></li>`).join('')}</ul>`;
+}
+
+function hojaSueldo(k, recargar) {
+  const filas = k.cuentas.flatMap((c) => {
+    const e = c.esperado;
+    const quien = k.cuentas.length > 1 ? ` de ${c.usuario}` : '';
+    return [
+      ...(e.base === 'quincena' ? [
+        { rotulo: `Quincena${quien}`, detalle: esc(fechaCorta(e.quincena.fecha)), valor: money(e.quincena.monto), clase: 'sub' },
+        { rotulo: `Fin de mes${quien}`, detalle: esc(fechaCorta(e.fin.fecha)), valor: money(e.fin.monto), clase: 'sub' },
+      ] : []),
+      { rotulo: `Sueldo${quien}`, detalle: esc(e.base === 'mio' ? 'el que escribiste' : e.base === 'mediana' ? `mediana de ${e.meses} meses` : e.base === 'quincena' ? 'la última quincena + el último fin de mes' : 'lo cobrado'), valor: money(c.sueldo) },
+      { rotulo: '· ya cobrado', valor: money(c.cobrado), clase: 'sub' },
+      ...(c.porCobrar > 0 ? [{ rotulo: '· falta cobrar', valor: money(c.porCobrar), clase: 'sub' }] : []),
+    ];
+  });
+  deDondeSale({
+    titulo: `Sueldo de ${mesCorto(k.mes)}`,
+    filas: [...filas, ...(k.cuentas.length > 1 ? [{ rotulo: '= Sueldo de los dos', valor: money(k.sueldo), clase: 'total final' }] : [])],
+    nota: 'Mientras no llegue todo, se usa el sueldo esperado. Cuenta como sueldo lo que se apunta como quincena, fin de mes o sueldo.',
+    acciones: k.cuentas.length === 1 ? [{ texto: 'Ajustar sueldo y ahorro', alPulsar: () => formSueldo(k.mes, k.quien, recargar) }] : [],
+  });
+}
+
+function hojaFijos(k) {
+  deDondeSale({
+    titulo: `Fijos de ${mesCorto(k.mes)}`,
+    filas: [
+      ...k.grupos.flatMap((g) => [
+        { rotulo: g.rotulo, detalle: esc(g.pista), valor: money(g.total) },
+        ...g.lineas.map((l) => ({ rotulo: l.detalle, detalle: esc([l.aMano ? 'por pagar' : '', l.grupo === 'suscripciones' ? '' : l.nota].filter(Boolean).join(' · ')), valor: money(l.monto), clase: 'sub' })),
+      ]),
+      { rotulo: '= Fijos', valor: money(k.fijos), clase: 'total final' },
+    ],
+    nota: 'Lo que no se mueve aunque quieras: letras, cuotas de diferidos y suscripciones. Se cuenta en el mes al que pertenece la letra o el estado de cuenta.',
+  });
+}
+
+function hojaConsumo(k) {
+  deDondeSale({
+    titulo: `Consumo de ${mesCorto(k.mes)}`,
+    filas: [
+      ...k.porCategoria.flatMap((c) => [
+        { rotulo: c.categoria, detalle: esc(`${c.lineas.length} ${c.lineas.length === 1 ? 'gasto' : 'gastos'}`), valor: money(c.total) },
+        ...c.lineas.slice().sort((a, b) => b.monto - a.monto).slice(0, 8).map((l) => ({
+          rotulo: l.detalle, detalle: esc([l.medio === 'Tarjeta' ? 'tarjeta' : 'efectivo', fechaCorta(l.fecha)].filter(Boolean).join(' · ')), valor: money(l.monto), clase: 'sub',
+        })),
+      ]),
+      { rotulo: '· con tarjeta', valor: money(k.tarjeta), clase: 'sub' },
+      { rotulo: '· en efectivo y débito', valor: money(k.efectivo), clase: 'sub' },
+      { rotulo: '= Consumo', valor: money(k.consumo), clase: 'total final' },
+    ],
+    nota: 'El día a día: lo que se puede recortar. Lo de tarjeta cuenta en el mes de su estado de cuenta, por eso una compra de los primeros días puede caer en el mes anterior.',
+  });
+}
+
+/** Los límites por categoría: cuánto va de cada uno y cuáles avisan. */
+function tarjetaLimites(mes, quien) {
+  const cab = '<header><h2>Consumo por categoría</h2><span class="pista">Límite</span></header>';
+  if (quien === 'Ambos') {
+    return `${cab}<p class="vacio">Los límites son de cada uno: elige J o C arriba.</p>`;
+  }
+  const L = limitesConsumo(quien, mes);
+  if (L.limite <= 0) return `${cab}<p class="vacio">Sin sueldo de ${esc(quien)} no hay de dónde sacar los límites.</p>`;
+  if (!L.filas.length) return `${cab}<p class="vacio">Todavía no hay compras del día a día que se repitan.</p>`;
+  const ESTADO = {
+    pasado: ['mal', 'te pasaste'], limite: ['cerca', 'al límite'], ritmo: ['cerca', 'a este ritmo'], bien: ['', ''], sin: ['', ''],
+  };
+  const fila = (f) => {
+    const [clase, chip] = ESTADO[f.estado];
+    return `<li class="${clase}">
+      <span class="lc-cat">${esc(f.categoria)}${chip ? ` <span class="lc-chip">${chip}</span>` : ''}</span>
+      <span class="lc-cifra"><b>${money(f.gastado)}</b><small>${f.tope != null ? `de ${money(f.tope)}` : 'sin límite'}</small></span>
+      ${f.tope ? `<span class="lc-barra"><i style="width:${Math.min(100, (f.gastado / f.tope) * 100).toFixed(1)}%"></i></span>` : ''}
+    </li>`;
+  };
+  // Primero lo que avisa; luego el resto, plegado.
+  const orden = [...L.filas].sort((a, b) => rango(a) - rango(b));
+  const visibles = orden.slice(0, 4);
+  const resto = orden.slice(4);
+  return `${cab}
+    <ul class="lim-corta">${visibles.map(fila).join('')}</ul>
+    ${resto.length ? `<details class="pz-lista"${estado.limitesAbiertos ? ' open' : ''}>
+      <summary><span class="pz-lista-tit">${resto.length} ${resto.length === 1 ? 'categoría más' : 'categorías más'}</span><span class="pz-lista-res"></span></summary>
+      <ul class="lim-corta">${resto.map(fila).join('')}</ul></details>` : ''}
+    <p class="cas-pie">Por fecha de compra. Cada límite es un % de lo que puedes gastar
+      (${money(L.limite)}).${L.sugeridos ? ' Ahora son tus promedios: bájalos para ahorrar.' : ''}</p>
+    <div class="sueldo-acciones"><button class="btn pequeno" id="mes-ajustar-limites">Ajustar límites</button></div>`;
+}
+
+const rango = (f) => ({ pasado: 0, limite: 1, ritmo: 2, bien: 3, sin: 4 }[f.estado] ?? 5) * 1e6 - (f.tope ?? f.promedio);
+
+return { render };
+})();
+
+M["views/proximos"] = (function () {
+/**
+ * Vista «Próximos»: ¿cuánto voy a gastar los meses que vienen?
+ *
+ * Reúne en un gráfico y una tabla lo que en Presupuesto son cuatro tarjetas:
+ * lo real (sí o sí), lo que se simula y lo común que estima la app, apilados
+ * contra el límite para gastar de cada mes. Un selector elige qué entra en la
+ * tabla; la cuenta es la misma que en Presupuesto (`cierres`, `ESCENARIOS`).
+ */
+
+const {nombreMes, money, redondear} = M["calc"];
+const {esc, $, $$, segmentado, deDondeSale} = M["ui"];
+const {proyeccion, mesesProyectados, recurrencias, esSimulacion, estaExcluida} = M["plan"];
+const {cierres, ESCENARIOS, cuentaDelMes, formSimulacion, abrirTabla, lineasReales, lineasPrevistas, ORDEN_TIPO} = M["views/plan"];
+const estado = { horizonte: 6, quien: 'J', escenario: 'real' };
+
+const mesCorto = (m) => nombreMes(m).split(' ')[0].toLowerCase();
+const mesTres = (m) => nombreMes(m, true).split(' ')[0];
+
+function render(raiz, { irA }) {
+  const plan = proyeccion(mesesProyectados(estado.horizonte), { quien: estado.quien });
+  const cuentas = plan.filas.map((f) => cuentaDelMes(f, estado.quien));
+  const recargar = () => render(raiz, { irA });
+  const simulados = recurrencias(estado.quien)
+    .filter((r) => r.manual && esSimulacion(r) && r.fiable && r.vigente && !estaExcluida(r.clave));
+
+  raiz.innerHTML = `
+    <section class="tarjeta" id="prox-grafico">
+      <div class="prox-mandos"><div id="prox-quien"></div><div id="prox-horizonte"></div></div>
+      ${grafico(plan, cuentas)}
+    </section>
+    <section class="tarjeta" id="prox-tabla"></section>
+    <section class="tarjeta" id="prox-simulas">${tarjetaSimulas(simulados)}</section>
+    <p class="prox-mas"><button type="button" class="enlace" id="prox-plan">Pagos fijos, gastos comunes y archivo en Presupuesto completo ›</button></p>`;
+
+  $('#prox-quien', raiz).appendChild(segmentado(
+    [{ valor: 'J', texto: 'J' }, { valor: 'C', texto: 'C' }, { valor: 'Ambos', texto: 'Ambos' }],
+    estado.quien, (v) => { estado.quien = v; recargar(); },
+  ));
+  $('#prox-horizonte', raiz).appendChild(segmentado(
+    [{ valor: '3', texto: '3 m' }, { valor: '6', texto: '6 m' }, { valor: '12', texto: '12 m' }],
+    String(estado.horizonte), (v) => { estado.horizonte = Number(v); recargar(); },
+  ));
+  $('#prox-plan', raiz).addEventListener('click', () => irA('plan'));
+
+  const pintarTabla = () => {
+    const caja = $('#prox-tabla', raiz);
+    caja.innerHTML = tarjetaTabla(plan, cuentas);
+    $('#prox-escenario', caja).appendChild(segmentado(
+      ESCENARIOS.map((e) => ({ valor: e.k, texto: e.k === 'real' ? 'Solo real' : e.rotulo })),
+      estado.escenario, (v) => { estado.escenario = v; pintarTabla(); },
+    ));
+    $$('[data-prox-mes]', caja).forEach((tr) => tr.addEventListener('click', () => hojaMes(plan, cuentas, Number(tr.dataset.proxMes))));
+    $('#prox-ver-tabla', caja).addEventListener('click', () => abrirTabla(
+      { real: 'real', simulado: 'sim', comunes: 'comparar' }[estado.escenario], { plan, quien: estado.quien },
+    ));
+  };
+  pintarTabla();
+  $$('[data-prox-col]', raiz).forEach((b) => b.addEventListener('click', () => hojaMes(plan, cuentas, Number(b.dataset.proxCol))));
+
+  $('#prox-simular', raiz).addEventListener('click', () => formSimulacion(null, recargar));
+  $$('[data-simulado]', raiz).forEach((b) => b.addEventListener('click', () => {
+    const r = simulados.find((x) => x.clave === b.dataset.simulado);
+    if (r) formSimulacion(r, recargar);
+  }));
+}
+
+/** Columnas apiladas: real, simulado y común, con la marca del límite de cada mes. */
+function grafico(plan, cuentas) {
+  const escala = Math.max(1, ...plan.filas.map((f, i) => Math.max(f.real + f.simulacion + f.comunes, cuentas[i].limite)));
+  const alto = (v) => `${((Math.max(0, v) / escala) * 100).toFixed(2)}%`;
+  const limites = [...new Set(cuentas.map((c) => c.limite))];
+  return `<header><h2>¿Cuánto voy a gastar?</h2>
+      <span class="pista">${limites.length === 1 ? `límite ${money(limites[0])}` : 'límite de cada mes'}</span></header>
+    <div class="prox-cols" role="img" aria-label="${esc(plan.filas.map((f) => `${nombreMes(f.mes)}: real ${money(f.real)}, simulado ${money(f.simulacion)}, comunes ${money(f.comunes)}`).join('; '))}">
+      ${plan.filas.map((f, i) => `
+        <button type="button" class="prox-col" data-prox-col="${i}" aria-label="Ver ${esc(nombreMes(f.mes))}">
+          <span class="prox-pila">
+            <i class="pz-tarjeta" style="height:${alto(f.real)}"></i>
+            <i class="pz-simulado" style="height:${alto(f.simulacion)}"></i>
+            <i class="pz-comunes" style="height:${alto(f.comunes)}"></i>
+            <i class="prox-limite" style="bottom:${alto(cuentas[i].limite)}"></i>
+          </span>
+          <span class="prox-mes">${esc(mesTres(f.mes))}</span>
+        </button>`).join('')}
+    </div>
+    <div class="pz-ley">
+      <span><i class="pz-tarjeta"></i>Real (sí o sí)</span>
+      <span><i class="pz-simulado"></i>Simulado</span>
+      <span><i class="pz-comunes"></i>Comunes (estimado)</span>
+      <span><i class="prox-ley-limite"></i>Límite para gastar</span>
+    </div>`;
+}
+
+function tarjetaTabla(plan, cuentas) {
+  const e = ESCENARIOS.find((x) => x.k === estado.escenario) || ESCENARIOS[0];
+  const cierre = cierres(plan, estado.quien, e.partes);
+  const pct = cuentas[0]?.pct ?? 30;
+  return `<header><h2>Mes a mes</h2><span class="pista">Ver como</span></header>
+    <div id="prox-escenario" class="prox-escenario"></div>
+    <div class="tabla-envoltura"><table class="prox-tabla">
+      <thead><tr><th>Mes</th><th>Gasto</th><th>Te sobra</th><th>En cuentas</th></tr></thead>
+      <tbody>${plan.filas.map((f, i) => {
+    const gasto = redondear(e.gasto(f));
+    const sobra = redondear(cuentas[i].sueldo - gasto);
+    return `<tr data-prox-mes="${i}" tabindex="0">
+          <th>${esc(mesTres(f.mes))}</th><td>${money(gasto)}</td>
+          <td class="${sobra >= cuentas[i].meta ? 'ok' : sobra >= 0 ? 'cerca' : 'mal'}">${money(sobra)}</td>
+          <td>${money(cierre[i].saldo)}</td></tr>`;
+  }).join('')}</tbody>
+    </table></div>
+    <p class="cas-pie">En verde, los meses que llegan al ahorro del ${pct} %. Toca un mes para ver cada gasto.</p>
+    <div class="sueldo-acciones"><button type="button" class="btn pequeno" id="prox-ver-tabla">▦ Ver en tabla</button></div>`;
+}
+
+function tarjetaSimulas(simulados) {
+  const chip = (r) => {
+    const como = r.clase === 'plazos' ? `${r.cuotas} × ${money(r.monto)}`
+      : r.clase === 'unico' ? `${mesCorto(r.mes)} ${money(r.monto)}`
+        : `${money(r.porMes)} al mes`;
+    return `<button type="button" class="chip prox-chip" data-simulado="${esc(r.clave)}">${esc(r.detalle)} · ${esc(como)}</button>`;
+  };
+  return `<header><h2>Lo que simulas</h2><button type="button" class="btn pequeno primario" id="prox-simular">+ Simular</button></header>
+    ${simulados.length ? `<div class="prox-chips">${simulados.map(chip).join('')}</div>
+      <p class="cas-pie">Toca uno para cambiar el valor o cómo se paga. No cuenta como real hasta que lo hagas.</p>`
+    : '<p class="vacio">Nada simulado. Prueba con algo que piensas comprar y mira cómo quedan los meses.</p>'}`;
+}
+
+/** Los gastos de un mes en el escenario elegido, agrupados como en la tabla. */
+function hojaMes(plan, cuentas, i) {
+  const f = plan.filas[i];
+  const c = cuentas[i];
+  const e = ESCENARIOS.find((x) => x.k === estado.escenario) || ESCENARIOS[0];
+  const lineas = [
+    ...lineasReales(f),
+    ...(e.partes.simulacion ? lineasPrevistas(f, 'simulacion') : []),
+    ...(e.partes.comunes ? lineasPrevistas(f, 'comunes') : []),
+  ];
+  const grupos = ORDEN_TIPO.map((t) => ({ t, xs: lineas.filter((l) => l.tipo === t).sort((a, b) => b.monto - a.monto) }))
+    .filter((g) => g.xs.length);
+  const gasto = redondear(e.gasto(f));
+  const cierre = cierres(plan, estado.quien, e.partes)[i];
+  const sobra = redondear(c.sueldo - gasto);
+  deDondeSale({
+    titulo: `${nombreMes(f.mes)} · ${e.k === 'real' ? 'solo real' : e.rotulo.toLowerCase()}`,
+    filas: [
+      ...grupos.flatMap((g) => [
+        { rotulo: g.t, valor: money(redondear(g.xs.reduce((t, l) => t + l.monto, 0))) },
+        ...g.xs.slice(0, 12).map((l) => ({ rotulo: l.detalle, detalle: esc(l.categoria), valor: money(l.monto), clase: 'sub' })),
+        ...(g.xs.length > 12 ? [{ rotulo: `y ${g.xs.length - 12} más`, valor: '', clase: 'sub' }] : []),
+      ]),
+      { rotulo: '= Gasto', valor: money(gasto), clase: 'total' },
+      { rotulo: 'Sueldo', valor: money(c.sueldo) },
+      { rotulo: '= Te sobra', detalle: esc(`meta ${money(c.meta)}`), valor: money(sobra), clase: 'total' },
+      { rotulo: 'En cuentas al cierre', valor: `≈ ${money(cierre.saldo)}`, clase: 'total final' },
+    ],
+    nota: 'La tarjeta de un mes se paga al siguiente: por eso «En cuentas» la descuenta un mes después.',
+  });
+}
+
+return { render };
+})();
+
 M["app"] = (function () {
 /** Arranque, navegación y botón de registro rápido. */
 
-const {db, cargar, alCambiar, almacenamiento, instantaneaSinSecretos, guardar, tarjetas} = M["store"];
+const {db, cargar, alCambiar, almacenamiento, instantaneaSinSecretos, guardar} = M["store"];
 const {iniciarSync, empujarDiferido, alCambiarSync, estadoSync, configurado} = M["sync"];
-const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta, hoyLocal, sumarMeses, pagoDeTarjeta, fechaPagoMes, diasEntre, textoFecha} = M["calc"];
+const {hoyLocal} = M["calc"];
 const archivoExcel = M["archivo"];
 const {crearCajon} = M["cajon"];
 const {pedirClave, vigilar} = M["pantalla_llave"];
 const {ofrecerAlArrancar, ofrecerNuevos} = M["ajustes"];
-const {limitesConsumo} = M["plan"];
+const {avisosPendientes: todosLosAvisos} = M["avisos"];
 const {alRedimensionar, ocultarTooltip} = M["charts"];
 const {$, crear, esc, ICONOS, modal, brindis, descargar, vigilarMensajes} = M["ui"];
 const {formGastoTarjeta, formGastoEfectivo, formIngreso, formInversion, formMovimiento} = M["forms"];
@@ -22486,25 +23665,37 @@ const datos = M["views/datos"];
 const plan = M["views/plan"];
 const analisis = M["views/analisis"];
 const vehiculo = M["views/vehiculo"];
+const hoy = M["views/hoy"];
+const mes = M["views/mes"];
+const proximos = M["views/proximos"];
 /*
  * `titulo` es el rótulo de la barra de abajo, donde cada ranura mide unos 48 px
  * en un teléfono: si no cabe, se corta. `rotulo` es el título largo de la
  * cabecera, que sí tiene sitio.
  */
+/*
+ * Las cuatro primeras son las de la barra de abajo, una pregunta cada una:
+ * ¿cómo voy?, ¿en qué se va?, ¿cuánto voy a gastar?, ¿qué debo y cuándo? El
+ * resto está en «Más» (el cajón), tal cual era: Resumen y Presupuesto completos
+ * siguen ahí con todo lo que tenían.
+ */
 const VISTAS = [
-  { id: 'resumen', titulo: 'Inicio', rotulo: 'Resumen', modulo: resumen, icono: ICONOS.resumen },
-  { id: 'mensual', titulo: 'Mes', rotulo: 'Mensual', modulo: mensual, icono: ICONOS.mensual },
+  { id: 'hoy', titulo: 'Hoy', modulo: hoy, icono: ICONOS.hoy, barra: true },
+  { id: 'mes', titulo: 'Mes', rotulo: 'Este mes', modulo: mes, icono: ICONOS.mensual, barra: true },
+  { id: 'proximos', titulo: 'Próximos', rotulo: 'Próximos meses', modulo: proximos, icono: ICONOS.plan, barra: true },
+  { id: 'tarjetas', titulo: 'Tarjetas', modulo: vistaTarjetas, icono: ICONOS.tarjetas, barra: true },
+  { id: 'resumen', titulo: 'Resumen', rotulo: 'Resumen completo', modulo: resumen, icono: ICONOS.resumen },
+  { id: 'plan', titulo: 'Plan', rotulo: 'Presupuesto completo', modulo: plan, icono: ICONOS.plan },
+  { id: 'mensual', titulo: 'Categorías', rotulo: 'Categorías por mes', modulo: mensual, icono: ICONOS.mensual },
   { id: 'anual', titulo: 'Año', modulo: anual, icono: ICONOS.anual },
-  { id: 'tarjetas', titulo: 'Tarjetas', modulo: vistaTarjetas, icono: ICONOS.tarjetas },
   { id: 'inversiones', titulo: 'Invertir', rotulo: 'Inversiones', modulo: inversiones, icono: ICONOS.inversiones },
   { id: 'cuentas', titulo: 'Cuentas', modulo: cuentas, icono: ICONOS.cuentas },
-  { id: 'plan', titulo: 'Plan', rotulo: 'Presupuesto', modulo: plan, icono: ICONOS.plan },
   { id: 'analisis', titulo: 'Análisis', modulo: analisis, icono: ICONOS.analisis },
   { id: 'vehiculo', titulo: 'Carro', rotulo: 'Vehículo', modulo: vehiculo, icono: ICONOS.vehiculo },
   { id: 'datos', titulo: 'Datos', modulo: datos, icono: ICONOS.datos },
 ];
 
-let vistaActual = 'resumen';
+let vistaActual = 'hoy';
 
 function aplicarTema() {
   const tema = db.config.tema || 'auto';
@@ -22532,85 +23723,48 @@ function pintarEstadoSync() {
 }
 
 /*
- * Abajo solo queda el «+». Navegar es cosa del cajón lateral, así que la barra
- * con las seis secciones sobraba: repetía lo mismo y se comía el ancho.
+ * La barra de abajo: las cuatro preguntas, el «+» en medio y «Más», que abre
+ * el cajón con el resto de secciones.
  *
  * El «+» va dibujado, no escrito: el carácter de texto se apoya en la línea
  * base de la fuente y nunca queda centrado del todo dentro del círculo.
  */
 function pintarNav() {
   const nav = $('#nav');
-  if (nav.dataset.listo) return;
-  nav.innerHTML = `
-    <button class="nav-mas" id="fab" aria-label="Registrar movimiento">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
-           stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-    </button>`;
-  nav.querySelector('#fab').addEventListener('click', menuRegistro);
-  nav.dataset.listo = 'si';
-}
-
-/** Lo que hay que mirar hoy: se pinta en la campana de la cabecera. */
-function avisosPendientes() {
-  const lista = [];
-
-  if (!almacenamiento.ok) {
-    lista.push({ nivel: 'critico', texto: 'Este navegador no está guardando los datos. Descarga un respaldo.' });
+  if (!nav.dataset.listo) {
+    const boton = (v) => `<button type="button" class="nav-tab" data-tab="${v.id}">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${v.icono}</svg><span>${esc(v.titulo)}</span></button>`;
+    const barra = VISTAS.filter((v) => v.barra);
+    nav.innerHTML = `<div class="nav-barra">
+      ${barra.slice(0, 2).map(boton).join('')}
+      <button class="nav-mas" id="fab" aria-label="Registrar movimiento">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+             stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      ${barra.slice(2).map(boton).join('')}
+      <button type="button" class="nav-tab" data-tab="mas" aria-label="Más secciones">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ICONOS.mas}</svg><span>Más</span></button>
+    </div>`;
+    nav.querySelector('#fab').addEventListener('click', menuRegistro);
+    nav.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => {
+      if (b.dataset.tab === 'mas') menuPrincipal();
+      else irA(b.dataset.tab);
+    }));
+    nav.dataset.listo = 'si';
   }
-  if (configurado() && estadoSync.error) {
-    lista.push({ nivel: 'critico', texto: `La sincronización falló: ${estadoSync.error}` });
-  }
-
-  const mes = mesActual();
-  tarjetas().forEach((t) => {
-    /*
-     * Lo que vence ESTE mes es el consumo del mes anterior: las cuotas de
-     * septiembre se pagan en octubre. Antes decía «a pagar en octubre» con las
-     * cuotas de octubre, que se pagan en noviembre. Pagado, ya no se avisa.
-     */
-    const previo = sumarMeses(mes, -1);
-    const pago = pagoDelMes(t.id, previo, 'ambos');
-    if (pago > 0 && !pagoDeTarjeta(t.id, previo)) {
-      const vence = fechaPagoMes(previo, t.id);
-      const dias = vence ? diasEntre(hoyLocal(), vence) : null;
-      lista.push({
-        nivel: dias !== null && dias < 0 ? 'critico' : dias !== null && dias <= 3 ? 'alerta' : 'info',
-        texto: `${t.nombre}: ${dias !== null && dias < 0 ? 'venció' : 'vence'} ${vence ? `el ${textoFecha(vence).replace(/ de \d{4}$/, '')}` : `en ${nombreMes(mes)}`} `
-          + `${money(pago)} (consumo de ${nombreMes(previo)}).`,
-      });
-    }
-    const est = estadoTarjeta(t.id);
-    const uso = est.cupo ? (est.utilizado / est.cupo) * 100 : 0;
-    if (uso >= 80) {
-      lista.push({
-        nivel: uso >= 95 ? 'critico' : 'alerta',
-        texto: `${t.nombre} lleva usado el ${uso.toFixed(0)} % del cupo.`,
-      });
-    }
+  const enBarra = VISTAS.find((v) => v.id === vistaActual)?.barra;
+  nav.querySelectorAll('[data-tab]').forEach((b) => {
+    const activa = b.dataset.tab === vistaActual || (b.dataset.tab === 'mas' && !enBarra);
+    if (activa) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
-
-  /*
-   * Los límites de consumo: lo que ya se pasó, lo que está al límite y lo
-   * que a este ritmo se va a pasar. Solo de quien tenga sueldo.
-   */
-  for (const u of ['J', 'C']) {
-    let L = null;
-    try { L = limitesConsumo(u, mes); } catch { L = null; }
-    if (!L || L.limite <= 0) continue;
-    for (const f of L.avisos) {
-      lista.push({
-        nivel: f.estado === 'pasado' ? 'critico' : 'alerta',
-        texto: f.estado === 'pasado'
-          ? `${u} · ${f.categoria}: te pasaste del límite (${money(f.gastado)} de ${money(f.tope)}, ${money(-f.resto)} de más).`
-          : f.estado === 'limite'
-            ? `${u} · ${f.categoria}: al límite, ${Math.round(f.uso)} % (${money(f.gastado)} de ${money(f.tope)}; quedan ${money(f.resto)}).`
-            : `${u} · ${f.categoria}: a este ritmo llegas a ${money(f.ritmo)} y el límite es ${money(f.tope)}.`,
-      });
-    }
-  }
-
-  return lista;
 }
+
+/**
+ * Lo que hay que mirar hoy: se pinta en la campana de la cabecera. Es la misma
+ * lista que «Necesita atención» de Hoy, sin lo que solo informa (una póliza
+ * que vence).
+ */
+const avisosPendientes = () => todosLosAvisos().filter((a) => !a.soloHoy);
 
 /*
  * El punto de aviso vive ahora en la marca «JC», que es lo único que queda en
@@ -22672,7 +23826,7 @@ function pintarCajon() {
       </svg>Avisos${pendientes ? '<span class="punto" aria-label="hay avisos"></span>' : ''}</button>
 
     <div class="cajon-rotulo">Secciones</div>
-    ${VISTAS.map((v) => `
+    ${VISTAS.map((v, i) => `${i === VISTAS.findIndex((x) => !x.barra) ? '<div class="cajon-rotulo">Más</div>' : ''}
       <button class="cajon-item" data-vista="${v.id}"
         ${v.id === vistaActual ? 'aria-current="page"' : ''}>
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${v.icono}</svg>
@@ -22858,11 +24012,11 @@ function arrancarApp(origen) {
     if (id && id !== vistaActual) irA(id);
   });
 
-  // Siempre se arranca en Inicio. El iPhone reabre la app en la última
+  // Siempre se arranca en Hoy. El iPhone reabre la app en la última
   // dirección visitada, fragmento incluido, así que al volver aparecía la
   // sección donde se quedó uno y no el resumen. El fragmento sigue mandando
   // dentro de la sesión: solo se ignora el heredado del arranque.
-  irA('resumen');
+  irA('hoy');
 
   if (origen === 'semilla') {
     brindis('Datos cargados desde el Excel migrado');
