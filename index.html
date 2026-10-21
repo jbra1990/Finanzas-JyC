@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-UgUaCz/UW349lY5CQy5vuR6LPBaeyRiDvk7foKR/Nu4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-hhQUCNnxXSon/nAUk95HTGDQFo/lsMkfU4OEHxhLSts='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4017,6 +4017,10 @@ dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { 
 .lf-dinero { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; }
 .lim-total { margin: 6px 0; font-size: 12.5px; color: var(--tinta-2); }
 .lim-total .mal { color: var(--critico); } .lim-total .ok { color: var(--ok-texto); }
+.lim-desplegable { margin: 4px 0 0; }
+.lim-desplegable > .lim-lista { padding: 0 12px 4px; }
+.lim-desplegable .pz-lista-res b.mal { color: var(--critico); }
+.lim-desplegable .pz-lista-res b.cerca { color: var(--alerta); }
 
 </style>
 </head>
@@ -4050,7 +4054,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '19f17d1ab3';
+window.__VERSION_APP__ = 'dc943e3954';
 
 M["cerradura"] = (function () {
 /**
@@ -11572,6 +11576,27 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
       '', g.proposito || '', g.categoria || '', g.usuario || '');
   }
 
+  /*
+   * Lo registrado de cada mes, por concepto: con esto, un pago fijo escrito a
+   * mano que se pagó como un gasto normal —sin pulsar «Pagar»— ya no se cuenta
+   * otra vez como «por pagar». Antes la letra apuntada a mano en Efectivo
+   * salía dos veces y bajaba el ahorro sin haber gastado nada más.
+   */
+  const registrado = new Map();
+  const anotarRegistro = (mes, detalle, monto, usuario) => {
+    if (!porMes.has(mes) || !esDe(usuario, quien)) return;
+    const k = `${mes}|${claveGasto(detalle)}`;
+    if (!registrado.has(k)) registrado.set(k, []);
+    registrado.get(k).push(Number(monto) || 0);
+  };
+  for (const g of db.gastosEfectivo) anotarRegistro(letraDe.get(g.id) || claveMes(g.fecha), g.detalle, g.monto, g.usuario);
+  for (const c of db.cuotas) {
+    const compra = db.gastosTarjeta.find((x) => x.id === c.gasto_id);
+    anotarRegistro(c.mes, compra?.detalle || '', c.monto, c.usuario);
+  }
+  const yaRegistrado = (mes, detalle, monto) => (registrado.get(`${mes}|${claveGasto(detalle)}`) || [])
+    .some((v) => Math.abs(v - monto) <= Math.max(0.5, monto * 0.02));
+
   const usadas = [];
   for (const r of recs) {
     if (!r.fiable || !r.vigente || fuera.has(r.clave) || r.cubierto) continue;
@@ -11593,7 +11618,15 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
       const casilla = porMes.get(mes);
       // Un mes ya pagado no se prevé: su importe ya está apuntado como gasto
       // real, y volver a preverlo lo contaría dos veces.
-      if (!casilla || mes < ahora || r.mesesConRegistro.has(mes) || pagados.has(mes)) return;
+      /*
+       * Un mes pasado ya no se prevé, salvo la cuota sin pagar de un pago fijo
+       * a plazos: la letra de octubre que no se pagó no desaparece de octubre
+       * al llegar noviembre (las ya pagadas no llegan aquí, ver abajo).
+       */
+      const pasadoQueCuenta = origen === 'fijos' && r.clase === 'plazos';
+      if (!casilla || (mes < ahora && !pasadoQueCuenta) || r.mesesConRegistro.has(mes) || pagados.has(mes)) return;
+      // Pagado como un gasto normal, con su nombre y su importe: ya está en lo real.
+      if (origen === 'fijos' && yaRegistrado(mes, r.detalle, monto)) return;
       // Lo simulado no es real hasta que se ejecute.
       const conocido = conocidoPedido && origen !== 'simulacion';
       casilla.previsto += monto;
@@ -11636,6 +11669,8 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
       // Cuotas contadas: se colocan en sus meses y se acaban. La última lleva
       // los centavos que la división no repartió.
       for (let i = 0; i < r.cuotas; i += 1) {
+        // Las ya pagadas no se prevén (ni en un mes pasado).
+        if (r.manual && i < (r.pagadas || 0)) continue;
         const importe = i === r.cuotas - 1 ? (r.ultimaCuota ?? r.monto) : r.monto;
         sumar(sumarMeses(r.desdeMes, i), importe, `cuota ${i + 1} de ${r.cuotas}`, true);
       }
@@ -15384,6 +15419,7 @@ function render(raiz, { irA }) {
       estadoLimites.quien, (v) => { estadoLimites.quien = v; pintarLimites(); },
     ));
     $('#limites-ajustar', raiz)?.addEventListener('click', () => formLimites(mes, estadoLimites.quien, () => render(raiz, { irA })));
+    $('#limites-consumo .lim-desplegable', raiz)?.addEventListener('toggle', (e) => { estadoLimites.abierta = e.target.open; });
   };
   pintarLimites();
   $('#topes', raiz).innerHTML = seccionTopes(mes, usuarioFiltro);
@@ -15919,7 +15955,7 @@ function iniciales(nombre) {
 
 /* --- Límites de consumo -------------------------------------------------- */
 
-const estadoLimites = { quien: 'J' };
+const estadoLimites = { quien: 'J', abierta: false };
 
 /*
  * El consumo del día a día contra un límite por categoría: cada una tiene un
@@ -15970,7 +16006,11 @@ function seccionLimites(mes, quien) {
     : `<span><i class="lr-libre"></i>Sin asignar ${pc(libre)}</span>`}</div>
     ${L.sugeridos ? `<p class="lim-sug">Son <b>tus promedios</b> de los últimos 6 meses, que propone la app. Bájalos en
       «Ajustar límites» para ahorrar: lo que no gastes ahí, se queda.</p>` : ''}
-    <ul class="lim-lista">${filas}</ul>
+    <details class="pz-lista lim-desplegable"${estadoLimites.abierta ? ' open' : ''}>
+      <summary><span class="pz-lista-tit">Categorías</span><span class="pz-lista-res">${L.filas.length}${L.avisos.length
+    ? ` · <b class="${L.avisos.some((f) => f.estado === 'pasado') ? 'mal' : 'cerca'}">${L.avisos.length} ${L.avisos.length === 1 ? 'aviso' : 'avisos'}</b>` : ' · todo bien'}</span></summary>
+      <ul class="lim-lista">${filas}</ul>
+    </details>
     <div class="lim-resumen">
       <div><span class="k">Consumo del mes</span><b>${money(L.gastadoVariables)}</b><small>de ${money(L.topeVariables)} en límites</small></div>
       <div><span class="k">Ahorro con tus límites</span><b class="${L.ahorroPosible > 0 ? 'ok' : ''}">${money(L.ahorroPosible)}</b><small>al mes, frente a tu promedio</small></div>
