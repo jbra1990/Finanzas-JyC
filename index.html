@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-4HbOTozI/5NhF/p0LTRAm4iMIx5Tuf66xHjwS3trMGk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-RUbHNrOmokT7GHj5xgIeyd5EL3foj2wRR3DHZY24i9M='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4023,51 +4023,12 @@ dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { 
 .lim-desplegable .pz-lista-res b.cerca { color: var(--alerta); }
 
 /* =============================================================================
-   Rediseño: Hoy · Mes · Próximos · Tarjetas · Más
+   Rediseño: Hoy · Mes · Próximos · Tarjetas
    -----------------------------------------------------------------------------
    Cada pantalla contesta una pregunta, con una respuesta arriba y como mucho
    tres cifras. Lo demás, detrás de un toque: «¿De dónde sale?» abre la cuenta
    línea por línea en una hoja que sube desde abajo.
    ========================================================================== */
-
-/* --- La barra de abajo ---------------------------------------------------- */
-
-.app { padding-bottom: calc(118px + env(safe-area-inset-bottom)); }
-.nav {
-  justify-content: center;
-  padding: 0 calc(10px + env(safe-area-inset-right)) 0 calc(10px + env(safe-area-inset-left));
-  bottom: calc(12px + env(safe-area-inset-bottom));
-}
-.nav-barra {
-  pointer-events: auto;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr) auto repeat(3, 1fr);
-  align-items: center;
-  gap: 2px;
-  width: min(100%, 520px);
-  padding: 6px 6px;
-  border-radius: var(--radio-pill);
-  background: var(--vidrio);
-  border: 1px solid var(--vidrio-borde);
-  box-shadow: var(--sombra-nav), inset 0 1px 0 var(--vidrio-brillo);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  backdrop-filter: blur(18px) saturate(1.4);
-}
-.nav-tab {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  min-width: 0; min-height: 46px; padding: 4px 2px;
-  border: 0; border-radius: 16px; background: transparent;
-  color: var(--vidrio-tinta); font: inherit; font-size: 10px; font-weight: 560; letter-spacing: -0.01em;
-  cursor: pointer; -webkit-tap-highlight-color: transparent;
-}
-.nav-tab svg { width: 21px; height: 21px; }
-.nav-tab span { max-width: 100%; overflow: hidden; text-overflow: clip; white-space: nowrap; }
-.nav-tab[aria-current="page"] { color: var(--vidrio-tinta-viva); background: var(--superficie-3); font-weight: 640; }
-.nav-tab:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
-.nav .nav-barra .nav-mas { width: 48px; height: 48px; margin: -14px 2px 0; }
-@media (min-width: 860px) {
-  .nav { left: 0; right: 0; bottom: 18px; justify-content: center; }
-}
 
 /* --- Hoy ------------------------------------------------------------------ */
 
@@ -4298,11 +4259,6 @@ dialog.hoja, dialog.hoja .modal-cab, dialog.hoja .modal-pie { background: var(--
 .hoy-tres b { font-size: clamp(12px, 3.7vw, 14.5px); }
 .hoy-tres > button, .hoy-tres > div { padding: 9px 8px; }
 @media (max-width: 360px) {
-  .nav-tab { font-size: 9px; letter-spacing: -0.02em; }
-  .nav .nav-barra .nav-mas { width: 44px; height: 44px; margin: -12px 0 0; }
-  .nav-barra { padding: 5px 4px; }
-}
-@media (max-width: 360px) {
   .hoy-tres { gap: 6px; }
   .hoy-tres > button, .hoy-tres > div { padding: 8px 6px; }
   .hoy-tres b { font-size: 12px; }
@@ -4340,7 +4296,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '17669b3516';
+window.__VERSION_APP__ = '775e046177';
 
 M["cerradura"] = (function () {
 /**
@@ -9086,7 +9042,6 @@ function pedirArchivo(accept) {
 /** Iconos del menú inferior (trazo, 24×24). */
 const ICONOS = {
   hoy: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
-  mas: '<circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/>',
   vehiculo: '<path d="M5 17h14M6.5 17a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm14 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM4 17v-4l2-5h12l2 5v4M6.5 13h11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   resumen: '<path d="M3 13h6V3H3v10Zm0 8h6v-6H3v6Zm8 0h10V11H11v10Zm0-18v6h10V3H11Z"/>',
   mensual: '<path d="M7 2v3M17 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
@@ -23674,16 +23629,16 @@ const proximos = M["views/proximos"];
  * cabecera, que sí tiene sitio.
  */
 /*
- * Las cuatro primeras son las de la barra de abajo, una pregunta cada una:
- * ¿cómo voy?, ¿en qué se va?, ¿cuánto voy a gastar?, ¿qué debo y cuándo? El
- * resto está en «Más» (el cajón), tal cual era: Resumen y Presupuesto completos
+ * Las cuatro primeras, una pregunta cada una: ¿cómo voy?, ¿en qué se va?,
+ * ¿cuánto voy a gastar?, ¿qué debo y cuándo? Van arriba del cajón. El resto
+ * va debajo, en «Más secciones», tal cual era: Resumen y Presupuesto completos
  * siguen ahí con todo lo que tenían.
  */
 const VISTAS = [
-  { id: 'hoy', titulo: 'Hoy', modulo: hoy, icono: ICONOS.hoy, barra: true },
-  { id: 'mes', titulo: 'Mes', rotulo: 'Este mes', modulo: mes, icono: ICONOS.mensual, barra: true },
-  { id: 'proximos', titulo: 'Próximos', rotulo: 'Próximos meses', modulo: proximos, icono: ICONOS.plan, barra: true },
-  { id: 'tarjetas', titulo: 'Tarjetas', modulo: vistaTarjetas, icono: ICONOS.tarjetas, barra: true },
+  { id: 'hoy', titulo: 'Hoy', modulo: hoy, icono: ICONOS.hoy, principal: true },
+  { id: 'mes', titulo: 'Mes', rotulo: 'Este mes', modulo: mes, icono: ICONOS.mensual, principal: true },
+  { id: 'proximos', titulo: 'Próximos', rotulo: 'Próximos meses', modulo: proximos, icono: ICONOS.plan, principal: true },
+  { id: 'tarjetas', titulo: 'Tarjetas', modulo: vistaTarjetas, icono: ICONOS.tarjetas, principal: true },
   { id: 'resumen', titulo: 'Resumen', rotulo: 'Resumen completo', modulo: resumen, icono: ICONOS.resumen },
   { id: 'plan', titulo: 'Plan', rotulo: 'Presupuesto completo', modulo: plan, icono: ICONOS.plan },
   { id: 'mensual', titulo: 'Categorías', rotulo: 'Categorías por mes', modulo: mensual, icono: ICONOS.mensual },
@@ -23723,40 +23678,22 @@ function pintarEstadoSync() {
 }
 
 /*
- * La barra de abajo: las cuatro preguntas, el «+» en medio y «Más», que abre
- * el cajón con el resto de secciones.
+ * Abajo solo queda el «+». Navegar es cosa del cajón lateral: una barra con
+ * las secciones tapaba lo de abajo de cada pantalla y se comía el ancho.
  *
  * El «+» va dibujado, no escrito: el carácter de texto se apoya en la línea
  * base de la fuente y nunca queda centrado del todo dentro del círculo.
  */
 function pintarNav() {
   const nav = $('#nav');
-  if (!nav.dataset.listo) {
-    const boton = (v) => `<button type="button" class="nav-tab" data-tab="${v.id}">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${v.icono}</svg><span>${esc(v.titulo)}</span></button>`;
-    const barra = VISTAS.filter((v) => v.barra);
-    nav.innerHTML = `<div class="nav-barra">
-      ${barra.slice(0, 2).map(boton).join('')}
-      <button class="nav-mas" id="fab" aria-label="Registrar movimiento">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
-             stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-      </button>
-      ${barra.slice(2).map(boton).join('')}
-      <button type="button" class="nav-tab" data-tab="mas" aria-label="Más secciones">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ICONOS.mas}</svg><span>Más</span></button>
-    </div>`;
-    nav.querySelector('#fab').addEventListener('click', menuRegistro);
-    nav.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => {
-      if (b.dataset.tab === 'mas') menuPrincipal();
-      else irA(b.dataset.tab);
-    }));
-    nav.dataset.listo = 'si';
-  }
-  const enBarra = VISTAS.find((v) => v.id === vistaActual)?.barra;
-  nav.querySelectorAll('[data-tab]').forEach((b) => {
-    const activa = b.dataset.tab === vistaActual || (b.dataset.tab === 'mas' && !enBarra);
-    if (activa) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
-  });
+  if (nav.dataset.listo) return;
+  nav.innerHTML = `
+    <button class="nav-mas" id="fab" aria-label="Registrar movimiento">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+           stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    </button>`;
+  nav.querySelector('#fab').addEventListener('click', menuRegistro);
+  nav.dataset.listo = 'si';
 }
 
 /**
@@ -23826,7 +23763,7 @@ function pintarCajon() {
       </svg>Avisos${pendientes ? '<span class="punto" aria-label="hay avisos"></span>' : ''}</button>
 
     <div class="cajon-rotulo">Secciones</div>
-    ${VISTAS.map((v, i) => `${i === VISTAS.findIndex((x) => !x.barra) ? '<div class="cajon-rotulo">Más</div>' : ''}
+    ${VISTAS.map((v, i) => `${i === VISTAS.findIndex((x) => !x.principal) ? '<div class="cajon-rotulo">Más secciones</div>' : ''}
       <button class="cajon-item" data-vista="${v.id}"
         ${v.id === vistaActual ? 'aria-current="page"' : ''}>
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${v.icono}</svg>
