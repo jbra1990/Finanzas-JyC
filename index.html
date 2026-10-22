@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-031az1gpx8Ecd7MOjSMaKwHPX85s/P7zUYAXEwsj2R4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-VdzkC6RvhPZRcKJPau6qqilUJyj7Oz4c0RqXl4dRcK4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4050,32 +4050,27 @@ dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { 
 /* Con `:not()` para pesar más que la regla de lo que va a la izquierda. */
 .tarjeta > header > .heroe-cab:not(h2):not(.pista) { order: 3; flex: 1 0 100%; margin: 0; padding: 0 16px 4px; }
 
-/* --- La «i» de la cabecera: las explicaciones de la tarjeta, plegadas ---- */
+/* --- La «i» al pie de la tarjeta: las explicaciones, plegadas ------------- */
 .tarjeta:not([data-info="si"]) .texto-plegable { display: none !important; }
-.tarjeta > header > .info-cab:not(h2):not(.pista) {
-  order: -1;
-  flex: none;
-  align-self: flex-start;
+.info-pie { display: flex; justify-content: center; margin: 14px 0 2px; }
+.info-cab {
   display: grid; place-items: center;
-  width: 26px; height: 26px;
-  margin: 4px 0 0 14px;
+  width: 30px; height: 30px;
   padding: 0;
   border-radius: 50%;
   border: 1.5px solid var(--borde-fuerte);
   background: var(--superficie-2);
   color: var(--tinta-2);
-  font: italic 700 13px/1 Georgia, 'Times New Roman', serif;
+  font: italic 700 14px/1 Georgia, 'Times New Roman', serif;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.tarjeta > header > .info-cab[data-nivel="alerta"]:not(h2):not(.pista) { font: 800 14px/1 var(--fuente); color: var(--alerta);
+.info-cab[data-nivel="alerta"] { font: 800 15px/1 var(--fuente); color: var(--alerta);
   border-color: color-mix(in srgb, var(--alerta) 60%, transparent); background: color-mix(in srgb, var(--alerta) 14%, transparent); }
-.tarjeta > header > .info-cab[data-nivel="critico"]:not(h2):not(.pista) { font: 800 14px/1 var(--fuente); color: var(--critico);
+.info-cab[data-nivel="critico"] { font: 800 15px/1 var(--fuente); color: var(--critico);
   border-color: color-mix(in srgb, var(--critico) 60%, transparent); background: color-mix(in srgb, var(--critico) 14%, transparent); }
-.tarjeta > header > .info-cab[aria-expanded="true"]:not(h2):not(.pista) { background: var(--acento-suave); border-color: var(--acento); color: var(--tinta); }
-.tarjeta > header > .info-cab:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
-/* Con la «i» delante, el dato de la izquierda no necesita su sangría entera. */
-.tarjeta > header > .info-cab + .pista { padding-left: 10px; }
+.info-cab[aria-expanded="true"] { background: var(--acento-suave); border-color: var(--acento); color: var(--tinta); }
+.info-cab:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
 
 </style>
 </head>
@@ -4109,7 +4104,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '7ce7be5127';
+window.__VERSION_APP__ = '33a1c2cfa1';
 
 M["cerradura"] = (function () {
 /**
@@ -8776,9 +8771,9 @@ const MARCAS = { critico: '!', alerta: '!', ok: '✓', info: 'i' };
 
 /*
  * Los textos largos que explican una tarjeta. Con los avisos, se esconden
- * detrás de UNA «i» en la cabecera de la tarjeta, a la izquierda del título:
- * un sitio que ya existe y no ocupa una fila más. Si entre ellos hay un aviso
- * de alerta, la «i» pasa a ser un «!» de color, para que no pase inadvertido.
+ * detrás de UNA «i» al pie de la tarjeta, centrada: el mismo sitio en todas.
+ * Si entre ellos hay un aviso de alerta, la «i» pasa a ser un «!» de color,
+ * para que no pase inadvertido.
  */
 const TEXTOS = 'p.pz-sub, p.pz-nota, p.lim-lead, p.lim-sug, p.cm-lead, p.cm-pie';
 /** Un `p.pista` suelto en la tarjeta, de más de esto, es una explicación. */
@@ -8796,8 +8791,9 @@ function plegarEnTarjeta(t) {
   ].filter((m) => propios(m) && !m.classList.contains('texto-plegable'));
   nuevos.forEach((m) => m.classList.add('texto-plegable'));
   const textos = [...t.querySelectorAll('.texto-plegable')].filter((m) => m.closest('.tarjeta') === t);
-  let boton = cab.querySelector(':scope > .info-cab');
-  if (!textos.length) { boton?.remove(); return; }
+  let pie = t.querySelector(':scope > .info-pie');
+  let boton = pie?.querySelector('.info-cab');
+  if (!textos.length) { pie?.remove(); return; }
   const alerta = textos.some((m) => m.matches('.alerta, .critico, p.tope-realismo'));
   const nivel = textos.some((m) => m.matches('.critico')) ? 'critico' : alerta ? 'alerta' : 'info';
   if (!boton) {
@@ -8811,8 +8807,12 @@ function plegarEnTarjeta(t) {
       t.dataset.info = abrir ? 'si' : 'no';
       boton.setAttribute('aria-expanded', String(abrir));
     });
-    cab.prepend(boton);
+    pie = document.createElement('div');
+    pie.className = 'info-pie';
+    pie.append(boton);
   }
+  // Siempre lo último de la tarjeta, aunque se le añada algo después.
+  if (t.lastElementChild !== pie) t.append(pie);
   // Solo si cambia: cada cambio vuelve a despertar al vigilante.
   const marca = nivel === 'info' ? 'i' : '!';
   if (boton.dataset.nivel !== nivel) boton.dataset.nivel = nivel;
