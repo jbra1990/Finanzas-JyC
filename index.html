@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-yO/DvApzb4FgSdVLylX4wuyhG63J4UD4wBsSV45lV8E='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-N44ihndOLK9s7FHdo5JbGfsjwXE3Cg5XovIoymf2y4A='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4078,12 +4078,12 @@ dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { 
 .tarjeta > header > .lim-quien .segmentado button { min-height: 28px; padding: 0 12px; font-size: 12.5px; }
 
 /*
- * Espacio entre tarjetas: el mismo en todas partes, la mitad del de antes.
+ * Espacio entre tarjetas: el mismo en todas partes, 10 px.
  * Las que van en pareja (rejilla) sumaban su margen al hueco de la rejilla y
  * dejaban 28 o 40 px; ahora la rejilla pone el hueco y ellas no.
  */
-#vista > .tarjeta, #vista > .panel, #vista .rejilla > .tarjeta { margin-top: 7px; margin-bottom: 7px; }
-#vista > .rejilla { gap: 7px; margin: 7px 0; }
+#vista > .tarjeta, #vista > .panel, #vista .rejilla > .tarjeta { margin-top: 10px; margin-bottom: 10px; }
+#vista > .rejilla { gap: 10px; margin: 10px 0; }
 #vista > .rejilla > .tarjeta { margin: 0; }
 
 </style>
@@ -4118,7 +4118,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '0144057cca';
+window.__VERSION_APP__ = '24ae23d05c';
 
 M["cerradura"] = (function () {
 /**
