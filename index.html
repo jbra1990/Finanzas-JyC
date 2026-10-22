@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-VdzkC6RvhPZRcKJPau6qqilUJyj7Oz4c0RqXl4dRcK4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-4UpEsIti4/7+1m1qJ7t0V6e79jzeKrktAYj57UElUN4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4052,7 +4052,9 @@ dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { 
 
 /* --- La «i» al pie de la tarjeta: las explicaciones, plegadas ------------- */
 .tarjeta:not([data-info="si"]) .texto-plegable { display: none !important; }
-.info-pie { display: flex; justify-content: center; margin: 14px 0 2px; }
+.info-pie { display: flex; justify-content: flex-start; margin: 8px 0 -4px; }
+/* Dentro de la fila de botones del pie: a la izquierda, los botones a la derecha. */
+.info-cab.en-fila { flex: none !important; margin-right: auto; align-self: center; }
 .info-cab {
   display: grid; place-items: center;
   width: 30px; height: 30px;
@@ -4071,6 +4073,9 @@ dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { 
   border-color: color-mix(in srgb, var(--critico) 60%, transparent); background: color-mix(in srgb, var(--critico) 14%, transparent); }
 .info-cab[aria-expanded="true"] { background: var(--acento-suave); border-color: var(--acento); color: var(--tinta); }
 .info-cab:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+/* El J / C de Límites, en la cabecera: compacto. */
+.tarjeta > header > .lim-quien { margin: 6px 8px 6px 16px; justify-content: flex-start; }
+.tarjeta > header > .lim-quien .segmentado button { min-height: 28px; padding: 0 12px; font-size: 12.5px; }
 
 </style>
 </head>
@@ -4104,7 +4109,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '33a1c2cfa1';
+window.__VERSION_APP__ = '001c3eef98';
 
 M["cerradura"] = (function () {
 /**
@@ -8776,6 +8781,8 @@ const MARCAS = { critico: '!', alerta: '!', ok: '✓', info: 'i' };
  * para que no pase inadvertido.
  */
 const TEXTOS = 'p.pz-sub, p.pz-nota, p.lim-lead, p.lim-sug, p.cm-lead, p.cm-pie';
+/** Las filas de botones con que acaban muchas tarjetas: la «i» se mete en ellas. */
+const FILAS_PIE = '.sueldo-acciones, .topes-pie, .barra-accion, .pz-tabla-btn';
 /** Un `p.pista` suelto en la tarjeta, de más de esto, es una explicación. */
 const PISTA_LARGA = 70;
 
@@ -8792,8 +8799,8 @@ function plegarEnTarjeta(t) {
   nuevos.forEach((m) => m.classList.add('texto-plegable'));
   const textos = [...t.querySelectorAll('.texto-plegable')].filter((m) => m.closest('.tarjeta') === t);
   let pie = t.querySelector(':scope > .info-pie');
-  let boton = pie?.querySelector('.info-cab');
-  if (!textos.length) { pie?.remove(); return; }
+  let boton = [...t.querySelectorAll('.info-cab')].find((x) => x.closest('.tarjeta') === t);
+  if (!textos.length) { boton?.remove(); pie?.remove(); return; }
   const alerta = textos.some((m) => m.matches('.alerta, .critico, p.tope-realismo'));
   const nivel = textos.some((m) => m.matches('.critico')) ? 'critico' : alerta ? 'alerta' : 'info';
   if (!boton) {
@@ -8807,12 +8814,26 @@ function plegarEnTarjeta(t) {
       t.dataset.info = abrir ? 'si' : 'no';
       boton.setAttribute('aria-expanded', String(abrir));
     });
-    pie = document.createElement('div');
-    pie.className = 'info-pie';
-    pie.append(boton);
   }
-  // Siempre lo último de la tarjeta, aunque se le añada algo después.
-  if (t.lastElementChild !== pie) t.append(pie);
+  /*
+   * Abajo a la izquierda. Si la tarjeta acaba en una fila de botones
+   * («Ajustar topes»), va al principio de esa fila y no añade otra; si no,
+   * en una fila propia y corta. Siempre al final, aunque se añada algo luego.
+   */
+  const ultimo = [...t.children].filter((c) => !c.classList.contains('info-pie')).pop();
+  if (ultimo?.matches(FILAS_PIE)) {
+    if (ultimo.firstElementChild !== boton) ultimo.prepend(boton);
+    if (!boton.classList.contains('en-fila')) boton.classList.add('en-fila');
+    pie?.remove();
+  } else {
+    if (!pie) {
+      pie = document.createElement('div');
+      pie.className = 'info-pie';
+    }
+    if (boton.parentElement !== pie) pie.append(boton);
+    if (boton.classList.contains('en-fila')) boton.classList.remove('en-fila');
+    if (t.lastElementChild !== pie) t.append(pie);
+  }
   // Solo si cambia: cada cambio vuelve a despertar al vigilante.
   const marca = nivel === 'info' ? 'i' : '!';
   if (boton.dataset.nivel !== nivel) boton.dataset.nivel = nivel;
@@ -16076,8 +16097,9 @@ const estadoLimites = { quien: 'J', abierta: false };
  */
 function seccionLimites(mes, quien) {
   const L = limitesConsumo(quien, mes);
-  const cab = '<header><h2>Límites de consumo</h2></header>';
-  const selector = '<div class="lim-quien" id="limites-quien"></div>';
+  // El J / C va en la cabecera, a la izquierda del título: sin fila propia.
+  const cab = '<header><h2>Límites de consumo</h2><div class="lim-quien" id="limites-quien"></div></header>';
+  const selector = '';
   if (L.limite <= 0) {
     return `${cab}${selector}<p class="vacio">Sin sueldo de ${esc(quien)} no hay de dónde sacar los límites.
       Apunta el sueldo o escríbelo en «Ajustar sueldo y ahorro».</p>`;
@@ -19429,11 +19451,10 @@ function tarjetaReal({ plan, quien, pagosFijos, suma }) {
   const f0 = plan.filas[0];
   const c0 = cuentaDelMes(f0, quien);
   const queda0 = redondear(c0.sueldo - f0.real);
-  return `<header><h2><span class="pz-num real">1</span>Lo real</h2></header>
+  return `<header><h2><span class="pz-num real">1</span>Lo real</h2><button type="button" class="btn pequeno" data-tabla="real">▦ Tabla</button></header>
     <p class="pz-sub">Lo ya registrado (tarjeta, efectivo y débito) y los <b>pagos fijos</b> que sabes que
       vienen, como la letra de un préstamo. <b>Sin estimaciones.</b> Toca un mes para ver el detalle.
       «En cuentas al cierre» cuenta la tarjeta cuando se paga: el consumo de un mes, al siguiente.</p>
-    <div class="pz-tabla-btn"><button type="button" class="btn pequeno" data-tabla="real">▦ Ver en tabla</button></div>
     <div class="pz-kpis">
       <div><span class="k">En cuentas hoy</span><span class="v">${money(enCuentas)}</span></div>
       <div><span class="k">Real de ${esc(nombreMes(f0.mes).split(' ')[0].toLowerCase())}</span><span class="v">${money(f0.real)}</span></div>
@@ -19576,10 +19597,9 @@ function tarjetaRealSim({ plan, quien, simulados }) {
       <div class="caja-desglose">${detalleSimulado(f)}${detalleReal(f)}</div>
     </details>`;
   });
-  return `<header><h2><span class="pz-num sim">2</span>Simulación</h2></header>
+  return `<header><h2><span class="pz-num sim">2</span>Simulación</h2><button type="button" class="btn pequeno" data-tabla="sim">▦ Tabla</button></header>
     <p class="pz-sub">Lo real (1) más lo que escribes para probar: un repuesto que piensas diferir, un viaje.
       <b>Sin los gastos comunes de la app. Lo simulado no cuenta como real hasta que lo ejecutes.</b></p>
-    <div class="pz-tabla-btn"><button type="button" class="btn pequeno" data-tabla="sim">▦ Ver en tabla</button></div>
     ${listaPlegable('simulados', 'Lo que simulas', simulados.length
     ? `${simulados.length} · ${money(redondear(simulados.filter((r) => r.vigente && !r.cubierto)
       .reduce((t, r) => t + (r.clase === 'plazos' ? (r.restante ?? r.total) : r.clase === 'unico' ? r.monto : r.porMes), 0)))}`
@@ -19641,12 +19661,11 @@ function tarjetaSimulacion({ plan, quien }) {
   });
 
   const totalReal = total(ESCENARIOS[0]);
-  return `<header><h2><span class="pz-num sim">3</span>Comparar</h2></header>
+  return `<header><h2><span class="pz-num sim">3</span>Comparar</h2><button type="button" class="btn pequeno" data-tabla="comparar">▦ Tabla</button></header>
     <p class="pz-sub">Cada mes, tres maneras de verlo: <b>solo lo real</b> (1), lo real <b>+ lo que simulas</b> (2) y
       además <b>+ los gastos comunes</b> que la app calcula por frecuencia (4). Cuánto se aparta cada uno de lo real,
       cuánto queda del sueldo (en verde si llega al ahorro) y cuánto quedaría en cuentas, con los otros ingresos que
       tengas apuntados.</p>
-    <div class="pz-tabla-btn"><button type="button" class="btn pequeno" data-tabla="comparar">▦ Ver en tabla</button></div>
     <div class="pz-comp-fin">
       <span class="k">Al cierre de ${esc(nombreMes(ultimo.mes))} tendrías en cuentas</span>
       ${ESCENARIOS.map((e, k) => `<div class="esc-${e.k}"><span><i class="pz-${e.k}"></i>${e.k === 'real' ? 'Solo lo real' : e.rotulo}</span>
@@ -19895,10 +19914,9 @@ function detalleSimulado(fila) {
 }
 
 function tarjetaComunes({ comunes, suma }) {
-  return `<header><h2><span class="pz-num com">4</span>Comunes</h2></header>
+  return `<header><h2><span class="pz-num com">4</span>Comunes</h2><button type="button" class="btn pequeno" data-tabla="comunes">▦ Tabla</button></header>
     <p class="pz-sub">Lo que la app ve que se repite en tu historial. <b>Puede pasar o no:</b> es una estimación.
       Cuando la compra ocurre, pasa a «Lo real». «Dejar fuera» lo saca de la proyección (3).</p>
-    <div class="pz-tabla-btn"><button type="button" class="btn pequeno" data-tabla="comunes">▦ Ver en tabla</button></div>
 
     ${listaPlegable('comunes', 'Gastos que se repiten', comunes.length
     ? `${comunes.length} · ${money(suma(comunes))} al mes` : 'ninguno',
