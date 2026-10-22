@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-foUG2jRUNY+beGhwyODzswRgbt5m94jIR+sAH+6Rw2U='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LAlN8LSURRC3Wa2Pw/3c43oJQeKfgDvia8Qb7Rkhu5I='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -1034,7 +1034,12 @@ a { color: var(--acento); }
   padding: 0;
   min-height: 46px;
 }
-.tarjeta > header h2 {
+/*
+ * A la izquierda, el dato de contexto («Quedan 9 días», «Últimos 12 meses»).
+ * El TÍTULO va en la pestaña de la esquina (ver `header > h2` más abajo): es
+ * lo que identifica la tarjeta, y la pestaña es lo primero que se ve.
+ */
+.tarjeta > header > .pista {
   /*
    * Base 0, no `auto`. Con `auto` la base es el ancho del TEXTO, así que un
    * rótulo largo pedía más sitio del que había y empujaba la pestaña de la
@@ -1046,15 +1051,18 @@ a { color: var(--acento); }
    */
   flex: 1 1 0;
   min-width: 0;
-  align-self: center;
-  padding: 13px 12px 13px 16px;
-  color: var(--titulo-seccion);
-  font-size: 15px;
+  /* A la altura del título, no centrado en la cabecera. */
+  align-self: flex-start;
+  order: 0;
+  padding: 9px 10px 8px 16px;
+  color: var(--tinta-3);
+  font-size: 12px;
+  font-weight: 560;
   letter-spacing: -0.005em;
   line-height: 1.3;
 }
 
-.tarjeta > header > .pista {
+.tarjeta > header > h2 {
   /*
    * TODAS del mismo tamaño, en todas las secciones. Antes cada pestaña se
    * ajustaba a su texto y, entre las 46 que hay en la app, salían anchos de 59
@@ -1074,7 +1082,11 @@ a { color: var(--acento); }
    * La forma NO se recorta aquí con `clip-path`: recortaría también al
    * `::after`, que es el filete que cuelga por debajo, y lo dejaría a medias.
    */
-  flex: 0 0 var(--pista-ancho);
+  /* Lo que mida el título, sin pasar de dos tercios: uno largo se parte en dos líneas. */
+  flex: 0 1 auto;
+  max-width: 68%;
+  min-width: var(--pista-ancho-min);
+  order: 2;
   isolation: isolate;
   align-self: flex-start;
   position: relative;
@@ -1096,11 +1108,11 @@ a { color: var(--acento); }
    * letra baja a 11 px y los rótulos que no entraban se reescribieron más
    * cortos.
    */
-  height: var(--pista-alto);
+  min-height: var(--pista-alto);
   /* Red de seguridad: si algún día vuelve a partirse en dos líneas, la pestaña
      se queda igual en la esquina derecha en vez de irse al otro lado. */
   margin: 0 0 0 auto;
-  padding: 0 15px;
+  padding: 7px 16px 7px 6px;
   border-radius: 0;
   background: transparent;
   /*
@@ -1113,14 +1125,14 @@ a { color: var(--acento); }
    * estuvo: ahí sigue la curva del filete y un corte recto delataría que son
    * dos piezas.
    */
-  /* Apagado: es el dato de contexto, no debe competir con el rótulo. */
-  color: var(--tinta-3);
-  font-size: 11px;
-  font-weight: 570;
+  /* El título: el color de los títulos de sección, en la pestaña. */
+  color: var(--titulo-seccion);
+  font-size: 14px;
+  font-weight: 660;
   letter-spacing: -0.005em;
-  line-height: 1.2;
+  line-height: 1.25;
   text-align: right;
-  white-space: nowrap;
+  white-space: normal;
   /*
    * NO se fuerza a una línea. Se intentó, para que todas las pestañas midieran
    * exactamente igual, y el resultado fue que 21 de los 40 rótulos se cortaban
@@ -1153,7 +1165,8 @@ a { color: var(--acento); }
   /* `flex: none` impedía encoger, y con dos de estos el segundo se salía. */
   flex: 0 1 auto;
   min-width: 0;
-  margin-right: 16px;
+  order: 1;
+  margin: 8px 8px 8px 16px;
 }
 
 /*
@@ -1167,23 +1180,25 @@ a { color: var(--acento); }
 .tarjeta[data-plegable] > header:focus-visible {
   outline: 2px solid var(--acento); outline-offset: -2px; border-radius: var(--radio-xl);
 }
-.tarjeta[data-plegable] > header h2 { display: flex; align-items: center; gap: 9px; }
+.tarjeta[data-plegable] > header h2 { display: flex; align-items: center; justify-content: flex-end; }
 /* La flecha: abajo plegada, arriba abierta. */
-.tarjeta[data-plegable] > header h2::before {
+.tarjeta[data-plegable] > header::before {
   content: '';
+  order: -1;
+  align-self: center;
   flex: none;
   width: 7px; height: 7px;
-  margin: -3px 1px 0 2px;
+  margin: -3px 0 0 18px;
   border-right: 2px solid var(--tinta-3);
   border-bottom: 2px solid var(--tinta-3);
   transform: rotate(45deg);
   transition: transform 0.18s ease, margin 0.18s ease;
 }
-.tarjeta[data-plegada="no"] > header h2::before { transform: rotate(-135deg); margin-top: 4px; }
+.tarjeta[data-plegada="no"] > header::before { transform: rotate(-135deg); margin-top: 4px; }
 .tarjeta[data-plegada="si"] { padding-bottom: 0; }
 .tarjeta[data-plegada="si"] > header { margin-bottom: 0; }
 /* El filete que baja de la pestaña hacia el cuerpo: sin cuerpo, cuelga en el aire. */
-.tarjeta[data-plegada="si"] > header > .pista::after { display: none; }
+.tarjeta[data-plegada="si"] > header > h2::after { display: none; }
 .tarjeta[data-plegada="si"] > :not(header) {
   height: 0 !important;
   min-height: 0 !important;
@@ -1194,7 +1209,7 @@ a { color: var(--acento); }
   visibility: hidden !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  .tarjeta[data-plegable] > header h2::before { transition: none; }
+  .tarjeta[data-plegable] > header::before { transition: none; }
 }
 
 .rejilla { display: grid; gap: 12px; }
@@ -3488,6 +3503,8 @@ body.velada .cabecera { filter: blur(18px); }
    * la vez cuando la pantalla no da.
    */
   --pista-ancho: min(184px, 49%);
+  /* La pestaña con el título: como poco esto, aunque el título sea corto. */
+  --pista-ancho-min: min(150px, 45%);
   --pista-alto: 31px;
   /* Ancho de la cuña curva que entra por la izquierda de la pestaña. */
   --cuna: calc(31px * 1.42);
@@ -3522,8 +3539,8 @@ body.velada .cabecera { filter: blur(18px); }
  * y eso recortaba también estos dos, que por definición viven FUERA de su caja.
  * La esquina salía entonces en ángulo recto, sin curva ninguna.
  */
-.tarjeta > header > .pista::before,
-.tarjeta > header > .pista::after {
+.tarjeta > header > h2::before,
+.tarjeta > header > h2::after {
   content: '';
   position: absolute;
   pointer-events: none;
@@ -3531,7 +3548,7 @@ body.velada .cabecera { filter: blur(18px); }
 
 /* La pieza entera: el rectángulo de la pestaña más la cuña curva que entra
    por la izquierda, de un solo trazo. Detrás del texto, nunca encima. */
-.tarjeta > header > .pista::before {
+.tarjeta > header > h2::before {
   z-index: -1;
   top: 0;
   right: 0;
@@ -3592,7 +3609,7 @@ body.velada .cabecera { filter: blur(18px); }
  * alto fijo del encabezado se quedaba en 32 px y, con un rótulo de dos
  * líneas, caía DENTRO de la pestaña y le pintaba encima a la segunda línea.
  */
-.tarjeta > header > .pista::after {
+.tarjeta > header > h2::after {
   top: 100%;
   right: 0;
   width: var(--filete-der);
@@ -4022,6 +4039,17 @@ dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { 
 .lim-desplegable .pz-lista-res b.mal { color: var(--critico); }
 .lim-desplegable .pz-lista-res b.cerca { color: var(--alerta); }
 
+
+/*
+ * La pestaña con el título se queda SIEMPRE arriba a la derecha: lo de la
+ * izquierda (el dato, un botón) encoge y parte su texto antes que empujarla a
+ * otra línea. La cifra grande de Año va debajo, a todo el ancho.
+ */
+.tarjeta > header { flex-wrap: nowrap; }
+.tarjeta > header:has(> .heroe-cab) { flex-wrap: wrap; }
+/* Con `:not()` para pesar más que la regla de lo que va a la izquierda. */
+.tarjeta > header > .heroe-cab:not(h2):not(.pista) { order: 3; flex: 1 0 100%; margin: 0; padding: 0 16px 4px; }
+
 </style>
 </head>
 <body>
@@ -4054,7 +4082,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '480cb4161c';
+window.__VERSION_APP__ = '9c26afd098';
 
 M["cerradura"] = (function () {
 /**
@@ -15337,7 +15365,7 @@ function render(raiz, { irA }) {
     </section>
 
     <section class="tarjeta">
-      <header><h2>Acumulado de todos los registros</h2>
+      <header><h2>Acumulado histórico</h2>
         <button class="btn pequeno" data-ir="anual">Ver año completo</button></header>
       <div class="rejilla kpis">
         <div class="kpi"><div class="etq">Ingresos</div>
@@ -15670,8 +15698,8 @@ function seccionTopes(mes, usuario) {
   const dias = filas.length ? Math.max(0, Math.round((1 - filas[0].corrido) * 30.4)) : 0;
   const esquina = !enCurso ? 'Mes cerrado'
     : dias === 1 ? 'Queda 1 día' : `Quedan ${dias} días`;
-  const cab = `<header><h2>Topes de ${esc(nombreMes(mes))}</h2>
-    <span class="pista">${filas.length ? esc(esquina) : 'Cuánto queda'}</span></header>`;
+  const cab = `<header><h2>Topes de gasto del mes</h2>
+    <span class="pista">${esc(nombreMes(mes))}${filas.length ? ` · ${esc(esquina.toLowerCase())}` : ''}</span></header>`;
 
   if (!filas.length) {
     return `${cab}
@@ -15807,8 +15835,8 @@ function seccionRepartoMes(mes) {
       + (f.partes.find((p) => p.usuario === u)?.monto || 0), 0)),
   }));
 
-  const cab = `<header><h2>Tarjetas de ${esc(nombreMes(mes))}</h2>
-    <span class="pista">Cada uno puso</span></header>`;
+  const cab = `<header><h2>Tarjetas por persona</h2>
+    <span class="pista">${esc(nombreMes(mes))}</span></header>`;
 
   if (!total) {
     return `${cab}<p class="vacio">Todavía no hay consumo cargado en este mes.</p>`;
@@ -15924,11 +15952,11 @@ function seccionProximos(mes) {
     });
 
   if (!filas.length) {
-    return '<header><h2>Próximos movimientos</h2></header><p class="vacio">Nada pendiente por ahora.</p>';
+    return '<header><h2>Próximos pagos</h2></header><p class="vacio">Nada pendiente por ahora.</p>';
   }
   // Cada uno en su ficha: el tipo y la fecha en la cabecera, de qué se trata en
   // medio y las dos cifras que lo resumen en la franja de abajo.
-  return `<header><h2>Próximos movimientos</h2></header>
+  return `<header><h2>Próximos pagos</h2></header>
     ${filas.map((f) => `
       <div class="ficha">
         <div class="ficha-meta">${esc(f.cuando)}</div>
@@ -16585,19 +16613,18 @@ function render(raiz) {
   raiz.innerHTML = `
     <section class="tarjeta">
       <header>
+        <h2>Resumen del año</h2>
         <div class="heroe-cab">
           <span class="pista">Gasto total ${esc(estado.año)}${esc(alcance)}</span>
           <div class="heroe">${moneyHTML(gastos)}</div>
           <span class="pista">Media ${money(mesesConGasto ? gastos / mesesConGasto : 0)} al mes</span>
         </div>
-        <div class="filtros" style="margin:0">
-          <div class="campo" style="flex:0 0 auto">
-            <label for="a-anio">Año</label>
-            <select id="a-anio">${opciones(años, estado.año)}</select>
-          </div>
-        </div>
       </header>
       <div class="filtros">
+        <div class="campo" style="flex:0 0 auto">
+          <label for="a-anio">Año</label>
+          <select id="a-anio">${opciones(años, estado.año)}</select>
+        </div>
         <div class="campo" style="flex:0 0 auto"><label>Usuario</label><div id="seg-usuario"></div></div>
         <div class="campo" style="flex:0 0 auto"><label for="a-tarjeta">Tarjeta</label>
           <select id="a-tarjeta">
@@ -16622,7 +16649,7 @@ function render(raiz) {
     </section>
 
     <section class="tarjeta">
-      <header><h2>Ingresos y gastos mes a mes</h2><span class="pista">${esc(estado.año)}</span></header>
+      <header><h2>Ingresos y gastos</h2><span class="pista">${esc(estado.año)} · mes a mes</span></header>
       <div id="g-meses"></div>
     </section>
 
@@ -17309,11 +17336,11 @@ function render(raiz) {
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Pagos por mes</h2><span class="pista">Últimos 12 meses</span></header>
+        <header><h2>Pagos de la tarjeta por mes</h2><span class="pista">Últimos 12 meses</span></header>
         <div id="g-meses"></div>
       </div>
       <div class="tarjeta">
-        <header><h2>Categorías del mes</h2><span class="pista">${esc(nombreMes(mes))}</span></header>
+        <header><h2>Consumo por categoría</h2><span class="pista">${esc(nombreMes(mes))}</span></header>
         <div id="g-dona"></div>
       </div>
     </section>
@@ -17583,7 +17610,7 @@ function seccionComprometido(t, usuario) {
   const filas = comprometidoDetalle(t, usuario);
   // El rótulo de la esquina cabe en una línea de unos 140 px: más largo, la
   // pestaña se estira y desencaja la cabecera en pantallas de 320.
-  const cab = `<header><h2>Ya comprometido</h2>
+  const cab = `<header><h2>Cuotas ya comprometidas</h2>
     <span class="pista">Próximos meses</span></header>`;
 
   const total = redondear(filas.reduce((s, f) => s + f.total, 0));
@@ -18584,7 +18611,7 @@ function render(raiz) {
     </section>
 
     <section class="tarjeta">
-      <header><h2>Excel</h2><span class="pista">Importar y exportar</span></header>
+      <header><h2>Importar y exportar Excel</h2><span class="pista">Libro .xlsx</span></header>
       <p class="pista" style="margin:0 0 10px">
         Puedes cargar tu <strong>libro de tarjetas de siempre</strong> —el de las
         hojas por banco con las columnas de mes— y la app lo convierte en gastos
@@ -18675,7 +18702,7 @@ function render(raiz) {
     </section>
 
     <section class="tarjeta">
-      <header><h2>Ajustes</h2></header>
+      <header><h2>Tema y usuarios</h2></header>
       <div class="filtros">
         <div class="campo"><label for="s-tema">Tema</label>
           <select id="s-tema">${opciones([
@@ -19124,7 +19151,7 @@ function render(raiz, { irA } = {}) {
 
     ${descartadas.length || caducadas.length || irregulares.length ? `
       <section class="tarjeta" id="pz-archivo">
-        <header><h2>Archivo</h2>
+        <header><h2>Archivo de gastos</h2>
           <span class="pista">No cuenta · ${descartadas.length + caducadas.length + irregulares.length}</span></header>
         <p class="pz-sub">Nada de lo que hay aquí suma en Lo real, Simulación ni Comunes:
           es para consultar.</p>
@@ -21542,7 +21569,7 @@ function resultado({
           <td class="acumulado">${money(total)}</td></tr></tfoot>
       </table></div>` : ''}
 
-    <header><h2>Por categoría</h2>
+    <header><h2>Gasto por categoría</h2>
       <span class="pista">Toca para el detalle</span></header>
     ${porCat.map(([c, v]) => {
     // Cada categoría lleva dentro sus propios movimientos, del más caro al
@@ -21743,7 +21770,7 @@ function render(raiz) {
     ${bloqueLecturas()}
 
     <section class="tarjeta" id="veh-toca">
-      <header><h2>Qué toca</h2><span class="pista">Por kilómetros</span></header>
+      <header><h2>Mantenimiento que toca</h2><span class="pista">Por kilómetros</span></header>
       ${bloqueQueToca(estados, pendientes, odometro, ritmo)}
     </section>
 
@@ -21752,7 +21779,7 @@ function render(raiz) {
     </section>
 
     <section class="tarjeta">
-      <header><h2>Lo que se le ha hecho</h2><span class="pista">Todo el historial</span></header>
+      <header><h2>Historial del carro</h2><span class="pista">Todo el historial</span></header>
       ${listaEventos(eventos)}
     </section>`;
 
@@ -22155,7 +22182,7 @@ function seccionPresupuesto() {
     .sort((a, b) => a.fechaProxima.localeCompare(b.fechaProxima));
 
   if (!p.filas.length && !luego.length) {
-    return `<header><h2>Lo que viene</h2></header>
+    return `<header><h2>Gastos del carro por venir</h2></header>
       <p class="vacio">Nada previsto en los próximos doce meses. En cuanto haya
         más historial —o pongas el odómetro al día— aquí sale qué toca, cuándo y
         cuánto conviene apartar.</p>`;
@@ -22166,7 +22193,7 @@ function seccionPresupuesto() {
   const alMes = redondear(p.total / 12);
 
   return `
-    <header><h2>Lo que viene</h2><span class="pista">Doce meses</span></header>
+    <header><h2>Gastos del carro por venir</h2><span class="pista">Doce meses</span></header>
 
     ${p.filas.length ? `
       <div class="panel-datos veh-total">
