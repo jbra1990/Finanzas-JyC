@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LAlN8LSURRC3Wa2Pw/3c43oJQeKfgDvia8Qb7Rkhu5I='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-031az1gpx8Ecd7MOjSMaKwHPX85s/P7zUYAXEwsj2R4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4050,6 +4050,33 @@ dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { 
 /* Con `:not()` para pesar más que la regla de lo que va a la izquierda. */
 .tarjeta > header > .heroe-cab:not(h2):not(.pista) { order: 3; flex: 1 0 100%; margin: 0; padding: 0 16px 4px; }
 
+/* --- La «i» de la cabecera: las explicaciones de la tarjeta, plegadas ---- */
+.tarjeta:not([data-info="si"]) .texto-plegable { display: none !important; }
+.tarjeta > header > .info-cab:not(h2):not(.pista) {
+  order: -1;
+  flex: none;
+  align-self: flex-start;
+  display: grid; place-items: center;
+  width: 26px; height: 26px;
+  margin: 4px 0 0 14px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--borde-fuerte);
+  background: var(--superficie-2);
+  color: var(--tinta-2);
+  font: italic 700 13px/1 Georgia, 'Times New Roman', serif;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.tarjeta > header > .info-cab[data-nivel="alerta"]:not(h2):not(.pista) { font: 800 14px/1 var(--fuente); color: var(--alerta);
+  border-color: color-mix(in srgb, var(--alerta) 60%, transparent); background: color-mix(in srgb, var(--alerta) 14%, transparent); }
+.tarjeta > header > .info-cab[data-nivel="critico"]:not(h2):not(.pista) { font: 800 14px/1 var(--fuente); color: var(--critico);
+  border-color: color-mix(in srgb, var(--critico) 60%, transparent); background: color-mix(in srgb, var(--critico) 14%, transparent); }
+.tarjeta > header > .info-cab[aria-expanded="true"]:not(h2):not(.pista) { background: var(--acento-suave); border-color: var(--acento); color: var(--tinta); }
+.tarjeta > header > .info-cab:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+/* Con la «i» delante, el dato de la izquierda no necesita su sangría entera. */
+.tarjeta > header > .info-cab + .pista { padding-left: 10px; }
+
 </style>
 </head>
 <body>
@@ -4082,7 +4109,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '9c26afd098';
+window.__VERSION_APP__ = '7ce7be5127';
 
 M["cerradura"] = (function () {
 /**
@@ -8747,9 +8774,60 @@ function avisoInfo(html) {
 const MENSAJES = 'div.aviso, p.tope-realismo, .tope-comprometido';
 const MARCAS = { critico: '!', alerta: '!', ok: '✓', info: 'i' };
 
+/*
+ * Los textos largos que explican una tarjeta. Con los avisos, se esconden
+ * detrás de UNA «i» en la cabecera de la tarjeta, a la izquierda del título:
+ * un sitio que ya existe y no ocupa una fila más. Si entre ellos hay un aviso
+ * de alerta, la «i» pasa a ser un «!» de color, para que no pase inadvertido.
+ */
+const TEXTOS = 'p.pz-sub, p.pz-nota, p.lim-lead, p.lim-sug, p.cm-lead, p.cm-pie';
+/** Un `p.pista` suelto en la tarjeta, de más de esto, es una explicación. */
+const PISTA_LARGA = 70;
+
+function plegarEnTarjeta(t) {
+  const cab = t.querySelector(':scope > header');
+  if (!cab || t.closest('dialog')) return;
+  // Lo que lleva un botón pide hacer algo: se queda a la vista (o en su propio círculo).
+  const propios = (m) => m.closest('.tarjeta') === t && !m.closest('header, details, dialog, form')
+    && !m.matches('[role="alert"]') && !m.querySelector('button, input, select, a');
+  const nuevos = [
+    ...t.querySelectorAll(`${MENSAJES}, ${TEXTOS}`),
+    ...[...t.querySelectorAll('p.pista')].filter((p) => p.textContent.trim().length > PISTA_LARGA),
+  ].filter((m) => propios(m) && !m.classList.contains('texto-plegable'));
+  nuevos.forEach((m) => m.classList.add('texto-plegable'));
+  const textos = [...t.querySelectorAll('.texto-plegable')].filter((m) => m.closest('.tarjeta') === t);
+  let boton = cab.querySelector(':scope > .info-cab');
+  if (!textos.length) { boton?.remove(); return; }
+  const alerta = textos.some((m) => m.matches('.alerta, .critico, p.tope-realismo'));
+  const nivel = textos.some((m) => m.matches('.critico')) ? 'critico' : alerta ? 'alerta' : 'info';
+  if (!boton) {
+    boton = document.createElement('button');
+    boton.type = 'button';
+    boton.className = 'info-cab';
+    // Dentro de una cabecera que pliega la tarjeta, tocar la «i» no la pliega.
+    boton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const abrir = t.dataset.info !== 'si';
+      t.dataset.info = abrir ? 'si' : 'no';
+      boton.setAttribute('aria-expanded', String(abrir));
+    });
+    cab.prepend(boton);
+  }
+  // Solo si cambia: cada cambio vuelve a despertar al vigilante.
+  const marca = nivel === 'info' ? 'i' : '!';
+  if (boton.dataset.nivel !== nivel) boton.dataset.nivel = nivel;
+  if (boton.textContent !== marca) boton.textContent = marca;
+  const etiqueta = nivel === 'info' ? 'Ver la explicación' : 'Ver el aviso';
+  if (boton.getAttribute('aria-label') !== etiqueta) boton.setAttribute('aria-label', etiqueta);
+  const abierta = String(t.dataset.info === 'si');
+  if (boton.getAttribute('aria-expanded') !== abierta) boton.setAttribute('aria-expanded', abierta);
+}
+
 function plegarMensajes(raiz) {
+  raiz.querySelectorAll('.tarjeta').forEach(plegarEnTarjeta);
   raiz.querySelectorAll(MENSAJES).forEach((m) => {
-    if (m.closest('.mensaje-plegado, dialog') || m.matches('[role="alert"]')) return;
+    if (m.closest('.mensaje-plegado, dialog') || m.matches('[role="alert"]')
+      || m.classList.contains('texto-plegable')) return;
     const nivel = ['critico', 'alerta', 'ok'].find((n) => m.classList.contains(n)) || 'info';
     const plegado = document.createElement('details');
     plegado.className = `aviso-info mensaje-plegado nivel-${nivel}`;
@@ -15334,11 +15412,11 @@ function render(raiz, { irA }) {
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Cupos de las tarjetas</h2><span class="pista">Cupo utilizado</span></header>
+        <header><h2>Cupos de las tarjetas</h2></header>
         <div id="cupos"></div>
       </div>
       <div class="tarjeta">
-        <header><h2>Patrimonio</h2><span class="pista">Hoy</span></header>
+        <header><h2>Patrimonio</h2></header>
         <div class="rejilla kpis">
           <div class="kpi"><div class="etq">En cuentas</div>
             <div class="valor">${money(ahorro)}</div></div>
@@ -15355,11 +15433,11 @@ function render(raiz, { irA }) {
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Gasto por categoría</h2><span class="pista">${esc(nombreMes(mes))}</span></header>
+        <header><h2>Gasto por categoría</h2></header>
         <div id="g-dona"></div>
       </div>
       <div class="tarjeta">
-        <header><h2>Ingresos vs. gastos</h2><span class="pista">Últimos 12 meses</span></header>
+        <header><h2>Ingresos vs. gastos</h2></header>
         <div id="g-barras"></div>
       </div>
     </section>
@@ -15505,8 +15583,7 @@ function render(raiz, { irA }) {
  */
 function seccionSueldo(mes, usuario) {
   const c = cuentaDelSueldo(mes, usuario);
-  const cab = `<header><h2>Sueldo de ${esc(usuario)}</h2>
-    <span class="pista">Ahorro ${c.pct} %${c.sueldo > 0 ? ` · ${money(c.ahorro)}` : ''}</span></header>`;
+  const cab = `<header><h2>Sueldo de ${esc(usuario)}</h2></header>`;
 
   if (c.sueldo <= 0) {
     return `${cab}<p class="vacio">No hay sueldo de ${esc(usuario)} en ${esc(nombreMes(mes))}
@@ -15699,7 +15776,7 @@ function seccionTopes(mes, usuario) {
   const esquina = !enCurso ? 'Mes cerrado'
     : dias === 1 ? 'Queda 1 día' : `Quedan ${dias} días`;
   const cab = `<header><h2>Topes de gasto del mes</h2>
-    <span class="pista">${esc(nombreMes(mes))}${filas.length ? ` · ${esc(esquina.toLowerCase())}` : ''}</span></header>`;
+    ${filas.length ? `<span class="pista">${esc(esquina)}</span>` : ''}</header>`;
 
   if (!filas.length) {
     return `${cab}
@@ -15835,8 +15912,7 @@ function seccionRepartoMes(mes) {
       + (f.partes.find((p) => p.usuario === u)?.monto || 0), 0)),
   }));
 
-  const cab = `<header><h2>Tarjetas por persona</h2>
-    <span class="pista">${esc(nombreMes(mes))}</span></header>`;
+  const cab = '<header><h2>Tarjetas por persona</h2></header>';
 
   if (!total) {
     return `${cab}<p class="vacio">Todavía no hay consumo cargado en este mes.</p>`;
@@ -16000,8 +16076,7 @@ const estadoLimites = { quien: 'J', abierta: false };
  */
 function seccionLimites(mes, quien) {
   const L = limitesConsumo(quien, mes);
-  const cab = `<header><h2>Límites de consumo</h2>
-    <span class="pista">${L.avisos.length ? `${L.avisos.length} ${L.avisos.length === 1 ? 'aviso' : 'avisos'}` : 'Del día a día'}</span></header>`;
+  const cab = '<header><h2>Límites de consumo</h2></header>';
   const selector = '<div class="lim-quien" id="limites-quien"></div>';
   if (L.limite <= 0) {
     return `${cab}${selector}<p class="vacio">Sin sueldo de ${esc(quien)} no hay de dónde sacar los límites.
@@ -16117,9 +16192,7 @@ function formLimites(mes, quien, alTerminar) {
  */
 function seccionCombustible(filtros) {
   const r = recorridoCombustible(filtros);
-  const cab = `<header><h2>Combustible y kilómetros</h2>
-    <span class="pista">${r.km > 0
-    ? `${money(r.porKm)} por km` : 'Sin recorrido medido'}</span></header>`;
+  const cab = '<header><h2>Combustible y kilómetros</h2></header>';
 
   if (!r.repostajes) {
     return `${cab}<p class="vacio">Todavía no hay gastos de combustible registrados.
@@ -16272,7 +16345,6 @@ function render(raiz) {
     <section class="tarjeta">
       <header>
         <h2>Filtros</h2>
-        <span class="pista">${meses.length} ${meses.length === 1 ? 'mes' : 'meses'}</span>
       </header>
       <div class="filtros">
         <div class="campo"><label for="f-desde">Desde</label>
@@ -16311,11 +16383,11 @@ function render(raiz) {
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Reparto por categoría</h2><span class="pista">Periodo filtrado</span></header>
+        <header><h2>Reparto por categoría</h2></header>
         <div id="g-dona"></div>
       </div>
       <div class="tarjeta">
-        <header><h2>Evolución mensual</h2><span class="pista">Ingresos vs. gastos</span></header>
+        <header><h2>Evolución mensual</h2></header>
         <div id="g-col"></div>
       </div>
     </section>
@@ -16330,11 +16402,11 @@ function render(raiz) {
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Ranking de gasto</h2><span class="pista">Todas</span></header>
+        <header><h2>Ranking de gasto</h2></header>
         <div id="g-rank"></div>
       </div>
       <div class="tarjeta">
-        <header><h2>Reparto J / C</h2><span class="pista">Periodo filtrado</span></header>
+        <header><h2>Reparto J / C</h2></header>
         <div id="g-usuarios"></div>
       </div>
     </section>
@@ -16649,39 +16721,39 @@ function render(raiz) {
     </section>
 
     <section class="tarjeta">
-      <header><h2>Ingresos y gastos</h2><span class="pista">${esc(estado.año)} · mes a mes</span></header>
+      <header><h2>Ingresos y gastos</h2></header>
       <div id="g-meses"></div>
     </section>
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Composición del gasto</h2><span class="pista">Principales</span></header>
+        <header><h2>Composición del gasto</h2></header>
         <div id="g-apilado"></div>
       </div>
       <div class="tarjeta">
-        <header><h2>Acumulado del año</h2><span class="pista">Corrido mes a mes</span></header>
+        <header><h2>Acumulado del año</h2></header>
         <div id="g-acum"></div>
       </div>
     </section>
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Reparto por categoría</h2><span class="pista">${esc(estado.año)}</span></header>
+        <header><h2>Reparto por categoría</h2></header>
         <div id="g-dona"></div>
       </div>
       <div class="tarjeta">
-        <header><h2>Ranking anual</h2><span class="pista">Todas</span></header>
+        <header><h2>Ranking anual</h2></header>
         <div id="g-rank"></div>
       </div>
     </section>
 
     <section class="tarjeta">
-      <header><h2>Cuadro anual</h2><span class="pista">Categorías × meses</span></header>
+      <header><h2>Cuadro anual</h2></header>
       <div class="tabla-scroll">${tablaAnual(matriz, serie)}</div>
     </section>
 
     <section class="tarjeta">
-      <header><h2>Reparto J / C</h2><span class="pista">${esc(estado.año)}</span></header>
+      <header><h2>Reparto J / C</h2></header>
       <div id="g-usuarios"></div>
     </section>`;
 
@@ -16823,11 +16895,11 @@ function render(raiz) {
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Reparto del ahorro</h2><span class="pista">Por cuenta</span></header>
+        <header><h2>Reparto del ahorro</h2></header>
         <div id="g-cuentas"></div>
       </div>
       <div class="tarjeta">
-        <header><h2>Evolución del ahorro</h2><span class="pista">Saldo al cierre de cada mes</span></header>
+        <header><h2>Evolución del ahorro</h2></header>
         <div id="g-evolucion"></div>
       </div>
     </section>
@@ -16859,8 +16931,7 @@ function render(raiz) {
     </section>
 
     <section class="tarjeta">
-      <header><h2>Movimientos y transacciones</h2>
-        <span class="pista">Pagos y traspasos</span></header>
+      <header><h2>Movimientos y transacciones</h2></header>
       <div id="lista-movs"></div>
     </section>`;
 
@@ -17306,8 +17377,7 @@ function render(raiz) {
     </section>
 
     <section class="tarjeta">
-      <header><h2>Cupo de ${esc(t.nombre)}</h2>
-        <span class="pista">Todos los meses</span></header>
+      <header><h2>Cupo de ${esc(t.nombre)}</h2></header>
       <div id="cupo"></div>
       <div class="rejilla kpis">
         <div class="kpi"><div class="etq">Cupo utilizado</div>
@@ -17336,11 +17406,11 @@ function render(raiz) {
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Pagos de la tarjeta por mes</h2><span class="pista">Últimos 12 meses</span></header>
+        <header><h2>Pagos de la tarjeta por mes</h2></header>
         <div id="g-meses"></div>
       </div>
       <div class="tarjeta">
-        <header><h2>Consumo por categoría</h2><span class="pista">${esc(nombreMes(mes))}</span></header>
+        <header><h2>Consumo por categoría</h2></header>
         <div id="g-dona"></div>
       </div>
     </section>
@@ -17348,8 +17418,7 @@ function render(raiz) {
     <section class="tarjeta" id="comprometido"></section>
 
     <section class="tarjeta">
-      <header><h2>Diferidos vigentes</h2>
-        <span class="pista">Cuotas por pagar</span></header>
+      <header><h2>Diferidos vigentes</h2></header>
       <div id="diferidos"></div>
     </section>
 
@@ -17610,8 +17679,7 @@ function seccionComprometido(t, usuario) {
   const filas = comprometidoDetalle(t, usuario);
   // El rótulo de la esquina cabe en una línea de unos 140 px: más largo, la
   // pestaña se estira y desencaja la cabecera en pantallas de 320.
-  const cab = `<header><h2>Cuotas ya comprometidas</h2>
-    <span class="pista">Próximos meses</span></header>`;
+  const cab = `<header><h2>Cuotas ya comprometidas</h2></header>`;
 
   const total = redondear(filas.reduce((s, f) => s + f.total, 0));
   const porPagarDif = redondear(filas.reduce((s, f) => s + f.dif, 0));
@@ -18124,8 +18192,7 @@ function render(raiz) {
         Liquídalas para que el capital y el interés entren a la cuenta.</span></div>` : ''}
 
     <section class="tarjeta">
-      <header><h2>Calculadora de póliza</h2>
-        <span class="pista">Simula antes</span></header>
+      <header><h2>Calculadora de póliza</h2></header>
       <div class="filtros">
         <div class="campo"><label for="c-capital">Capital</label>
           <input id="c-capital" type="text" value="5000" inputmode="decimal"></div>
@@ -18149,22 +18216,22 @@ function render(raiz) {
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Reparto por institución</h2><span class="pista">Capital activo</span></header>
+        <header><h2>Reparto por institución</h2></header>
         <div id="g-inst"></div>
       </div>
       <div class="tarjeta">
-        <header><h2>Interés esperado</h2><span class="pista">Por póliza</span></header>
+        <header><h2>Interés esperado</h2></header>
         <div id="g-int"></div>
       </div>
     </section>
 
     <section class="tarjeta">
-      <header><h2>Pólizas activas</h2><span class="pista">Por vencimiento</span></header>
+      <header><h2>Pólizas activas</h2></header>
       <div id="lista-activas"></div>
     </section>
 
     <section class="tarjeta">
-      <header><h2>Historial</h2><span class="pista">Pólizas liquidadas</span></header>
+      <header><h2>Pólizas liquidadas</h2></header>
       <div id="lista-hist"></div>
     </section>`;
 
@@ -18513,7 +18580,7 @@ function render(raiz) {
       <header><h2>Ajustes de datos</h2>
         <span class="pista">Versión ${esc(window.__VERSION_APP__ || 'en desarrollo')}</span></header>
       <p class="pista" style="margin:0 0 10px">${pendientesAj
-    ? `Hay <strong>${pendientesAj}</strong> ${pendientesAj === 1 ? 'ajuste' : 'ajustes'} de datos por revisar. No se toca nada hasta que pulses «Aplicar».`
+    ? `Hay <strong>${pendientesAj}</strong> ${pendientesAj === 1 ? 'ajuste' : 'ajustes'} de datos por revisar.`
     : 'No hay ajustes de datos pendientes.'}</p>
       <div class="filtros"><button class="btn${pendientesAj ? ' primario' : ''}" id="btn-ajustes-datos"${pendientesAj ? '' : ' disabled'}>
         Ver ajustes pendientes</button></div>
@@ -18611,7 +18678,7 @@ function render(raiz) {
     </section>
 
     <section class="tarjeta">
-      <header><h2>Importar y exportar Excel</h2><span class="pista">Libro .xlsx</span></header>
+      <header><h2>Importar y exportar Excel</h2></header>
       <p class="pista" style="margin:0 0 10px">
         Puedes cargar tu <strong>libro de tarjetas de siempre</strong> —el de las
         hojas por banco con las columnas de mes— y la app lo convierte en gastos
@@ -18628,7 +18695,7 @@ function render(raiz) {
     </section>
 
     <section class="tarjeta">
-      <header><h2>Respaldo completo</h2><span class="pista">Archivo JSON</span></header>
+      <header><h2>Respaldo completo</h2></header>
       <div class="filtros">
         <button class="btn" id="btn-exp-json">⬇ Descargar respaldo</button>
         <button class="btn" id="btn-imp-json">⬆ Restaurar respaldo</button>
@@ -19362,7 +19429,7 @@ function tarjetaReal({ plan, quien, pagosFijos, suma }) {
   const f0 = plan.filas[0];
   const c0 = cuentaDelMes(f0, quien);
   const queda0 = redondear(c0.sueldo - f0.real);
-  return `<header><h2><span class="pz-num real">1</span>Lo real</h2><span class="pista">Lo que sí o sí</span></header>
+  return `<header><h2><span class="pz-num real">1</span>Lo real</h2></header>
     <p class="pz-sub">Lo ya registrado (tarjeta, efectivo y débito) y los <b>pagos fijos</b> que sabes que
       vienen, como la letra de un préstamo. <b>Sin estimaciones.</b> Toca un mes para ver el detalle.
       «En cuentas al cierre» cuenta la tarjeta cuando se paga: el consumo de un mes, al siguiente.</p>
@@ -19509,7 +19576,7 @@ function tarjetaRealSim({ plan, quien, simulados }) {
       <div class="caja-desglose">${detalleSimulado(f)}${detalleReal(f)}</div>
     </details>`;
   });
-  return `<header><h2><span class="pz-num sim">2</span>Simulación</h2><span class="pista">Real + simulado</span></header>
+  return `<header><h2><span class="pz-num sim">2</span>Simulación</h2></header>
     <p class="pz-sub">Lo real (1) más lo que escribes para probar: un repuesto que piensas diferir, un viaje.
       <b>Sin los gastos comunes de la app. Lo simulado no cuenta como real hasta que lo ejecutes.</b></p>
     <div class="pz-tabla-btn"><button type="button" class="btn pequeno" data-tabla="sim">▦ Ver en tabla</button></div>
@@ -19574,7 +19641,7 @@ function tarjetaSimulacion({ plan, quien }) {
   });
 
   const totalReal = total(ESCENARIOS[0]);
-  return `<header><h2><span class="pz-num sim">3</span>Comparar</h2><span class="pista">Los tres escenarios</span></header>
+  return `<header><h2><span class="pz-num sim">3</span>Comparar</h2></header>
     <p class="pz-sub">Cada mes, tres maneras de verlo: <b>solo lo real</b> (1), lo real <b>+ lo que simulas</b> (2) y
       además <b>+ los gastos comunes</b> que la app calcula por frecuencia (4). Cuánto se aparta cada uno de lo real,
       cuánto queda del sueldo (en verde si llega al ahorro) y cuánto quedaría en cuentas, con los otros ingresos que
@@ -19828,7 +19895,7 @@ function detalleSimulado(fila) {
 }
 
 function tarjetaComunes({ comunes, suma }) {
-  return `<header><h2><span class="pz-num com">4</span>Comunes</h2><span class="pista">Lo calcula la app</span></header>
+  return `<header><h2><span class="pz-num com">4</span>Comunes</h2></header>
     <p class="pz-sub">Lo que la app ve que se repite en tu historial. <b>Puede pasar o no:</b> es una estimación.
       Cuando la compra ocurre, pasa a «Lo real». «Dejar fuera» lo saca de la proyección (3).</p>
     <div class="pz-tabla-btn"><button type="button" class="btn pequeno" data-tabla="comunes">▦ Ver en tabla</button></div>
@@ -19963,8 +20030,7 @@ function listaRecurrencias(filas, fuera) {
  */
 function seccionRitmo(filas) {
   const buenas = filas.filter((r) => r.fiable && r.vigente);
-  const cab = `<header><h2>Cada cuánto compras</h2>
-    <span class="pista">Ritmo detectado</span></header>`;
+  const cab = `<header><h2>Cada cuánto compras</h2></header>`;
 
   if (!buenas.length) {
     return `${cab}<p class="vacio">Todavía no hay ningún concepto que se repita
@@ -20040,8 +20106,7 @@ function comoVaElMes(fila, quien) {
   const dias = diasQuedan(mes);
   const alDia = libre > 0 && dias > 0 ? redondear(libre / dias) : 0;
 
-  const cab = `<header><h2>Cómo va ${esc(nombreMes(mes))}</h2>
-    <span class="pista">Hasta hoy</span></header>`;
+  const cab = `<header><h2>Cómo va ${esc(nombreMes(mes))}</h2></header>`;
 
   const filas = [
     ['Tarjeta, ya facturado', salido.Tarjeta],
@@ -21362,8 +21427,7 @@ function bloqueNoSeRecorta(filas) {
  * todos los días o el sitio que se está acelerando.
  */
 function seccionHormiga(meses, filtros) {
-  const cab = `<header><h2>Gasto hormiga</h2>
-    <span class="pista">Lo que se repite</span></header>`;
+  const cab = `<header><h2>Gasto hormiga</h2></header>`;
   return `${cab}
     ${bloqueHormigaCategorias(filtros)}
     ${bloqueHormigaSitios(meses, filtros)}`;
@@ -21569,8 +21633,7 @@ function resultado({
           <td class="acumulado">${money(total)}</td></tr></tfoot>
       </table></div>` : ''}
 
-    <header><h2>Gasto por categoría</h2>
-      <span class="pista">Toca para el detalle</span></header>
+    <header><h2>Gasto por categoría</h2></header>
     ${porCat.map(([c, v]) => {
     // Cada categoría lleva dentro sus propios movimientos, del más caro al
     // más barato. Antes iban todos juntos en una lista al final: con
@@ -21770,7 +21833,7 @@ function render(raiz) {
     ${bloqueLecturas()}
 
     <section class="tarjeta" id="veh-toca">
-      <header><h2>Mantenimiento que toca</h2><span class="pista">Por kilómetros</span></header>
+      <header><h2>Mantenimiento que toca</h2></header>
       ${bloqueQueToca(estados, pendientes, odometro, ritmo)}
     </section>
 
@@ -21779,7 +21842,7 @@ function render(raiz) {
     </section>
 
     <section class="tarjeta">
-      <header><h2>Historial del carro</h2><span class="pista">Todo el historial</span></header>
+      <header><h2>Historial del carro</h2></header>
       ${listaEventos(eventos)}
     </section>`;
 
