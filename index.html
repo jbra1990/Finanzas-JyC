@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-N44ihndOLK9s7FHdo5JbGfsjwXE3Cg5XovIoymf2y4A='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-dWsIKML+osWGhdkNPDMT7kgib6V7AE9IAv3T3m/fqJI='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4086,6 +4086,46 @@ dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { 
 #vista > .rejilla { gap: 10px; margin: 10px 0; }
 #vista > .rejilla > .tarjeta { margin: 0; }
 
+/* --- «Tus tarjetas» (Resumen) y la barra del cupo (Tarjetas) ------------- */
+.tj-fila + .tj-fila { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--grid); }
+.tj-cab { display: flex; align-items: center; gap: 10px; }
+.tj-cab h3 { flex: 1; min-width: 0; font-size: 15.5px; }
+.tj-cab .insignia { flex: none; }
+.tj-chip {
+  padding: 3px 10px; border-radius: var(--radio-pill); font-size: 12px; font-weight: 700; white-space: nowrap;
+  color: var(--tinta-2); background: var(--superficie-2);
+}
+.tj-chip.ok { color: var(--ok-texto); background: color-mix(in srgb, var(--ok) 16%, transparent); }
+.tj-chip.cerca { color: var(--alerta); background: color-mix(in srgb, var(--alerta) 16%, transparent); }
+.tj-chip.mal { color: var(--critico); background: color-mix(in srgb, var(--critico) 16%, transparent); }
+.tj-dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.tj-dos > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tj-dos .der { align-items: flex-end; text-align: right; }
+.tj-dos .etq { font-size: 12px; color: var(--tinta-3); }
+.tj-dos b { font-size: 18px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.tj-dos small { font-size: 11.5px; color: var(--tinta-3); }
+.tj-fila .reparto { margin-top: 8px; }
+.tj-cupo { display: flex; height: 8px; margin-top: 10px; border-radius: 4px; background: var(--superficie-2); overflow: hidden; }
+.tj-cupo i { display: block; height: 100%; }
+.tj-ya { background: var(--critico); }
+.tj-mes { background: var(--serie-3); }
+.tj-vienen { background: color-mix(in srgb, var(--alerta) 80%, transparent); }
+.tj-pie { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-top: 6px; font-size: 12.5px; color: var(--tinta-3); }
+.tj-pie b { color: var(--tinta); font-variant-numeric: tabular-nums; }
+.tj-pie .mal { color: var(--critico); }
+.tj-ley { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; font-size: 11.5px; color: var(--tinta-2); }
+.tj-ley i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+#cupo + .rejilla, .tj-ley + .rejilla { margin-top: 12px; }
+
+.cm-tabla { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.cm-tabla th, .cm-tabla td { background: none; padding: 8px 5px; text-align: right; border-top: 1px solid var(--grid); white-space: nowrap; }
+.cm-tabla thead th { border-top: 0; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tinta-3); font-weight: 640; }
+.cm-tabla th:first-child { text-align: left; font-weight: 560; }
+.cm-tabla td.tot { font-weight: 700; }
+.cm-tabla tr.tenue th, .cm-tabla tr.tenue td { color: var(--tinta-3); white-space: normal; }
+.tarjeta > header > #cm-alcance { margin: 6px 8px 6px 16px; }
+.tarjeta > header > #cm-alcance .segmentado button { min-height: 28px; padding: 0 12px; font-size: 12.5px; }
+
 </style>
 </head>
 <body>
@@ -4118,7 +4158,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '24ae23d05c';
+window.__VERSION_APP__ = 'b63f15b3d7';
 
 M["cerradura"] = (function () {
 /**
@@ -15349,8 +15389,8 @@ M["views/resumen"] = (function () {
 
 const {db, tarjetas, usuarios, guardar} = M["store"];
 const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, entreRecargas, pagoDeTarjeta, topesDelMes, umbralAviso, comprometidoEnMes, realismoDeTopes, hoyLocal} = M["calc"];
-const {dona, columnas, medidor, alRedimensionar} = M["charts"];
-const {crear, esc, $, segmentado, opciones, modal, brindis, aNumero, campoMonto} = M["ui"];
+const {dona, columnas, alRedimensionar} = M["charts"];
+const {esc, $, segmentado, opciones, modal, brindis, aNumero, campoMonto} = M["ui"];
 const {cuentaDelSueldo, guardarAjusteSueldo, sueldoEsperado, porcentajeAhorro, limitesConsumo, guardarLimites, AVISO_LIMITE} = M["plan"];
 const {formGastoTarjeta, formIngreso, formTopes} = M["forms"];
 let usuarioFiltro = 'ambos';
@@ -15442,10 +15482,6 @@ function render(raiz, { irA }) {
 
     <section class="rejilla dos">
       <div class="tarjeta">
-        <header><h2>Cupos de las tarjetas</h2></header>
-        <div id="cupos"></div>
-      </div>
-      <div class="tarjeta">
         <header><h2>Patrimonio</h2></header>
         <div class="rejilla kpis">
           <div class="kpi"><div class="etq">En cuentas</div>
@@ -15505,38 +15541,6 @@ function render(raiz, { irA }) {
     render(raiz, { irA });
   });
 
-  /*
-   * Cupos, con la forma de la lista de la referencia: insignia con las
-   * iniciales, nombre y banco a la izquierda, saldo pendiente a la derecha con
-   * el disponible debajo, y la barra de cupo cruzando la fila.
-   */
-  const cupos = $('#cupos', raiz);
-  const lista = crear('<ul class="lista"></ul>');
-  tarjetas().forEach((t) => {
-    const est = estadoTarjeta(t.id);
-    const holgado = est.cupo > 0 && est.uso < 80;
-    const fila = crear(`
-      <li class="con-acciones">
-        <span class="insignia">${esc(iniciales(t.nombre))}</span>
-        <div class="principal">
-          <div class="titulo">${esc(t.nombre.replace(/^TC /, ''))}</div>
-          <div class="meta">Disponible ${money(est.disponible)}${
-  t.dia_pago ? ` · paga el día ${esc(t.dia_pago)}` : ''}</div>
-        </div>
-        <div class="monto">${money(est.utilizado)}
-          <span class="delta-mini ${holgado ? 'bien' : 'mal'}">
-            ${est.cupo > 0 ? `${est.uso.toFixed(0)} % del cupo` : 'sin cupo definido'}</span></div>
-        <div class="acciones" style="justify-content:stretch"><div class="medidor-host" style="flex:1"></div></div>
-      </li>`);
-    // Sin pie: el importe y el porcentaje ya están en la propia fila, y
-    // repetirlos debajo solo alargaba la tarjeta.
-    medidor(fila.querySelector('.medidor-host'), {
-      usado: est.utilizado, total: est.cupo, sinPie: true,
-    });
-    lista.appendChild(fila);
-  });
-  cupos.appendChild(lista);
-
   const pintarGraficos = () => {
     dona($('#g-dona', raiz), totalPorCategoria([mes], filtros), { titulo: 'Gasto del mes' });
     const serie = serieMensual(meses12, filtros);
@@ -15564,10 +15568,10 @@ function render(raiz, { irA }) {
   $('#topes', raiz).innerHTML = seccionTopes(mes, usuarioFiltro);
   $('#btn-topes', raiz)?.addEventListener('click', () => formTopes(() => render(raiz, { irA })));
 
-  $('#reparto-mes', raiz).innerHTML = seccionRepartoMes(mes);
+  $('#reparto-mes', raiz).innerHTML = seccionTarjetas(mes);
 
-  // Próximos vencimientos e hitos
-  $('#proximos', raiz).innerHTML = seccionProximos(mes);
+  // Las pólizas que vencen
+  $('#proximos', raiz).innerHTML = seccionProximos();
 
   $('#combustible', raiz).innerHTML = seccionCombustible(filtros);
 
@@ -15914,75 +15918,82 @@ function seccionTopes(mes, usuario) {
 }
 
 /**
- * El total del mes de cada tarjeta, partido entre J y C.
+ * «Tus tarjetas»: todo lo de cada tarjeta en una sola ficha. Junta lo que
+ * antes estaba repartido en tres tarjetas —«Cupos de las tarjetas»,
+ * «Tarjetas por persona» y los pagos de tarjeta de «Próximos pagos»— y que
+ * repetía datos entre ellas.
  *
- * Es la pregunta de todos los días —«¿cuánto llevamos y cuánto puso cada
- * uno?»— y hasta ahora había que ir tarjeta por tarjeta a la vista de
- * Tarjetas. Deliberadamente no atiende al filtro J/C del panel: la gracia de
- * esta sección es ver a los dos a la vez.
+ * Por tarjeta, dos cifras que no se pisan:
+ *   · PAGAR AHORA: el estado del mes anterior, que es lo que vence en este;
+ *   · LLEVAS: el consumo del mes que se mira, que se paga al siguiente,
+ *     partido entre J y C.
+ * Debajo, el cupo de hoy en una barra con lo mismo por colores: lo que vence
+ * ya, lo de este mes y las cuotas que vienen. No sigue al filtro J / C del
+ * panel: la gracia es ver a los dos a la vez.
  */
-function seccionRepartoMes(mes) {
+function seccionTarjetas(mes) {
   const gente = usuarios();
+  const previo = sumarMeses(mes, -1);
+  const hoyMes = mesActual();
+  const hoy = hoyLocal();
+  const corta = (f) => fechaCorta(f).replace(/ de (\w{3})\w*$/, ' $1');
+  const mesMin = (m) => nombreMes(m).split(' ')[0].toLowerCase();
+  const chips = (partes, total) => partes.filter((p) => p.monto > 0).map((p) => `
+    <span class="chip ${esc(String(p.usuario).toLowerCase())}">${esc(p.usuario)} <strong>${money(p.monto)}</strong>
+      <em>${total > 0 ? `${Math.round((p.monto / total) * 100)} %` : ''}</em></span>`).join('');
+
   const filas = tarjetas().map((t) => {
-    const total = pagoDelMes(t.id, mes, 'ambos');
-    return {
-      tarjeta: t,
-      total,
-      movs: db.cuotas.filter((c) => c.tarjeta === t.id && c.mes === mes).length,
-      vence: fechaPagoMes(mes, t.id),
-      pago: pagoDeTarjeta(t.id, mes),
-      partes: gente.map((u) => ({ usuario: u, monto: pagoDelMes(t.id, mes, u) })),
-    };
+    const pagado = pagoDeTarjeta(t.id, previo);
+    const debe = pagado ? 0 : pagoDelMes(t.id, previo, 'ambos');
+    const vence = fechaPagoMes(previo, t.id);
+    const dias = vence ? diasEntre(hoy, vence) : null;
+    const lleva = pagoDelMes(t.id, mes, 'ambos');
+    const sePaga = fechaPagoMes(mes, t.id);
+    const pagoMes = pagoDeTarjeta(t.id, mes);
+    const partes = gente.map((u) => ({ usuario: u, monto: pagoDelMes(t.id, mes, u) }));
+    const partesDebe = gente.map((u) => ({ usuario: u, monto: debe > 0 ? pagoDelMes(t.id, previo, u) : 0 }));
+
+    // El cupo es el de hoy, aunque se mire otro mes.
+    const est = estadoTarjeta(t.id);
+    const debeHoy = pagoDeTarjeta(t.id, sumarMeses(hoyMes, -1)) ? 0 : pagoDelMes(t.id, sumarMeses(hoyMes, -1), 'ambos');
+    const ya = Math.min(debeHoy, est.utilizado);
+    const esteMes = Math.min(pagoDelMes(t.id, hoyMes, 'ambos'), Math.max(0, est.utilizado - ya));
+    const vienen = Math.max(0, redondear(est.utilizado - ya - esteMes));
+    const escala = Math.max(est.cupo, est.utilizado, 1);
+    const ancho = (v) => `${((v / escala) * 100).toFixed(2)}%`;
+
+    const chip = pagado ? `<span class="tj-chip ok">${esc(mesMin(previo))} pagado</span>`
+      : debe > 0 ? `<span class="tj-chip ${dias !== null && dias < 0 ? 'mal' : 'cerca'}">${dias !== null && dias < 0 ? 'venció' : 'vence'} ${esc(vence ? corta(vence) : '')}</span>`
+        : '';
+    return { t, debe, lleva, html: `<div class="tj-fila">
+      <div class="tj-cab"><h3>${esc(t.nombre.replace(/^TC /, ''))}</h3>${chip}</div>
+      <div class="tj-dos">
+        <div><span class="etq">Pagar ahora${debe > 0 ? ` · ${esc(mesMin(previo))}` : ''}</span><b>${money(debe)}</b>
+          ${debe > 0 ? `<small>${partesDebe.filter((p) => p.monto > 0).map((p) => `${esc(p.usuario)} ${money(p.monto)}`).join(' · ')}</small>` : ''}</div>
+        <div class="der"><span class="etq">Llevas en ${esc(mesMin(mes))}</span><b>${money(lleva)}</b>
+          <small>${pagoMes ? `pagada el ${esc(corta(pagoMes.fecha))}` : sePaga ? `se paga el ${esc(corta(sePaga))}` : ''}</small></div>
+      </div>
+      ${lleva > 0 ? `<div class="reparto">${chips(partes, lleva)}</div>` : ''}
+      <div class="tj-cupo" role="img" aria-label="Cupo: por pagar ya ${esc(money(ya))}; este mes ${esc(money(esteMes))}; cuotas que vienen ${esc(money(vienen))}; libre ${esc(money(est.disponible))}">
+        <i class="tj-ya" style="width:${ancho(ya)}"></i><i class="tj-mes" style="width:${ancho(esteMes)}"></i><i class="tj-vienen" style="width:${ancho(vienen)}"></i>
+      </div>
+      <div class="tj-pie"><span>Cupo libre <b>${money(est.disponible)}</b>${est.cupo ? ` de ${money(est.cupo)}` : ''}</span>
+        <span class="${est.uso >= 80 ? 'mal' : ''}">${est.cupo ? `${est.uso.toFixed(0)} % usado` : ''}</span></div>
+    </div>` };
   });
 
-  const total = redondear(filas.reduce((s, f) => s + f.total, 0));
+  const total = redondear(filas.reduce((s, f) => s + f.lleva, 0));
   const porPersona = gente.map((u) => ({
-    usuario: u,
-    monto: redondear(filas.reduce((s, f) => s
-      + (f.partes.find((p) => p.usuario === u)?.monto || 0), 0)),
+    usuario: u, monto: redondear(tarjetas().reduce((s, t) => s + pagoDelMes(t.id, mes, u), 0)),
   }));
-
-  const cab = '<header><h2>Tarjetas por persona</h2></header>';
-
-  if (!total) {
-    return `${cab}<p class="vacio">Todavía no hay consumo cargado en este mes.</p>`;
-  }
-
-  return `${cab}
-    <ul class="lista">
-      ${filas.map((f) => `
-        <li class="con-acciones">
-          <span class="insignia">${esc(iniciales(f.tarjeta.nombre))}</span>
-          <div class="principal">
-            <div class="titulo">${esc(f.tarjeta.nombre.replace(/^TC /, ''))}${
-  f.pago ? '<span class="sello-pagado">Pagada</span>' : ''}</div>
-            <div class="meta">${f.movs} ${f.movs === 1 ? 'movimiento' : 'movimientos'}${
-  /*
-   * Si ya se pagó, lo que importa no es cuándo vencía sino cuándo se pagó y
-   * de dónde salió la plata; la fecha de vencimiento ya no dice nada.
-   * Fecha corta: el año se sobreentiende y la línea no llega a cortarse.
-   */
-  f.pago
-    ? ` · pagada el ${esc(fechaCorta(f.pago.fecha))} desde ${esc(nombreCuenta(f.pago.cuenta_origen))}`
-    : (f.vence ? ` · se paga el ${esc(fechaCorta(f.vence))}` : '')}</div>
-          </div>
-          <div class="monto">${money(f.total)}</div>
-          <div class="acciones" style="justify-content:stretch;flex-direction:column;align-items:stretch">
-            ${barraReparto(f.partes, f.total)}
-            <div class="reparto">${chipsReparto(f.partes, f.total)}</div>
-          </div>
-        </li>`).join('')}
-    </ul>
+  return `<header><h2>Tus tarjetas</h2></header>
+    ${filas.map((f) => f.html).join('')}
+    <div class="tj-ley"><span><i class="tj-ya"></i>Por pagar ya</span><span><i class="tj-mes"></i>Este mes</span><span><i class="tj-vienen"></i>Cuotas que vienen</span></div>
     <div class="pie-reparto">
-      <span>Total de ${esc(nombreMes(mes, true))} en las ${filas.length} tarjetas</span>
+      <span>Llevas en ${esc(mesMin(mes))} en las ${filas.length} tarjetas</span>
       <strong>${money(total)}</strong>
     </div>
-    <div class="reparto">${chipsReparto(porPersona, total)}</div>`;
-}
-
-/** 'BCO-PICH' → 'Banco Pichincha'; si la cuenta ya no existe, el propio id. */
-function nombreCuenta(id) {
-  return db.cuentas.find((c) => c.id === id)?.nombre || id || 'la cuenta';
+    ${total > 0 ? `<div class="reparto">${chips(porPersona, total)}</div>` : ''}`;
 }
 
 /** '2026-09-18' → '18 de septiembre'. */
@@ -15990,57 +16001,13 @@ function fechaCorta(fechaISO) {
   return textoFecha(fechaISO).replace(/ de \d{4}$/, '');
 }
 
-/** Barra de proporción J | C. Sin datos no se dibuja: una barra vacía engaña. */
-function barraReparto(partes, total) {
-  if (total <= 0) return '';
-  return `<div class="barra-jc" role="presentation">
-    ${partes.filter((p) => p.monto > 0).map((p) => `
-      <span style="flex:${p.monto};background:var(--persona-${
-  esc(String(p.usuario).toLowerCase())}, var(--acento))"></span>`).join('')}
-  </div>`;
-}
-
-function chipsReparto(partes, total) {
-  return partes.map((p) => `
-    <span class="chip ${esc(String(p.usuario).toLowerCase())}">
-      ${esc(p.usuario)} <strong>${money(p.monto)}</strong>
-      <em>${total > 0 ? `${((p.monto / total) * 100).toFixed(0)} %` : '—'}</em>
-    </span>`).join('');
-}
-
-function seccionProximos(mes) {
+function seccionProximos() {
   const filas = [];
 
   /*
-   * Lo que vence: el consumo del mes anterior (se paga en este) si aún no se
-   * pagó, y el del mes que se mira (se paga en el siguiente). Antes solo salía
-   * el segundo, y el pago más urgente —el de este mes— no estaba en la lista.
+   * Los pagos de tarjeta ya no van aquí: están en «Tus tarjetas» («Pagar
+   * ahora» y «Llevas»). Quedan las pólizas que vencen.
    */
-  tarjetas().forEach((t) => [sumarMeses(mes, -1), mes].forEach((mes) => {
-    const monto = pagoDelMes(t.id, mes, 'ambos');
-    /*
-     * Una tarjeta ya pagada no es un movimiento «próximo»: sale de esta lista
-     * y pasa a enseñarse como pagada en «Tarjetas del mes», arriba. Antes se
-     * quedaba aquí como pendiente aunque el pago ya estuviera hecho.
-     */
-    if (monto > 0 && !pagoDeTarjeta(t.id, mes)) {
-      const vence = fechaPagoMes(mes, t.id);
-      // Cuánto pone cada uno de ese pago: el cupo es compartido, así que lo
-      // útil no es solo el total sino a quién le toca qué parte.
-      const reparto = usuarios()
-        .map((u) => ({ usuario: u, monto: pagoDelMes(t.id, mes, u) }))
-        .filter((x) => x.monto > 0);
-      filas.push({
-        tipo: 'Pago de tarjeta',
-        cuando: vence ? fechaCorta(vence) : nombreMes(mes),
-        titulo: t.nombre,
-        reparto,
-        pieEtq: `Consumo de ${nombreMes(mes)}`,
-        monto: -monto,
-      });
-    }
-  }));
-
   const hoy = hoyLocal();
   db.inversiones
     .filter((p) => p.estado === 'Activa')
@@ -16058,11 +16025,11 @@ function seccionProximos(mes) {
     });
 
   if (!filas.length) {
-    return '<header><h2>Próximos pagos</h2></header><p class="vacio">Nada pendiente por ahora.</p>';
+    return '<header><h2>Pólizas que vencen</h2></header><p class="vacio">Ninguna póliza activa.</p>';
   }
   // Cada uno en su ficha: el tipo y la fecha en la cabecera, de qué se trata en
   // medio y las dos cifras que lo resumen en la franja de abajo.
-  return `<header><h2>Próximos pagos</h2></header>
+  return `<header><h2>Pólizas que vencen</h2></header>
     ${filas.map((f) => `
       <div class="ficha">
         <div class="ficha-meta">${esc(f.cuando)}</div>
@@ -16086,13 +16053,6 @@ function seccionProximos(mes) {
         </div>
         </div>
       </div>`).join('')}`;
-}
-
-/** «TC Pichincha» → «PI»; «Banco Bolivariano» → «BB». */
-function iniciales(nombre) {
-  const palabras = String(nombre).replace(/^TC /, '').split(/\s+/).filter(Boolean);
-  if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
-  return String(palabras[0] || '?').slice(0, 2).toUpperCase();
 }
 
 /* --- Límites de consumo -------------------------------------------------- */
@@ -17238,8 +17198,8 @@ M["views/tarjetas"] = (function () {
 /** Vista «Tarjetas»: cupo, consumo del mes, diferidos vivos y movimientos. */
 
 const {db, tarjetas, eliminar, guardar, quitarCuotas} = M["store"];
-const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir, posiblesRepetidos, marcarNoRepetidos} = M["calc"];
-const {medidor, columnas, dona, alRedimensionar} = M["charts"];
+const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, pagoDeTarjeta, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir, posiblesRepetidos, marcarNoRepetidos} = M["calc"];
+const {columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, aNumero, notaFila, marcaNota, notaTexto, centrarElegido, modal} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
 const {formCuenta} = M["views/cuentas"];
@@ -17252,6 +17212,8 @@ const estado = {
    * puede devolver el foco y el cursor donde estaban.
    */
   busca: '',
+  // «Cuotas por venir»: de esta tarjeta o de las dos a la vez.
+  comprometidoAmbas: false,
 };
 
 /** Sin acentos ni mayúsculas: «Farmacía» y «FARMACIA» son lo mismo al buscar. */
@@ -17537,8 +17499,7 @@ function render(raiz) {
 
   }
 
-  // En el panel las cifras ya están debajo: la barra va sola.
-  medidor($('#cupo', raiz), { usado: est.utilizado, total: est.cupo, sinPie: true });
+  $('#cupo', raiz).innerHTML = barraCupo(t, est);
 
   const pintar = () => {
     columnas($('#g-meses', raiz), meses12.map((m) => nombreMes(m, true)), [
@@ -17557,7 +17518,16 @@ function render(raiz) {
   pintar();
   alRedimensionar(pintar);
 
-  $('#comprometido', raiz).innerHTML = seccionComprometido(t, estado.usuario);
+  const pintarComprometido = () => {
+    const caja = $('#comprometido', raiz);
+    caja.innerHTML = estado.comprometidoAmbas ? comprometidoAmbas(estado.usuario) : seccionComprometido(t, estado.usuario);
+    $('#cm-alcance', caja)?.appendChild(segmentado(
+      [{ valor: 'una', texto: 'Esta' }, { valor: 'ambas', texto: 'Ambas' }],
+      estado.comprometidoAmbas ? 'ambas' : 'una',
+      (v) => { estado.comprometidoAmbas = v === 'ambas'; pintarComprometido(); },
+    ));
+  };
+  pintarComprometido();
 
   $('#diferidos', raiz).innerHTML = listaDiferidos(t.id, estado.usuario);
   /*
@@ -17706,11 +17676,60 @@ function comprometidoDetalle(t, usuario) {
   return filas.slice(0, fin);
 }
 
+/** El selector «esta tarjeta / ambas», a la izquierda del título. */
+const SELECTOR_ALCANCE = '<div class="lim-quien" id="cm-alcance"></div>';
+
+/*
+ * Las cuotas ya comprometidas de las DOS tarjetas, lado a lado: mes a mes,
+ * cuánto cae en cada una y en total, y desde cuándo cada una queda sin
+ * diferidos. Es la misma cuenta que la de cada tarjeta (`comprometidoDetalle`).
+ */
+function comprometidoAmbas(usuario) {
+  const lista = tarjetas();
+  const detalle = lista.map((t) => comprometidoDetalle(t, usuario));
+  const meses = [...new Set(detalle.flatMap((d) => d.map((f) => f.mes)))].sort();
+  const valor = (k, mes) => detalle[k].find((f) => f.mes === mes)?.total || 0;
+  const sinDif = detalle.map((d) => {
+    const ultimo = [...d].reverse().find((f) => f.dif > 0);
+    return ultimo ? nombreMes(sumarMeses(ultimo.mes, 1), true) : 'ya';
+  });
+  const filas = meses.map((m) => {
+    const vs = lista.map((_, k) => redondear(valor(k, m)));
+    return { m, vs, total: redondear(vs.reduce((a, b) => a + b, 0)) };
+  }).filter((f, i, xs) => f.total > 0 || xs.slice(i).some((x) => x.total > 0));
+  const nombre = (t) => t.nombre.replace(/^TC /, '');
+  return `<header><h2>Cuotas por venir</h2>${SELECTOR_ALCANCE}</header>
+    <div class="tabla-envoltura"><table class="cm-tabla">
+      <thead><tr><th>Mes</th>${lista.map((t) => `<th>${esc(nombre(t))}</th>`).join('')}<th>Total</th></tr></thead>
+      <tbody>${filas.map((f) => `<tr><th>${esc(nombreMes(f.m, true))}</th>${f.vs.map((v) => `<td>${v > 0 ? money(v) : '—'}</td>`).join('')}<td class="tot">${money(f.total)}</td></tr>`).join('')}
+        <tr class="tenue"><th>Sin diferidos desde</th>${sinDif.map((x) => `<td>${esc(x)}</td>`).join('')}<td></td></tr></tbody>
+    </table></div>
+    <p class="cm-pie">Diferidos y suscripciones que ya firmaste: se cobran compres o no. El primer mes es el de hoy.</p>`;
+}
+
+/*
+ * El cupo en una barra con lo que lo ocupa, por colores: lo que vence ya (el
+ * estado del mes pasado sin pagar), lo de este mes y las cuotas que vienen.
+ */
+function barraCupo(t, est) {
+  const hoyMes = mesActual();
+  const previo = sumarMeses(hoyMes, -1);
+  const debe = pagoDeTarjeta(t.id, previo) ? 0 : pagoDelMes(t.id, previo, 'ambos');
+  const ya = Math.min(debe, est.utilizado);
+  const esteMes = Math.min(pagoDelMes(t.id, hoyMes, 'ambos'), Math.max(0, est.utilizado - ya));
+  const vienen = Math.max(0, redondear(est.utilizado - ya - esteMes));
+  const escala = Math.max(est.cupo, est.utilizado, 1);
+  const ancho = (v) => `${((v / escala) * 100).toFixed(2)}%`;
+  return `<div class="tj-cupo" role="img" aria-label="Por pagar ya ${esc(money(ya))}; este mes ${esc(money(esteMes))}; cuotas que vienen ${esc(money(vienen))}; libre ${esc(money(est.disponible))}">
+      <i class="tj-ya" style="width:${ancho(ya)}"></i><i class="tj-mes" style="width:${ancho(esteMes)}"></i><i class="tj-vienen" style="width:${ancho(vienen)}"></i></div>
+    <div class="tj-ley">${ya > 0 ? `<span><i class="tj-ya"></i>Por pagar ya ${money(ya)}</span>` : ''}<span><i class="tj-mes"></i>Este mes ${money(esteMes)}</span><span><i class="tj-vienen"></i>Cuotas que vienen ${money(vienen)}</span></div>`;
+}
+
 function seccionComprometido(t, usuario) {
   const filas = comprometidoDetalle(t, usuario);
   // El rótulo de la esquina cabe en una línea de unos 140 px: más largo, la
   // pestaña se estira y desencaja la cabecera en pantallas de 320.
-  const cab = `<header><h2>Cuotas ya comprometidas</h2></header>`;
+  const cab = `<header><h2>Cuotas por venir</h2>${tarjetas().length > 1 ? SELECTOR_ALCANCE : ''}</header>`;
 
   const total = redondear(filas.reduce((s, f) => s + f.total, 0));
   const porPagarDif = redondear(filas.reduce((s, f) => s + f.dif, 0));
