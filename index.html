@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-dWsIKML+osWGhdkNPDMT7kgib6V7AE9IAv3T3m/fqJI='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-MAzCSnthkvqBIgXa+yZmbPiaH8bUuerDW5Isp0XyXHI='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4126,6 +4126,10 @@ dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { 
 .tarjeta > header > #cm-alcance { margin: 6px 8px 6px 16px; }
 .tarjeta > header > #cm-alcance .segmentado button { min-height: 28px; padding: 0 12px; font-size: 12.5px; }
 
+/* «Cuotas por venir»: dos cifras (lo de este mes ya está en el panel de arriba). */
+.cm-kpis.dos { grid-template-columns: repeat(2, 1fr); }
+.cm-compras > .lista { padding: 0 12px 6px; margin: 0; }
+
 </style>
 </head>
 <body>
@@ -4158,7 +4162,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'b63f15b3d7';
+window.__VERSION_APP__ = '85f7dda41f';
 
 M["cerradura"] = (function () {
 /**
@@ -15389,7 +15393,7 @@ M["views/resumen"] = (function () {
 
 const {db, tarjetas, usuarios, guardar} = M["store"];
 const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, ingresoDelMes, totalPorCategoria, serieMensual, acumuladoHistorico, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, redondear, diasEntre, fechaPagoMes, textoFecha, recorridoCombustible, entreRecargas, pagoDeTarjeta, topesDelMes, umbralAviso, comprometidoEnMes, realismoDeTopes, hoyLocal} = M["calc"];
-const {dona, columnas, alRedimensionar} = M["charts"];
+const {dona, alRedimensionar} = M["charts"];
 const {esc, $, segmentado, opciones, modal, brindis, aNumero, campoMonto} = M["ui"];
 const {cuentaDelSueldo, guardarAjusteSueldo, sueldoEsperado, porcentajeAhorro, limitesConsumo, guardarLimites, AVISO_LIMITE} = M["plan"];
 const {formGastoTarjeta, formIngreso, formTopes} = M["forms"];
@@ -15404,7 +15408,6 @@ let mesFiltro = '';
 
 function render(raiz, { irA }) {
   const mes = mesFiltro || mesActual();
-  const meses12 = rangoMeses(sumarMeses(mes, -11), mes);
   /*
    * El mismo rango que en Tarjetas: año y medio atrás y un año por delante,
    * que es hasta donde llegan las cuotas de un diferido.
@@ -15495,16 +15498,9 @@ function render(raiz, { irA }) {
             <div class="delta">Ahorro + inversión − deuda</div></div>
         </div>
       </div>
-    </section>
-
-    <section class="rejilla dos">
       <div class="tarjeta">
         <header><h2>Gasto por categoría</h2></header>
         <div id="g-dona"></div>
-      </div>
-      <div class="tarjeta">
-        <header><h2>Ingresos vs. gastos</h2></header>
-        <div id="g-barras"></div>
       </div>
     </section>
 
@@ -15526,7 +15522,6 @@ function render(raiz, { irA }) {
 
     <section class="tarjeta" id="proximos"></section>
 
-    <section class="tarjeta" id="combustible"></section>
 `;
 
   // Filtro J / C / ambos
@@ -15543,11 +15538,6 @@ function render(raiz, { irA }) {
 
   const pintarGraficos = () => {
     dona($('#g-dona', raiz), totalPorCategoria([mes], filtros), { titulo: 'Gasto del mes' });
-    const serie = serieMensual(meses12, filtros);
-    columnas($('#g-barras', raiz), meses12.map((m) => nombreMes(m, true)), [
-      { nombre: 'Ingresos', valores: serie.map((s) => s.ingreso) },
-      { nombre: 'Gastos', valores: serie.map((s) => s.gasto) },
-    ]);
   };
   pintarGraficos();
   alRedimensionar(pintarGraficos);
@@ -15570,10 +15560,10 @@ function render(raiz, { irA }) {
 
   $('#reparto-mes', raiz).innerHTML = seccionTarjetas(mes);
 
-  // Las pólizas que vencen
-  $('#proximos', raiz).innerHTML = seccionProximos();
-
-  $('#combustible', raiz).innerHTML = seccionCombustible(filtros);
+  // Las pólizas que vencen pronto; si no hay ninguna, la tarjeta no sale.
+  const polizas = seccionProximos();
+  $('#proximos', raiz).innerHTML = polizas;
+  $('#proximos', raiz).hidden = !polizas;
 
 
   raiz.querySelectorAll('[data-ir]').forEach((b) => {
@@ -16005,12 +15995,13 @@ function seccionProximos() {
   const filas = [];
 
   /*
-   * Los pagos de tarjeta ya no van aquí: están en «Tus tarjetas» («Pagar
-   * ahora» y «Llevas»). Quedan las pólizas que vencen.
+   * Las pólizas que vencen en el próximo mes (o ya vencieron y siguen sin
+   * liquidar): es lo que pide mirarse. Las demás están en Inversiones, y
+   * repetirlas aquí era duplicar esa sección. Sin ninguna, no hay tarjeta.
    */
   const hoy = hoyLocal();
   db.inversiones
-    .filter((p) => p.estado === 'Activa')
+    .filter((p) => p.estado === 'Activa' && p.fecha_vencimiento && diasEntre(hoy, p.fecha_vencimiento) <= 30)
     .sort((a, b) => String(a.fecha_vencimiento).localeCompare(String(b.fecha_vencimiento)))
     .slice(0, 4)
     .forEach((p) => {
@@ -16024,9 +16015,7 @@ function seccionProximos() {
       });
     });
 
-  if (!filas.length) {
-    return '<header><h2>Pólizas que vencen</h2></header><p class="vacio">Ninguna póliza activa.</p>';
-  }
+  if (!filas.length) return '';
   // Cada uno en su ficha: el tipo y la fecha en la cabecera, de qué se trata en
   // medio y las dos cifras que lo resumen en la franja de abajo.
   return `<header><h2>Pólizas que vencen</h2></header>
@@ -16181,7 +16170,7 @@ function formLimites(mes, quien, alTerminar) {
  * coste por kilómetro, y para eso hace falta el odómetro, que es lo que se pide
  * al registrar el repostaje.
  */
-function seccionCombustible(filtros) {
+function seccionCombustible(filtros, { sinKm = false } = {}) {
   const r = recorridoCombustible(filtros);
   const cab = '<header><h2>Combustible y kilómetros</h2></header>';
 
@@ -16224,10 +16213,10 @@ function seccionCombustible(filtros) {
 
   return `${cab}
     <div class="rejilla kpis">
-      <div class="kpi"><div class="etq">Kilómetros medidos</div>
+      ${sinKm ? '' : `<div class="kpi"><div class="etq">Kilómetros medidos</div>
         <div class="valor">${miles(r.km)} km</div>
         <div class="delta">${miles(r.kmPorMes)} km al mes, en ${r.mesesMedidos}
-          ${r.mesesMedidos === 1 ? 'mes' : 'meses'}</div></div>
+          ${r.mesesMedidos === 1 ? 'mes' : 'meses'}</div></div>`}
       <div class="kpi"><div class="etq">Gasto acumulado</div>
         <div class="valor">${money(r.gasto)}</div>
         <div class="delta">${r.repostajes}
@@ -16268,7 +16257,7 @@ function seccionCombustible(filtros) {
     <p class="pista">Toca un mes para ver cada recarga: los días y los km desde la anterior.</p>`;
 }
 
-return { render };
+return { render, seccionCombustible };
 })();
 
 M["views/mensual"] = (function () {
@@ -16280,7 +16269,7 @@ M["views/mensual"] = (function () {
 
 const {tarjetas, categoriasGasto, guardar} = M["store"];
 const {mesActual, nombreMes, money, rangoMeses, mesesConDatos, matrizCategoriaMes, totalPorCategoria, totalPorUsuario, serieMensual, presupuestoVsReal, detalleDeCategoria} = M["calc"];
-const {dona, barrasHorizontales, columnas, alRedimensionar} = M["charts"];
+const {dona, columnas, alRedimensionar} = M["charts"];
 const {esc, $, $$, opciones, segmentado, modal, brindis, filaMovimiento} = M["ui"];
 const {presupuestoSugerido, aplicarPresupuesto} = M["plan"];
 const estado = {
@@ -16391,15 +16380,9 @@ function render(raiz) {
       <div class="tabla-scroll">${tablaHTML(matriz)}</div>
     </section>
 
-    <section class="rejilla dos">
-      <div class="tarjeta">
-        <header><h2>Ranking de gasto</h2></header>
-        <div id="g-rank"></div>
-      </div>
-      <div class="tarjeta">
-        <header><h2>Reparto J / C</h2></header>
-        <div id="g-usuarios"></div>
-      </div>
+    <section class="tarjeta">
+      <header><h2>Reparto J / C</h2></header>
+      <div id="g-usuarios"></div>
     </section>
 
     <section class="tarjeta">
@@ -16473,7 +16456,6 @@ function render(raiz) {
       { nombre: 'Ingresos', valores: serie.map((s) => s.ingreso) },
       { nombre: 'Gastos', valores: serie.map((s) => s.gasto) },
     ]);
-    barrasHorizontales($('#g-rank', raiz), totalPorCategoria(meses, filtros));
     dona($('#g-usuarios', raiz), totalPorUsuario(meses, filtros), { titulo: 'J y C' });
   };
   pintar();
@@ -16624,7 +16606,7 @@ M["views/anual"] = (function () {
 
 const {tarjetas} = M["store"];
 const {nombreMes, money, moneyHTML, matrizCategoriaMes, totalPorCategoria, serieMensual, añosDisponibles, redondear, totalPorUsuario, mesActual} = M["calc"];
-const {columnas, columnasApiladas, linea, dona, barrasHorizontales, plegarOtros, alRedimensionar} = M["charts"];
+const {columnas, columnasApiladas, linea, dona, plegarOtros, alRedimensionar} = M["charts"];
 const {esc, $, opciones, segmentado} = M["ui"];
 const estado = { año: null, usuario: 'ambos', tarjeta: 'todas' };
 
@@ -16727,15 +16709,9 @@ function render(raiz) {
       </div>
     </section>
 
-    <section class="rejilla dos">
-      <div class="tarjeta">
-        <header><h2>Reparto por categoría</h2></header>
-        <div id="g-dona"></div>
-      </div>
-      <div class="tarjeta">
-        <header><h2>Ranking anual</h2></header>
-        <div id="g-rank"></div>
-      </div>
+    <section class="tarjeta">
+      <header><h2>Reparto por categoría</h2></header>
+      <div id="g-dona"></div>
     </section>
 
     <section class="tarjeta">
@@ -16778,7 +16754,6 @@ function render(raiz) {
     ], { alto: 250 });
 
     dona($('#g-dona', raiz), porCat, { titulo: estado.año });
-    barrasHorizontales($('#g-rank', raiz), porCat);
     dona($('#g-usuarios', raiz), totalPorUsuario(meses, filtros), { titulo: 'J y C' });
   };
   pintar();
@@ -16816,8 +16791,8 @@ M["views/cuentas"] = (function () {
 /** Vista «Cuentas»: saldos reales de banco y efectivo, y sus movimientos. */
 
 const {db, cuentasBancarias, eliminar, upsert, cuenta} = M["store"];
-const {money, moneyHTML, saldoCuenta, totalAhorrado, totalInvertido, deudaTotalTarjetas, patrimonioNeto, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes, esIngresoReal, ahorradoAl, hoyLocal} = M["calc"];
-const {dona, linea, alRedimensionar} = M["charts"];
+const {money, moneyHTML, saldoCuenta, totalAhorrado, claveMes, nombreMes, redondear, rangoMeses, mesActual, sumarMeses, ingresoDelMes, esIngresoReal, ahorradoAl, hoyLocal} = M["calc"];
+const {linea, alRedimensionar} = M["charts"];
 const {esc, $, $$, confirmar, modal, brindis, aNumero, marcaNota, notaTexto, segmentado, centrarElegido} = M["ui"];
 const {formMovimiento, formIngreso, formGastoEfectivo} = M["forms"];
 /*
@@ -16859,11 +16834,7 @@ function render(raiz) {
           <button class="btn primario pequeno" id="btn-ing">+ Ingreso</button>
         </div>
       </div>
-      <div class="panel-datos">
-        <div><div class="etq">Invertido</div><div class="val">${money(totalInvertido())}</div></div>
-        <div><div class="etq">Deuda tarjetas</div><div class="val">${money(deudaTotalTarjetas())}</div></div>
-        <div><div class="etq">Patrimonio neto</div><div class="val">${money(patrimonioNeto())}</div></div>
-      </div>
+      <!-- Invertido, deuda y patrimonio están en Resumen → «Patrimonio». -->
     </section>
 
     <section class="tarjeta">
@@ -16884,15 +16855,9 @@ function render(raiz) {
   }).join('')}</ul>
     </section>
 
-    <section class="rejilla dos">
-      <div class="tarjeta">
-        <header><h2>Reparto del ahorro</h2></header>
-        <div id="g-cuentas"></div>
-      </div>
-      <div class="tarjeta">
-        <header><h2>Evolución del ahorro</h2></header>
-        <div id="g-evolucion"></div>
-      </div>
+    <section class="tarjeta">
+      <header><h2>Evolución del ahorro</h2></header>
+      <div id="g-evolucion"></div>
     </section>
 
     <div class="barra-accion barra-meses cuentas-mes">
@@ -16936,10 +16901,6 @@ function render(raiz) {
   }));
 
   const pintar = () => {
-    dona($('#g-cuentas', raiz), cuentas
-      .map((c) => ({ nombre: c.nombre, valor: Math.max(0, saldoCuenta(c.id)) }))
-      .filter((x) => x.valor > 0), { titulo: 'Ahorro' });
-
     /*
      * Lo que había de verdad en bancos y efectivo al cerrar cada mes; el del
      * mes en curso, hoy. Antes era un flujo que empezaba en cero hace un año
@@ -17410,10 +17371,6 @@ function render(raiz) {
 
     <section class="tarjeta" id="comprometido"></section>
 
-    <section class="tarjeta">
-      <header><h2>Diferidos vigentes</h2></header>
-      <div id="diferidos"></div>
-    </section>
 
     <section class="tarjeta">
       <header><h2>Movimientos de ${esc(nombreMes(mes))}</h2>
@@ -17529,7 +17486,6 @@ function render(raiz) {
   };
   pintarComprometido();
 
-  $('#diferidos', raiz).innerHTML = listaDiferidos(t.id, estado.usuario);
   /*
    * Pintar la lista y engancharla van JUNTOS: con el buscador, la lista se
    * repinta sola con cada tecla y los botones recién creados se quedarían sin
@@ -17741,7 +17697,6 @@ function seccionComprometido(t, usuario) {
   const corto = (m) => nombreMes(m, true);
   const largo = (m) => nombreMes(m).split(' ')[0].toLowerCase();
   const tope = Math.max(...filas.map((f) => f.total), 1);
-  const hoy = filas[0];
   // El primer mes sin cuotas de diferidos: desde ahí solo quedan suscripciones.
   const libre = filas.find((f, i) => i > 0 && f.dif === 0);
   const ultimoDif = [...filas].reverse().find((f) => f.dif > 0);
@@ -17749,9 +17704,7 @@ function seccionComprometido(t, usuario) {
   return `${cab}
     <p class="cm-lead">Cuotas que ya firmaste en ${esc(t.nombre)}: <b>se cobran compres o no</b>.
       Lo que gastes nuevo va encima de esto.</p>
-    <div class="cm-kpis">
-      <div><span class="k">Este mes</span><b>${money(hoy.total)}</b>
-        <small>${hoy.dif ? `${money(hoy.dif)} diferidos` : ''}${hoy.dif && hoy.rec ? ' · ' : ''}${hoy.rec ? `${money(hoy.rec)} suscripciones` : ''}</small></div>
+    <div class="cm-kpis dos">
       <div><span class="k">Diferidos por pagar</span><b>${money(porPagarDif)}</b><small>con la cuota de este mes</small></div>
       <div><span class="k">Sin diferidos desde</span><b>${ultimoDif ? esc(corto(sumarMeses(ultimoDif.mes, 1))) : 'ya'}</b>
         <small>${ultimoDif ? `última cuota en ${esc(largo(ultimoDif.mes))}` : 'solo suscripciones'}</small></div>
@@ -17777,10 +17730,26 @@ function seccionComprometido(t, usuario) {
     </details>`;
   }).join('')}</div>
     <p class="cm-pie">Toca un mes para ver qué cuotas lo forman.${libre
-    ? ` Desde ${esc(largo(libre.mes))} ya no quedan diferidos: lo comprometido baja a ${money(libre.total)} al mes.` : ''}</p>`;
+    ? ` Desde ${esc(largo(libre.mes))} ya no quedan diferidos: lo comprometido baja a ${money(libre.total)} al mes.` : ''}</p>
+    ${listaDiferidosPlegable(t.id, usuario)}`;
 }
 
-function listaDiferidos(tarjetaId, usuario) {
+/*
+ * Las compras diferidas, una por una, plegadas dentro de «Cuotas por venir»:
+ * antes eran su propia tarjeta («Diferidos vigentes») y repetían el total por
+ * pagar que ya da esta.
+ */
+function listaDiferidosPlegable(tarjetaId, usuario) {
+  const n = diferidosVigentes().filter((d) => d.gasto.tarjeta === tarjetaId
+    && (usuario === 'ambos' || d.gasto.usuario === usuario)).length;
+  if (!n) return '';
+  return `<details class="pz-lista cm-compras">
+    <summary><span class="pz-lista-tit">Compras diferidas</span><span class="pz-lista-res">${n} ${n === 1 ? 'compra' : 'compras'}</span></summary>
+    ${listaDiferidos(tarjetaId, usuario, false)}
+  </details>`;
+}
+
+function listaDiferidos(tarjetaId, usuario, conTotal = true) {
   const filas = diferidosVigentes()
     .filter((d) => d.gasto.tarjeta === tarjetaId)
     .filter((d) => usuario === 'ambos' || d.gasto.usuario === usuario)
@@ -17809,10 +17778,10 @@ function listaDiferidos(tarjetaId, usuario) {
       <div class="monto neg">${money(d.restante)}<span class="pie">por pagar</span></div>
       ${notaFila(d.gasto.proposito)}
     </li>`;
-  }).join('')}</ul>
+  }).join('')}</ul>${conTotal ? `
     <div class="aviso"><span class="icono">Σ</span>
       <span>Falta por pagar <strong>${money(filas.reduce((s, d) => s + d.restante, 0))}</strong>
-      en ${filas.length} ${filas.length === 1 ? 'compra diferida' : 'compras diferidas'}.</span></div>`;
+      en ${filas.length} ${filas.length === 1 ? 'compra diferida' : 'compras diferidas'}.</span></div>` : ''}`;
 }
 
 function listaMovimientos(tarjetaId, mes, usuario, marcable = false, busca = '') {
@@ -18264,7 +18233,7 @@ function render(raiz) {
       <div class="previsualizacion" id="c-res"></div>
     </section>
 
-    <section class="rejilla dos">
+    ${activas.length >= 2 ? `<section class="rejilla dos">
       <div class="tarjeta">
         <header><h2>Reparto por institución</h2></header>
         <div id="g-inst"></div>
@@ -18273,7 +18242,7 @@ function render(raiz) {
         <header><h2>Interés esperado</h2></header>
         <div id="g-int"></div>
       </div>
-    </section>
+    </section>` : ''}
 
     <section class="tarjeta">
       <header><h2>Pólizas activas</h2></header>
@@ -18312,7 +18281,9 @@ function render(raiz) {
   calcular();
 
   // --- Gráficos ---
+  // Con una sola póliza repetían lo de «Pólizas activas»: salen desde dos.
   const pintar = () => {
+    if (activas.length < 2) return;
     const porInst = new Map();
     activas.forEach((p) => porInst.set(p.institucion,
       (porInst.get(p.institucion) || 0) + (Number(p.capital) || 0)));
@@ -19099,7 +19070,7 @@ M["views/plan"] = (function () {
  */
 
 const {db, guardar, categoriasGasto, cuentasBancarias, tarjetas, upsert, nuevoId, capitalizar} = M["store"];
-const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, ingresoDelMes, hoyLocal, ahorradoAl, pagoDelMes, pagoDeTarjeta} = M["calc"];
+const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, hoyLocal, ahorradoAl, pagoDelMes, pagoDeTarjeta} = M["calc"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo, confirmar, descargar} = M["ui"];
 const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago, esSimulacion, sueldoDelMes, porcentajeAhorro, claveGasto, otrosIngresos, fijosManuales} = M["plan"];
 const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
@@ -19253,7 +19224,6 @@ function render(raiz, { irA } = {}) {
       <span class="pista" style="white-space:nowrap">${fiables.length} periódicos</span>
     </div>
 
-    <section class="tarjeta">${comoVaElMes(primero, estado.quien)}</section>
 
     <div class="barra-accion">
       <span class="pista crece">Meses a ver</span>
@@ -20127,83 +20097,6 @@ function seccionRitmo(filas) {
       Prorrateados, <strong>${money(alMes)}</strong> al mes.</span></div>`;
 }
 
-/*
- * Cómo va el mes: lo que se lleva gastado HOY contra lo que entró.
- *
- * El resto de la sección mira hacia delante —qué viene, cuánto se prevé—. Esto
- * mira hacia atrás y responde la única pregunta que se hace uno a mitad de
- * mes: ¿puedo seguir gastando o paro?
- *
- * Se separa lo que YA SALIÓ de lo que está COMPROMETIDO pero aún no ha salido
- * —la cuota del préstamo, un pago único apuntado—, porque no es lo mismo: lo
- * primero ya no se puede evitar y lo segundo tampoco, pero uno todavía no lo
- * ha notado en la cuenta.
- */
-function comoVaElMes(fila, quien) {
-  const mes = fila.mes;
-  const ingresos = ingresoDelMes(mes, quien === 'Ambos' ? 'ambos' : quien);
-  // De lo real, lo que de verdad ya pasó por una cuenta o por la tarjeta.
-  const salido = Object.fromEntries(MEDIOS.map((k) => [k,
-    redondear((fila.reales[k] || 0) - (fila.aMano[k] || 0))]));
-  const totalSalido = redondear(MEDIOS.reduce((s, k) => s + salido[k], 0));
-  const comprometido = redondear(MEDIOS.reduce((s, k) => s + (fila.aMano[k] || 0), 0));
-  const libre = redondear(ingresos - totalSalido - comprometido);
-
-  const dias = diasQuedan(mes);
-  const alDia = libre > 0 && dias > 0 ? redondear(libre / dias) : 0;
-
-  const cab = `<header><h2>Cómo va ${esc(nombreMes(mes))}</h2></header>`;
-
-  const filas = [
-    ['Tarjeta, ya facturado', salido.Tarjeta],
-    ['Efectivo y débito', salido.Efectivo],
-    ['Préstamo', redondear(salido['Préstamo'] + (fila.aMano['Préstamo'] || 0))],
-  ].filter(([, v]) => v > 0);
-
-  const otroComprometido = redondear(comprometido - (fila.aMano['Préstamo'] || 0));
-
-  return `${cab}
-    <div class="rejilla kpis">
-      <div class="kpi"><div class="etq">Ingresos del mes</div>
-        <div class="valor">${money(ingresos)}</div>
-        ${ingresos <= 0 ? '<div class="delta mal">sin registrar</div>' : ''}</div>
-      <div class="kpi"><div class="etq">Gastado hasta hoy</div>
-        <div class="valor">${money(totalSalido)}</div>
-        <div class="delta">lo que ya salió</div></div>
-      <div class="kpi"><div class="etq">Comprometido</div>
-        <div class="valor">${money(comprometido)}</div>
-        <div class="delta">aún no ha salido</div></div>
-    </div>
-    <ul class="desglose-medios">${filas.map(([rotulo, valor]) => `
-      <li><span>${esc(rotulo)}</span><strong>${money(valor)}</strong></li>`).join('')}
-      ${otroComprometido > 0 ? `
-        <li><span>Escrito a mano, sin cobrar</span>
-          <strong>${money(otroComprometido)}</strong></li>` : ''}
-    </ul>
-    ${ingresos > 0 ? `
-      <div class="aviso${libre > 0 ? '' : ' alerta'}">
-        <span class="icono">${libre > 0 ? 'Σ' : '!'}</span>
-        <span class="crece">${libre > 0
-    ? `Te quedan <strong>${money(libre)}</strong> de lo que entró este mes${
-      dias > 0 ? `, y ${dias} ${dias === 1 ? 'día' : 'días'} de mes: hasta
-      <strong>${money(alDia)}</strong> al día sin pasarte.` : '.'}`
-    : `Llevas gastado y comprometido <strong>${money(-libre)}</strong> más de lo que
-       entró este mes. Lo que gastes de aquí en adelante sale del ahorro.`}</span>
-      </div>`
-    : `<div class="aviso alerta"><span class="icono">!</span>
-        <span class="crece">Sin ingresos registrados en ${esc(nombreMes(mes))} no se
-        puede decir cuánto te queda. Apunta el sueldo en Cuentas → + Ingreso y
-        esta caja empieza a responder «¿puedo seguir gastando?».</span></div>`}`;
-}
-
-/** Días que faltan para acabar el mes; 0 si el mes ya está cerrado. */
-function diasQuedan(mes) {
-  if (mes !== mesActual()) return 0;
-  const hoy = new Date();
-  const [a, m] = mes.split('-').map(Number);
-  return new Date(a, m, 0).getDate() - hoy.getDate();
-}
-
 function detalleReal(fila) {
   if (!fila) return '';
   if (!fila.realLineas.length) {
@@ -20557,7 +20450,7 @@ function formFijo(r, alTerminar) {
         const explicar = () => {
           pistaEs.textContent = simulacion
             ? 'Solo cuenta en «Simulación», para ver cómo quedarían los meses. Con «Ejecutar» pasa a lo real.'
-            : 'Se paga sí o sí: cuenta en «Lo real», en el sueldo del mes y en «Cómo va el mes».';
+            : 'Se paga sí o sí: cuenta en «Lo real» y en el sueldo del mes.';
         };
         cajaEs.appendChild(segmentado(
           [{ valor: 'fijo', texto: 'Pago fijo' }, { valor: 'sim', texto: 'Simulación' }],
@@ -21800,6 +21693,7 @@ M["views/vehiculo"] = (function () {
 const {db, eliminar, guardar, recolocar} = M["store"];
 const {money, redondear, textoFecha, odometroHoy, kmPorMes, kmEstimadoEnFecha, estadoMantenimientos, eventosVehiculo, planesMantenimiento, guardarPlanMantenimiento, MANTENIMIENTOS, gastoDeMantenimiento, costoTipico, nombreMes, claveMes, recorridosQueNoEncajan, DESVIO_GRAVE, buscarEnElCarro, rangoMeses, hoyLocal} = M["calc"];
 const {fijosManuales, guardarManual} = M["plan"];
+const {seccionCombustible} = M["views/resumen"];
 const {esc, $, $$, confirmar, modal, brindis} = M["ui"];
 const {formMantenimiento} = M["forms"];
 const {plegable} = M["pliegue"];
@@ -21885,6 +21779,10 @@ function render(raiz) {
 
     <section class="tarjeta" id="veh-presupuesto">
       ${seccionPresupuesto()}
+    </section>
+
+    <section class="tarjeta" id="combustible">
+      ${seccionCombustible({ usuario: 'ambos' }, { sinKm: true })}
     </section>
 
     <section class="tarjeta">
@@ -22380,13 +22278,8 @@ function seccionPresupuesto() {
       <p class="pista">${[
     p.sinCosto ? `${p.sinCosto} sin costo estimado` : '',
     p.dudosas ? `${p.dudosas} con un historial que no se parece entre sí` : '',
-  ].filter(Boolean).join(' y ')}: el total de arriba se queda corto.</p>` : ''}
-
-    ${p.sinHistorial.length ? `
-      <p class="pista">Y estos no salen porque nunca se apuntó ninguno:
-        <strong>${p.sinHistorial.map((x) => esc(x)).join(', ')}</strong>.
-        En cuanto apuntes uno —con su fecha y su kilometraje— empiezan a contar
-        aquí.</p>` : ''}`;
+  ].filter(Boolean).join(' y ')}: el total de arriba se queda corto.</p>` : ''}`;
+  // Lo que nunca se apuntó ya lo dice «Mantenimiento que toca» («Sin apuntar todavía»).
 }
 
 const MES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
