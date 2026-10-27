@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-MAzCSnthkvqBIgXa+yZmbPiaH8bUuerDW5Isp0XyXHI='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-mvubXpd92blYBVgS08iNcFhMo9bZQfWejT1gauM6Hyc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3883,6 +3883,72 @@ body.velada .cabecera { filter: blur(18px); }
 }
 .pz-valores i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
 .pz-valores b { color: var(--tinta); font-weight: 640; }
+
+/* «¿Cuánto voy a gastar?»: una columna por mes, con la línea del límite. */
+.cg-real { background: color-mix(in srgb, var(--serie-1) 92%, transparent); }
+.cg-grafica { display: flex; align-items: flex-end; gap: 8px; height: 190px; margin: 10px 0 6px; }
+.cg-col {
+  flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: none; border: 0; padding: 0; cursor: pointer; color: inherit; font: inherit;
+}
+.cg-col:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; border-radius: 10px; }
+.cg-pila {
+  position: relative; flex: 1; width: 100%; max-width: 46px; display: flex; flex-direction: column-reverse;
+  border-radius: 10px; overflow: hidden; background: var(--superficie-3);
+}
+.cg-tramo { display: block; width: 100%; flex: none; }
+.cg-limite { position: absolute; left: -2px; right: -2px; height: 0; border-top: 2px dashed var(--alerta); }
+.cg-mes { font-size: 11.5px; color: var(--tinta-2); }
+.cg-mes.mal { color: var(--critico); font-weight: 650; }
+.cg-pasa { min-height: 14px; font-size: 10px; font-weight: 700; color: var(--critico); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cg-ley i.cg-ley-limite { width: 12px; height: 0; border-radius: 0; border-top: 2px dashed var(--alerta); vertical-align: 2px; }
+.cg-pie { margin-top: 6px; }
+
+/* «Mes a mes»: la tabla; cada fila se despliega con el detalle por categoría. */
+.cg-vercomo { margin: 4px 0 10px; }
+.cg-tabla { font-variant-numeric: tabular-nums; }
+.cg-cabeza, .cg-fila > summary { display: grid; grid-template-columns: 0.8fr 1.1fr 1.1fr 1.2fr; gap: 6px; align-items: baseline; }
+.cg-cabeza { padding: 6px 0; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tinta-3); border-bottom: 1px solid var(--grid); }
+.cg-cabeza span + span, .cg-c-num { text-align: right; }
+.cg-fila { border-bottom: 1px solid var(--grid); }
+.cg-fila > summary { list-style: none; cursor: pointer; padding: 11px 0; font-size: 14px; }
+.cg-fila > summary::-webkit-details-marker { display: none; }
+.cg-fila > summary:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; border-radius: 6px; }
+.cg-c-mes { font-weight: 650; color: var(--tinta); }
+.cg-c-mes::before { content: '›'; display: inline-block; width: 12px; color: var(--tinta-3); transition: transform 0.15s; }
+.cg-fila[open] .cg-c-mes::before { transform: rotate(90deg); }
+.cg-c-num { color: var(--tinta); font-weight: 600; }
+.cg-c-num.ok { color: var(--ok-texto); }
+.cg-c-num.mal, .cg-c-num.medio { color: var(--critico); }
+.cg-c-num small { display: block; font-size: 10.5px; font-weight: 650; color: var(--critico); }
+.cg-detalle { padding: 2px 0 12px; }
+.cg-resumen {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 10px; margin-bottom: 10px;
+  border-radius: 12px; border: 1px solid var(--borde); background: var(--superficie-2);
+}
+.cg-resumen.mal { border-color: color-mix(in srgb, var(--critico) 55%, transparent); background: color-mix(in srgb, var(--critico) 10%, var(--superficie-2)); }
+.cg-resumen > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cg-resumen span { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--tinta-3); }
+.cg-resumen > div b { font-size: 13.5px; color: var(--tinta); }
+.cg-resumen p { grid-column: 1 / -1; margin: 4px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--tinta-2); }
+.cg-resumen.mal p b { color: var(--critico); }
+.cg-resumen.ok p b { color: var(--ok-texto); }
+.cg-grupo { margin-top: 10px; }
+.cg-grupo.fuera { opacity: 0.6; }
+.cg-grupo-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 4px 0; font-size: 12.5px; font-weight: 680; color: var(--tinta); border-bottom: 1px solid var(--grid); }
+.cg-grupo-cab i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.cg-grupo-cab small { font-weight: 500; color: var(--tinta-3); }
+.cg-vacio { margin: 4px 0; font-size: 12px; color: var(--tinta-3); }
+.cg-cat > summary { display: grid; grid-template-columns: 1fr 56px auto; gap: 8px; align-items: center; list-style: none; cursor: pointer; padding: 6px 0; font-size: 13px; color: var(--tinta-2); }
+.cg-cat > summary::-webkit-details-marker { display: none; }
+.cg-cat > summary small { font-size: 10.5px; color: var(--tinta-3); }
+.cg-cat > summary b { color: var(--tinta); font-weight: 640; text-align: right; }
+.cg-cat-barra { height: 5px; border-radius: 3px; background: var(--superficie-3); overflow: hidden; }
+.cg-cat-barra i { display: block; height: 100%; background: var(--acento); border-radius: 3px; }
+.cg-cat ul { list-style: none; margin: 0 0 6px; padding: 0 0 0 12px; border-left: 2px solid var(--grid); }
+.cg-cat li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; font-size: 12px; color: var(--tinta-2); }
+.cg-cat li small { display: block; font-size: 10.5px; color: var(--tinta-3); }
+.cg-cat li b { font-weight: 600; color: var(--tinta); white-space: nowrap; }
 
 /* «Ver en tabla» de Presupuesto: una hoja con los meses en columnas. */
 .pz-tabla-btn { display: flex; justify-content: flex-end; margin: -2px 0 8px; }
@@ -19083,6 +19149,8 @@ const {plegable} = M["pliegue"];
  */
 const estado = {
   horizonte: 6, mesAbierto: null, quien: 'J',
+  // «Mes a mes»: qué se suma (solo lo real, + simulado, + comunes) y el mes desplegado.
+  verComo: 'real', cgAbierto: null,
   // Las listas plegables que se dejaron abiertas: siguen así al repintar.
   listas: new Set(),
 };
@@ -19230,6 +19298,8 @@ function render(raiz, { irA } = {}) {
       <div id="seg-horizonte"></div>
     </div>
 
+    <section class="tarjeta" id="cg-grafico">${tarjetaCuantoGasto(contexto)}</section>
+    <section class="tarjeta" id="cg-meses">${tarjetaMesAMes(contexto)}</section>
     <section class="tarjeta" id="pz-real">${tarjetaReal(contexto)}</section>
     <section class="tarjeta" id="pz-realsim">${tarjetaRealSim(contexto)}</section>
     <section class="tarjeta" id="pz-sim">${tarjetaSimulacion(contexto)}</section>
@@ -19272,6 +19342,24 @@ function render(raiz, { irA } = {}) {
     estado.horizonte,
     (v) => { estado.horizonte = Number(v); render(raiz, { irA }); },
   ));
+
+  // «Mes a mes»: qué se suma; al tocar un mes de la gráfica se despliega su detalle.
+  $('#cg-vercomo', raiz).appendChild(segmentado(VER_COMO, estado.verComo,
+    (v) => { estado.verComo = v; render(raiz, { irA }); }));
+  $$('details.cg-fila', raiz).forEach((d) => {
+    d.addEventListener('toggle', () => {
+      if (d.open) estado.cgAbierto = d.dataset.cg;
+      else if (estado.cgAbierto === d.dataset.cg) estado.cgAbierto = null;
+    });
+  });
+  $$('[data-cgmes]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const d = raiz.querySelector(`details.cg-fila[data-cg="${btn.dataset.cgmes}"]`);
+      if (!d) return;
+      d.open = true;
+      d.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
 
   // Las listas plegables se recuerdan abiertas al repintar (tras pagar, editar…).
   $$('details.pz-lista', raiz).forEach((d) => {
@@ -19428,6 +19516,123 @@ function cabezaMes(f, c, gasto, rotuloGasto) {
     <small>${rotuloGasto} ${money(gasto)}${rotuloGasto === 'gasto' ? ` de ${money(c.sueldo)}` : ''}</small>
     <small class="pz-mes-estado ${llega ? 'ok' : 'mal'}">${llega
     ? `alcanza para el ${c.pct} %` : `faltan ${money(redondear(c.meta - queda))} para el ${c.pct} %`}</small>`;
+}
+
+/*
+ * «¿Cuánto voy a gastar?» y «Mes a mes»: el presupuesto de un vistazo.
+ *
+ * La primera es la gráfica: una columna por mes con lo real (sí o sí), lo
+ * simulado y los gastos comunes que estima la app, y la línea del límite para
+ * gastar (el sueldo menos el ahorro). La segunda, los mismos meses en cifras:
+ * gasto, lo que sobra del sueldo y lo que habría en cuentas. Al tocar un mes
+ * —en la gráfica o en la tabla— se despliega en qué se va: cada categoría
+ * (gasolina, bebidas, supermercado…) con su monto, separado en lo real, lo
+ * simulado y lo recurrente. Si el mes se pasa del límite, se dice en rojo
+ * cuánto se pasa.
+ */
+const VER_COMO = [
+  { valor: 'real', texto: 'Solo real' },
+  { valor: 'simulado', texto: '+ Simulado' },
+  { valor: 'comunes', texto: '+ Comunes' },
+];
+const escenarioDe = (v) => ESCENARIOS.find((e) => e.k === v) || ESCENARIOS[0];
+const mesCorto = (m) => {
+  const n = nombreMes(m).split(' ')[0];
+  return n.charAt(0).toUpperCase() + n.slice(1, 3);
+};
+
+function tarjetaCuantoGasto({ plan, quien }) {
+  const e = escenarioDe(estado.verComo);
+  const meses = plan.filas.map((f) => ({ f, c: cuentaDelMes(f, quien) }));
+  const alto = Math.max(1, ...meses.map(({ f, c }) => Math.max(f.real + f.simulacion + f.comunes, c.limite * 1.25)));
+  const pct = (v) => `${((Math.max(0, v) / alto) * 100).toFixed(2)}%`;
+  const c0 = meses[0] && meses[0].c;
+  const cols = meses.map(({ f, c }) => {
+    const pasa = redondear(e.gasto(f) - c.limite);
+    return `<button type="button" class="cg-col" data-cgmes="${esc(f.mes)}" aria-label="${esc(nombreMes(f.mes))}: real ${esc(money(f.real))}, simulado ${esc(money(f.simulacion))}, comunes ${esc(money(f.comunes))}, límite ${esc(money(c.limite))}">
+      <span class="cg-pasa">${pasa > 0.004 ? `+${money(pasa)}` : ''}</span>
+      <span class="cg-pila">
+        <span class="cg-tramo pz-comunes" style="height:${pct(f.comunes)}"></span>
+        <span class="cg-tramo pz-simulado" style="height:${pct(f.simulacion)}"></span>
+        <span class="cg-tramo cg-real" style="height:${pct(f.real)}"></span>
+        <b class="cg-limite" style="bottom:${pct(c.limite)}"></b>
+      </span>
+      <span class="cg-mes${pasa > 0.004 ? ' mal' : ''}">${esc(mesCorto(f.mes))}</span>
+    </button>`;
+  });
+  return `<header><h2>¿Cuánto voy a gastar?</h2>${c0 ? `<span class="pista">límite ${money(c0.limite)}</span>` : ''}</header>
+    <div class="cg-grafica">${cols.join('')}</div>
+    <div class="pz-ley cg-ley">
+      <span><i class="cg-real"></i>Real (sí o sí)</span><span><i class="pz-simulado"></i>Simulado</span>
+      <span><i class="pz-comunes"></i>Comunes (estimado)</span><span><i class="cg-ley-limite"></i>Límite para gastar</span>
+    </div>
+    <p class="pz-sub cg-pie">Toca un mes para ver en qué se va. En rojo, cuánto te pasas del límite con «${esc(VER_COMO.find((v) => v.valor === e.k).texto)}».</p>`;
+}
+
+/** Las líneas de un mes, por grupo y por categoría, de la más cara a la más barata. */
+function grupoDetalle(titulo, clase, lineas, cuenta) {
+  const total = redondear(lineas.reduce((t, l) => t + l.monto, 0));
+  if (!lineas.length) {
+    return `<div class="cg-grupo${cuenta ? '' : ' fuera'}"><div class="cg-grupo-cab"><span><i class="${clase}"></i>${titulo}</span><b>${money(0)}</b></div>
+      <p class="cg-vacio">Nada este mes.</p></div>`;
+  }
+  const cats = [...lineas.reduce((m, l) => {
+    const k = l.categoria || 'Sin categoría';
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(l);
+    return m;
+  }, new Map())].map(([k, ls]) => [k, ls.sort((a, b) => b.monto - a.monto), redondear(ls.reduce((t, l) => t + l.monto, 0))])
+    .sort((a, b) => b[2] - a[2]);
+  return `<div class="cg-grupo${cuenta ? '' : ' fuera'}">
+    <div class="cg-grupo-cab"><span><i class="${clase}"></i>${titulo}${cuenta ? '' : ' <small>no se suma en esta vista</small>'}</span><b>${money(total)}</b></div>
+    ${cats.map(([k, ls, v]) => `<details class="cg-cat">
+      <summary><span>${esc(k)} <small>${ls.length > 1 ? `${ls.length} gastos` : ''}</small></span><span class="cg-cat-barra"><i style="width:${total > 0 ? ((v / total) * 100).toFixed(1) : 0}%"></i></span><b>${money(v)}</b></summary>
+      <ul>${ls.map((l) => `<li><span>${esc(l.detalle || k)}<small>${esc([l.tipo, l.de !== 'J y C' ? l.de : ''].filter(Boolean).join(' · '))}</small></span><b>${money(l.monto)}</b></li>`).join('')}</ul>
+    </details>`).join('')}
+  </div>`;
+}
+
+function tarjetaMesAMes({ plan, quien }) {
+  const e = escenarioDe(estado.verComo);
+  const cierre = cierres(plan, quien, e.partes);
+  const filas = plan.filas.map((f, i) => {
+    const c = cuentaDelMes(f, quien);
+    const gasto = redondear(e.gasto(f));
+    const queda = redondear(c.sueldo - gasto);
+    const pasa = redondear(gasto - c.limite);
+    const llega = queda >= c.meta;
+    const abierto = estado.cgAbierto === f.mes;
+    const reales = lineasReales(f), sims = lineasPrevistas(f, 'simulacion'), coms = lineasPrevistas(f, 'comunes');
+    return `<details class="cg-fila" data-cg="${esc(f.mes)}"${abierto ? ' open' : ''}>
+      <summary>
+        <span class="cg-c-mes">${esc(mesCorto(f.mes))}</span>
+        <span class="cg-c-num">${money(gasto)}</span>
+        <span class="cg-c-num ${llega ? 'ok' : pasa > 0.004 ? 'mal' : 'medio'}">${money(queda)}${pasa > 0.004 ? `<small>te pasas ${money(pasa)}</small>` : ''}</span>
+        <span class="cg-c-num">${money(cierre[i].saldo)}</span>
+      </summary>
+      <div class="cg-detalle">
+        <div class="cg-resumen ${pasa > 0.004 ? 'mal' : 'ok'}">
+          <div><span>Sueldo</span><b>${money(c.sueldo)}</b></div>
+          <div><span>Límite para gastar</span><b>${money(c.limite)}</b></div>
+          <div><span>Gasto</span><b>${money(gasto)}</b></div>
+          <p>${pasa > 0.004
+    ? `<b>Te pasas ${money(pasa)} del límite</b>: no llegas al ahorro del ${c.pct} % (${money(c.meta)}); ahorrarías ${money(Math.max(0, queda))}.`
+    : `Te quedan <b>${money(redondear(c.limite - gasto))}</b> antes del límite y llegas al ahorro del ${c.pct} %.`}</p>
+        </div>
+        ${grupoDetalle('Real (sí o sí)', 'cg-real', reales, true)}
+        ${grupoDetalle('Simulado', 'pz-simulado', sims, e.k !== 'real')}
+        ${grupoDetalle('Recurrentes (comunes que estima la app)', 'pz-comunes', coms, e.k === 'comunes')}
+      </div>
+    </details>`;
+  });
+  return `<header><h2>Mes a mes</h2><span class="pista">Ver como</span></header>
+    <div id="cg-vercomo" class="cg-vercomo"></div>
+    <div class="cg-tabla">
+      <div class="cg-cabeza"><span>Mes</span><span>Gasto</span><span>Te sobra</span><span>En cuentas</span></div>
+      ${filas.join('')}
+    </div>
+    <p class="pz-sub cg-pie">En verde, los meses que llegan al ahorro; en rojo, cuánto te pasas del límite. Toca un mes para ver cada gasto.</p>
+    <div class="barra-accion"><span class="crece"></span><button type="button" class="btn pequeno" data-tabla="${e.k === 'real' ? 'real' : e.k === 'simulado' ? 'sim' : 'comparar'}">▦ Ver en tabla</button></div>`;
 }
 
 function tarjetaReal({ plan, quien, pagosFijos, suma }) {
