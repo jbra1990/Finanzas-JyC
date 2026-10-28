@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-fZDV+3IcJTqr7e4iP1ciF3sx2fg4obL+xJgYKxBJNng='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-aiXOeKm0KS2I44iYyLgeXNeRo7zSBrMzivkgRl/chCI='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4235,7 +4235,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'd7b97d1e7c';
+window.__VERSION_APP__ = 'c3b9e32487';
 
 M["cerradura"] = (function () {
 /**
@@ -20564,7 +20564,8 @@ function formSimulacion(r, alTerminar) {
   const nuevo = !r;
   const mesHoy = hoyLocal().slice(0, 7);
   const misTarjetas = tarjetas();
-  const enCuotas = r ? r.clase === 'plazos' && Number(r.cuotas) > 1 : true;
+  // Una simulación nueva arranca «De una vez»: lo normal es un solo pago.
+  const enCuotas = r ? r.clase === 'plazos' && Number(r.cuotas) > 1 : false;
   const medio0 = r?.medio === 'Tarjeta' || !r ? 'Tarjeta' : 'Efectivo';
   const total0 = r ? (r.clase === 'plazos' ? (r.total ?? r.monto * r.cuotas) : r.monto) : '';
   const cuotas0 = r?.clase === 'plazos' ? Number(r.cuotas) : 3;
@@ -20590,7 +20591,7 @@ function formSimulacion(r, alTerminar) {
       <div class="campo ancho"><label>De una vez o en cuotas</label><div id="ps-forma"></div></div>
       <div class="filtros" id="ps-caja-cuotas">
         <div class="campo"><label for="pf-cuotas">Nº de cuotas</label>
-          <input id="pf-cuotas" name="cuotas" type="number" inputmode="numeric" min="2" max="48" step="1" value="${esc(String(cuotas0 > 1 ? cuotas0 : 3))}"></div>
+          <input id="pf-cuotas" name="cuotas" type="number" inputmode="numeric" min="1" max="48" step="1" value="${esc(String(cuotas0 > 1 ? cuotas0 : 3))}"></div>
         <div class="campo"><label>Cuota de cada mes</label><div class="ps-cuota" id="ps-cuota">—</div></div>
       </div>
       <div class="filtros">
@@ -20610,11 +20611,12 @@ function formSimulacion(r, alTerminar) {
         const conTarjeta = medio === 'Tarjeta';
         $('#ps-caja-tarjeta', form).hidden = !conTarjeta;
         $('#ps-tarjeta', form).disabled = !conTarjeta;
-        const cuotas = forma === 'cuotas';
-        $('#ps-caja-cuotas', form).hidden = !cuotas;
-        $('#pf-cuotas', form).disabled = !cuotas;
+        $('#ps-caja-cuotas', form).hidden = forma !== 'cuotas';
+        $('#pf-cuotas', form).disabled = forma !== 'cuotas';
         const total = redondear(aNumero($('#pf-total', form).value));
-        const n = Math.max(2, Math.round(Number($('#pf-cuotas', form).value) || 2));
+        const n = Math.max(1, Math.round(Number($('#pf-cuotas', form).value) || 1));
+        // Una sola cuota es un solo pago: se guarda y se enseña como tal.
+        const cuotas = forma === 'cuotas' && n > 1;
         const desde = $('#pf-desde', form).value || mesHoy;
         const cuota = redondear(total / n);
         const ultima = redondear(total - cuota * (n - 1));
@@ -20674,8 +20676,9 @@ function formSimulacion(r, alTerminar) {
         tipo: 'Fijo',
       };
       let fila;
-      if (forma === 'cuotas') {
-        const cuotas = Math.max(2, Math.min(48, Math.round(Number(d.cuotas) || 2)));
+      const n = Math.max(1, Math.min(48, Math.round(Number(d.cuotas) || 1)));
+      if (forma === 'cuotas' && n > 1) {
+        const cuotas = n;
         fila = {
           ...comun, clase: 'plazos', total, monto: redondear(total / cuotas), cuotas, desdeMes: desde,
           cargo: 'Diferido', cadencia: 30, pagadasInicio: 0, pagos: [],
