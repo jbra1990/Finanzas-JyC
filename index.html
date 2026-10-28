@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-mvubXpd92blYBVgS08iNcFhMo9bZQfWejT1gauM6Hyc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-fZDV+3IcJTqr7e4iP1ciF3sx2fg4obL+xJgYKxBJNng='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4196,6 +4196,13 @@ dialog.ps-dialogo, dialog.ps-dialogo .modal-cab, dialog.ps-dialogo .modal-pie { 
 .cm-kpis.dos { grid-template-columns: repeat(2, 1fr); }
 .cm-compras > .lista { padding: 0 12px 6px; margin: 0; }
 
+/* Datos → Respaldo completo: cómo está guardado todo en este teléfono. */
+.guardado { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; font-size: 13px; line-height: 1.4; }
+.guardado li { display: flex; gap: 8px; align-items: flex-start; color: var(--tinta-2); }
+.guardado li span { flex: none; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: 800; }
+.guardado li.ok span { color: var(--ok-texto); background: color-mix(in srgb, var(--ok) 18%, transparent); }
+.guardado li.mal span { color: var(--alerta); background: color-mix(in srgb, var(--alerta) 18%, transparent); }
+
 </style>
 </head>
 <body>
@@ -4228,7 +4235,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '85f7dda41f';
+window.__VERSION_APP__ = 'd7b97d1e7c';
 
 M["cerradura"] = (function () {
 /**
@@ -4411,7 +4418,19 @@ M["store"] = (function () {
 
 const cerradura = M["cerradura"];
 const CLAVE = 'finanzas.jc.v1';
+/** Cuándo se escribió por última vez la base en `localStorage` (ms). */
+const CLAVE_T = 'finanzas.jc.v1.t';
 const RUTA_SEMILLA = 'data/seed.json';
+/*
+ * La copia de seguridad interna, en IndexedDB. Ver `persistir` y `cargar`.
+ * Los nombres llevan el prefijo de la app: en jbra1990.github.io conviven otras
+ * apps y el almacenamiento del navegador es de todo el sitio, no de cada una.
+ */
+const COPIA_BD = 'finanzas-jc-copia';
+const COPIA_ALMACEN = 'copia';
+/** Lo que es de esta app en el almacenamiento del sitio: lo único que borra. */
+const BD_PROPIAS = [COPIA_BD, 'finanzas-archivo'];
+const CACHE_PROPIA = /^finanzas-jc/;
 
 /** Colecciones que componen la base de datos. */
 const COLECCIONES = [
@@ -4454,7 +4473,7 @@ const CONFIG_POR_DEFECTO = {
 };
 
 /** Ajustes que pertenecen al dispositivo y no se sincronizan. */
-const CONFIG_LOCAL = ['tema', 'sync_url', 'sync_clave', 'sync_id', 'dispositivo'];
+const CONFIG_LOCAL = ['tema', 'sync_url', 'sync_clave', 'sync_id', 'dispositivo', 'ultimo_respaldo'];
 
 /** Estado en memoria. Nunca se reasigna: se muta y se persiste. */
 const db = {
@@ -4599,6 +4618,104 @@ function comprobarAlmacenamiento() {
 }
 
 /*
+ * LA COPIA INTERNA.
+ *
+ * `localStorage` es de todo el sitio (jbra1990.github.io), no de esta app: lo
+ * comparten todas las apps publicadas ahí y tiene un tope de unos 5 MB. Si
+ * se llena, la base deja de guardarse; si algo borra la clave, se pierde.
+ * Por eso cada escritura deja además una copia en IndexedDB, con su hora, y
+ * al arrancar se usa la más reciente de las dos. Con la cerradura puesta la
+ * copia es el mismo sobre cifrado: nunca hay texto legible en ella.
+ */
+let colaCopia = Promise.resolve();
+let copiaPendiente = null;
+
+function abrirCopia() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(COPIA_BD, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(COPIA_ALMACEN);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => reject(new Error('IndexedDB bloqueada'));
+  });
+}
+
+function guardarCopia(texto, t) {
+  // Si ya hay una escritura en curso, solo se guarda la última que se pida.
+  const yaHabia = copiaPendiente !== null;
+  copiaPendiente = { texto, t };
+  if (yaHabia) return colaCopia;
+  colaCopia = colaCopia.then(async () => {
+    const dato = copiaPendiente;
+    copiaPendiente = null;
+    if (!dato || typeof indexedDB === 'undefined') return;
+    const bd = await abrirCopia();
+    await new Promise((resolve, reject) => {
+      const tx = bd.transaction(COPIA_ALMACEN, 'readwrite');
+      tx.objectStore(COPIA_ALMACEN).put(dato, 'base');
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+    bd.close();
+  }).catch((err) => { console.warn('Copia interna no guardada', err); });
+  return colaCopia;
+}
+
+/** La copia interna: {texto, t}, o null. Nunca tarda más de un segundo y medio. */
+async function leerCopia() {
+  if (typeof indexedDB === 'undefined') return null;
+  const leer = (async () => {
+    const bd = await abrirCopia();
+    const dato = await new Promise((resolve, reject) => {
+      const req = bd.transaction(COPIA_ALMACEN, 'readonly').objectStore(COPIA_ALMACEN).get('base');
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    bd.close();
+    return dato;
+  })();
+  const plazo = new Promise((resolve) => { setTimeout(() => resolve(null), 1500); });
+  try {
+    return await Promise.race([leer, plazo]);
+  } catch {
+    return null;
+  }
+}
+
+/** Espera a que la copia interna esté escrita (pruebas y cierre de la app). */
+function copiaAlDia() {
+  return colaCopia;
+}
+
+/**
+ * Escribe la base (en claro o el sobre cifrado) en `localStorage` y en la
+ * copia interna. La hora solo se apunta si `localStorage` aceptó la escritura:
+ * así, si se llena, al arrancar se ve que la copia interna es más nueva.
+ */
+function persistir(texto) {
+  const t = Date.now();
+  const escrito = seguro.escribir(CLAVE, texto);
+  if (escrito) seguro.escribir(CLAVE_T, String(t));
+  guardarCopia(texto, t);
+  return escrito;
+}
+
+/**
+ * Pide al navegador que no borre los datos de este sitio por su cuenta.
+ * Safari puede vaciar el almacenamiento de un sitio que lleva días sin
+ * abrirse; con el permiso concedido (o desde la pantalla de inicio) no lo hace.
+ */
+const persistencia = { pedida: false, concedida: null };
+async function pedirPersistencia() {
+  try {
+    if (!navigator.storage?.persist) return;
+    persistencia.pedida = true;
+    persistencia.concedida = (await navigator.storage.persisted?.()) || (await navigator.storage.persist());
+  } catch { /* el navegador no lo ofrece */ }
+}
+
+/*
  * Con la cerradura puesta, escribir deja de ser instantáneo: cifrar es
  * asíncrono. `guardar()` se sigue llamando igual desde toda la app —sin await,
  * como siempre—, así que aquí se encadenan las escrituras para que no se pisen
@@ -4615,7 +4732,7 @@ function escrituraPendiente() {
 function escribirCifrado(texto) {
   colaEscritura = colaEscritura
     .then(() => cerradura.sellar(texto, salActual))
-    .then((sobre) => { seguro.escribir(CLAVE, sobre); })
+    .then((sobre) => { persistir(sobre); })
     .catch((err) => { marcarFallo(err); });
   return colaEscritura;
 }
@@ -4630,7 +4747,7 @@ function guardar() {
     return;
   }
 
-  const escrito = seguro.escribir(CLAVE, texto);
+  const escrito = persistir(texto);
   // Que `setItem` no lance no significa que el dato se conserve: hay
   // navegadores que lo descartan en silencio. En ese caso manda la
   // comprobación de arranque y la bandera no se limpia.
@@ -4666,7 +4783,7 @@ async function ponerCerradura(clave) {
  * @returns {boolean} false si la clave no es la correcta
  */
 async function abrirCerradura(clave) {
-  const crudo = seguro.leer(CLAVE);
+  const crudo = crudoCargado ?? seguro.leer(CLAVE);
   const plano = await cerradura.abrir(crudo, clave);
   if (plano === null) return false;
   salActual = cerradura.salDe(crudo);
@@ -4676,14 +4793,14 @@ async function abrirCerradura(clave) {
 
 /** Quita la cerradura: vuelve a dejar la base en claro. Pide la clave actual. */
 async function quitarCerradura(clave) {
-  const crudo = seguro.leer(CLAVE);
+  const crudo = crudoCargado ?? seguro.leer(CLAVE);
   if (cerradura.esSobre(crudo) && await cerradura.abrir(crudo, clave) === null) {
     return false;
   }
   cerradura.cerrar();
   salActual = null;
   await colaEscritura;
-  seguro.escribir(CLAVE, JSON.stringify(db));
+  persistir(JSON.stringify(db));
   return true;
 }
 
@@ -4867,9 +4984,32 @@ function retirarPichinchaAdicional() {
  * Carga el estado: primero localStorage; si está vacío, la semilla migrada
  * del Excel original. Devuelve 'local' | 'semilla' | 'vacio'.
  */
+/** Lo que se leyó al arrancar (de `localStorage` o de la copia interna). */
+let crudoCargado = null;
+/** De dónde salió la base al arrancar: 'localStorage' | 'copia' | ''. */
+const recuperacion = { desde: '' };
+
 async function cargar() {
   comprobarAlmacenamiento();
-  const crudo = seguro.leer(CLAVE);
+  pedirPersistencia();
+  let crudo = seguro.leer(CLAVE);
+  /*
+   * La copia interna manda solo si hace falta: si en `localStorage` no hay
+   * nada, o si la copia es más nueva que lo último que `localStorage` aceptó
+   * (se llenó y dejó de guardar). Sin hora apuntada —una base de antes de que
+   * existiera la copia— manda `localStorage`.
+   */
+  const tLocal = Number(seguro.leer(CLAVE_T)) || 0;
+  const copia = await leerCopia();
+  if (copia?.texto && (!crudo || (tLocal && Number(copia.t) > tLocal))) {
+    crudo = copia.texto;
+    recuperacion.desde = 'copia';
+    // Se devuelve a su sitio; si sigue sin caber, la copia sigue valiendo.
+    if (seguro.escribir(CLAVE, crudo)) seguro.escribir(CLAVE_T, String(copia.t));
+  } else if (crudo) {
+    recuperacion.desde = 'localStorage';
+  }
+  crudoCargado = crudo;
   /*
    * Si lo guardado es un sobre cifrado no hay nada que interpretar todavía:
    * hace falta la clave. Se avisa y la app enseña la pantalla de la cerradura.
@@ -4928,22 +5068,26 @@ function reemplazar(datos) {
  */
 async function limpiarTodo() {
   seguro.borrar(CLAVE);
+  seguro.borrar(CLAVE_T);
   adoptar({});
   guardar();
+  await colaCopia;
 
+  /*
+   * Solo lo de ESTA app. El sitio (jbra1990.github.io) lo comparten otras
+   * apps: antes se borraban todas las bases y cachés del navegador, también
+   * las suyas.
+   */
   try {
-    const bds = (await indexedDB.databases?.()) || [];
-    await Promise.all(bds
-      .filter((b) => b.name)
-      .map((b) => new Promise((res) => {
-        const req = indexedDB.deleteDatabase(b.name);
-        req.onsuccess = res; req.onerror = res; req.onblocked = res;
-      })));
-  } catch { /* el navegador no deja enumerar: se sigue */ }
+    await Promise.all(BD_PROPIAS.map((nombre) => new Promise((res) => {
+      const req = indexedDB.deleteDatabase(nombre);
+      req.onsuccess = res; req.onerror = res; req.onblocked = res;
+    })));
+  } catch { /* sin IndexedDB: nada que borrar */ }
 
   try {
     const claves = await caches.keys();
-    await Promise.all(claves.map((k) => caches.delete(k)));
+    await Promise.all(claves.filter((k) => CACHE_PROPIA.test(k)).map((k) => caches.delete(k)));
   } catch { /* sin caché que borrar */ }
 }
 
@@ -4960,6 +5104,13 @@ function instantanea() {
  * archivo tendría acceso remoto a toda la base. Lo que se comparte no lleva
  * credenciales; al restaurar, cada aparato conserva las suyas.
  */
+/** Apunta que hoy se descargó un respaldo desde este aparato (para el recordatorio). */
+function marcarRespaldo() {
+  const d = new Date();
+  db.config.ultimo_respaldo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  guardar();
+}
+
 function instantaneaSinSecretos() {
   const copia = instantanea();
   copia.config = { ...copia.config };
@@ -5115,7 +5266,7 @@ function usuarios() {
     .filter(Boolean);
 }
 
-return { CLAVES, COLECCIONES, CONFIG_LOCAL, abrirCerradura, alCambiar, almacenamiento, capitalizar, cargar, categoriasGasto, categoriasIngreso, cerraduraAbierta, codigoDispositivo, comprobarAlmacenamiento, cuenta, cuentasBancarias, db, echarLlave, eliminar, escrituraPendiente, estaCifrada, guardar, instantanea, instantaneaSinSecretos, limpiarTodo, nuevoId, ponerCerradura, quitarCerradura, quitarCuotas, recolocar, reemplazar, sepultar, tarjetas, tocar, upsert, usuarios };
+return { CLAVES, COLECCIONES, CONFIG_LOCAL, abrirCerradura, alCambiar, almacenamiento, capitalizar, cargar, categoriasGasto, categoriasIngreso, cerraduraAbierta, codigoDispositivo, comprobarAlmacenamiento, copiaAlDia, cuenta, cuentasBancarias, db, echarLlave, eliminar, escrituraPendiente, estaCifrada, guardar, instantanea, instantaneaSinSecretos, limpiarTodo, marcarRespaldo, nuevoId, persistencia, ponerCerradura, quitarCerradura, quitarCuotas, recolocar, recuperacion, reemplazar, sepultar, tarjetas, tocar, upsert, usuarios };
 })();
 
 M["calc"] = (function () {
@@ -18431,7 +18582,7 @@ M["views/datos"] = (function () {
  * y ajustes generales.
  */
 
-const {db, guardar, reemplazar, limpiarTodo, instantaneaSinSecretos, tocar, CLAVES, estaCifrada, ponerCerradura, quitarCerradura} = M["store"];
+const {db, guardar, reemplazar, limpiarTodo, instantaneaSinSecretos, tocar, CLAVES, estaCifrada, ponerCerradura, quitarCerradura, marcarRespaldo, persistencia, almacenamiento} = M["store"];
 const {hayCripto, MIN_CLAVE} = M["cerradura"];
 const {ESPERA_MIN} = M["pantalla_llave"];
 const {money, redondear, nombreMes, hoyLocal} = M["calc"];
@@ -18617,9 +18768,30 @@ function aplicarImportacion(conv, modo) {
 
 // --- Respaldo JSON -----------------------------------------------------------
 
+/*
+ * Cómo está guardado todo en este teléfono, en tres líneas: si el navegador
+ * guarda, si se ha comprometido a no borrar los datos por su cuenta y cuándo
+ * fue el último respaldo descargado.
+ */
+function estadoGuardado() {
+  const ultimo = db.config.ultimo_respaldo;
+  const dias = ultimo ? Math.round((new Date(`${hoyLocal()}T12:00`) - new Date(`${ultimo}T12:00`)) / 86400000) : null;
+  const fila = (ok, texto) => `<li class="${ok ? 'ok' : 'mal'}"><span aria-hidden="true">${ok ? '✓' : '!'}</span>${texto}</li>`;
+  return `<ul class="guardado">
+    ${fila(almacenamiento.ok, almacenamiento.ok ? 'Este navegador está guardando los datos, con una copia interna de respaldo.'
+    : 'Este navegador NO está guardando: descarga un respaldo ya.')}
+    ${fila(persistencia.concedida === true, persistencia.concedida === true
+    ? 'Guardado permanente: el navegador no borrará los datos por su cuenta.'
+    : 'Sin guardado permanente: Safari puede borrar los datos si pasan días sin abrir la app. Ábrela desde el icono de la pantalla de inicio y descarga respaldos.')}
+    ${fila(dias !== null && dias < 7, dias === null ? 'Nunca se ha descargado un respaldo desde este teléfono.'
+    : dias === 0 ? 'Último respaldo: hoy.' : `Último respaldo: hace ${dias} ${dias === 1 ? 'día' : 'días'}.`)}
+  </ul>`;
+}
+
 function exportarJSON() {
   const blob = new Blob([JSON.stringify(instantaneaSinSecretos(), null, 1)], { type: 'application/json' });
   descargar(blob, `respaldo_finanzas_${hoyLocal()}.json`);
+  marcarRespaldo();
   brindis('Respaldo descargado');
 }
 
@@ -18783,6 +18955,7 @@ function render(raiz) {
 
     <section class="tarjeta">
       <header><h2>Respaldo completo</h2></header>
+      ${estadoGuardado()}
       <div class="filtros">
         <button class="btn" id="btn-exp-json">⬇ Descargar respaldo</button>
         <button class="btn" id="btn-imp-json">⬆ Restaurar respaldo</button>
@@ -22699,7 +22872,7 @@ return { render };
 M["app"] = (function () {
 /** Arranque, navegación y botón de registro rápido. */
 
-const {db, cargar, alCambiar, almacenamiento, instantaneaSinSecretos, guardar, tarjetas} = M["store"];
+const {db, cargar, alCambiar, almacenamiento, instantaneaSinSecretos, guardar, tarjetas, recuperacion, marcarRespaldo} = M["store"];
 const {iniciarSync, empujarDiferido, alCambiarSync, estadoSync, configurado} = M["sync"];
 const {mesActual, nombreMes, money, pagoDelMes, estadoTarjeta, hoyLocal, sumarMeses, pagoDeTarjeta, fechaPagoMes, diasEntre, textoFecha} = M["calc"];
 const archivoExcel = M["archivo"];
@@ -22793,6 +22966,24 @@ function avisosPendientes() {
   }
   if (configurado() && estadoSync.error) {
     lista.push({ nivel: 'critico', texto: `La sincronización falló: ${estadoSync.error}` });
+  }
+
+  /*
+   * Sin sincronización, el teléfono es la única copia de los datos: si Safari
+   * borra el almacenamiento del sitio o se pierde el teléfono, no hay de dónde
+   * recuperarlos. Se recuerda descargar un respaldo cada semana.
+   */
+  const hayDatos = db.gastosTarjeta.length + db.gastosEfectivo.length + db.ingresos.length > 0;
+  if (hayDatos && !configurado()) {
+    const ultimo = db.config.ultimo_respaldo;
+    const dias = ultimo ? diasEntre(ultimo, hoyLocal()) : null;
+    if (dias === null || dias >= 7) {
+      lista.push({
+        nivel: 'alerta',
+        texto: `${dias === null ? 'Nunca se ha descargado un respaldo desde este teléfono.' : `El último respaldo es de hace ${dias} días.`} `
+          + 'Descárgalo en Datos → Respaldo completo: es la única copia de tus datos fuera del navegador.',
+      });
+    }
   }
 
   const mes = mesActual();
@@ -22958,8 +23149,9 @@ function avisoAlmacenamiento() {
       + 'iPhone cuando la app va incrustada en otra página.',
     'no-persiste': 'Este navegador no está conservando los datos entre sesiones: '
       + 'lo que registres se perderá al cerrar la app.',
-    'sin-espacio': 'No queda espacio de almacenamiento en este navegador. '
-      + 'Descarga un respaldo y borra datos antiguos.',
+    'sin-espacio': 'No queda espacio en el almacenamiento de este sitio, que comparten '
+      + 'todas las apps publicadas en él. La app guarda mientras tanto una copia interna, '
+      + 'pero descarga un respaldo ya y libera espacio en las otras apps.',
   }[almacenamiento.motivo] || 'No se pudo guardar en este navegador.';
 
   const nodo = crear(`
@@ -22971,6 +23163,7 @@ function avisoAlmacenamiento() {
   nodo.querySelector('#btn-respaldo-urgente').addEventListener('click', () => {
     descargar(new Blob([JSON.stringify(instantaneaSinSecretos(), null, 1)], { type: 'application/json' }),
       `respaldo_finanzas_${hoyLocal()}.json`);
+    marcarRespaldo();
   });
   return nodo;
 }
@@ -23098,7 +23291,9 @@ function arrancarApp(origen) {
   // dentro de la sesión: solo se ignora el heredado del arranque.
   irA('resumen');
 
-  if (origen === 'semilla') {
+  if (recuperacion.desde === 'copia') {
+    brindis('Datos recuperados de la copia interna de la app');
+  } else if (origen === 'semilla') {
     brindis('Datos cargados desde el Excel migrado');
   } else if (origen === 'vacio') {
     $('#vista').prepend(crear(`
@@ -23112,6 +23307,11 @@ function arrancarApp(origen) {
   alCambiar(() => {
     aplicarTema();
     pintarAvisos();
+    // Si el navegador deja de guardar a mitad de uso, se dice en el acto, no al cambiar de sección.
+    if (!almacenamiento.ok && !$('#btn-respaldo-urgente')) {
+      const aviso = avisoAlmacenamiento();
+      if (aviso) { $('#vista').prepend(aviso); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    }
     empujarDiferido();
     archivoExcel.guardarDiferido();
   });
