@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-aiXOeKm0KS2I44iYyLgeXNeRo7zSBrMzivkgRl/chCI='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-DuWq2eI55C3W2RrXT2dkzRWpTXbZ582V4aJ5bhfpBzA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4235,7 +4235,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'c3b9e32487';
+window.__VERSION_APP__ = '693fb0bac6';
 
 M["cerradura"] = (function () {
 /**
@@ -12473,6 +12473,8 @@ function cuentaDelSueldo(mes = mesActual(), usuario = 'J') {
 const claveLimites = (u) => `limites_consumo_${u}`;
 const MESES_LIMITE = 6;
 const NO_ES_CONSUMO = /inter[eé]s|comisi[oó]n|impuesto|refinanciaci[oó]n/i;
+/** Las que salen siempre que haya compras, aunque no se repitan tanto. */
+const SIEMPRE_EN_LIMITES = ['Bebidas'];
 /** A partir de qué uso se avisa de que se está cerca del límite. */
 const AVISO_LIMITE = 80;
 
@@ -12557,6 +12559,7 @@ function limitesConsumo(usuario = 'J', mes = mesActual()) {
      */
     // Los cargos del banco (intereses, comisiones, impuestos) tampoco: no se consumen.
     .filter((c) => (c.activos >= MESES_LIMITE / 2 && c.porMes > 1.3 && !NO_ES_CONSUMO.test(c.categoria))
+      || SIEMPRE_EN_LIMITES.includes(c.categoria)
       || (guardados && guardados[c.categoria] != null))
     .map((c) => {
       // Con medio punto de precisión: con enteros, una categoría de $7 salía en 1 % ($10).
