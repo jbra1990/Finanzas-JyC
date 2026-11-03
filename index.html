@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-3Y1V+ni39rWX+zau7vrGVI6mPqAbZdytvhwHkRAgUbY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-JyaQeiPYUfTMv8GrSBlbhIEZyi9cxJ52jMTomeO7j0E='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3639,13 +3639,9 @@ body.velada .cabecera { filter: blur(18px); }
 .cuadre-items li:last-child { border-bottom: 0; }
 .cuadre-o { text-align: center; }
 .cuadre-veredicto { margin: 4px 0 0; font-size: 14px; font-weight: 600; }
-/* Comparación con los consumos pegados del estado de cuenta. */
-.pb-leido { margin: 0 0 8px; font-size: 14px; color: var(--tinta-2); }
-.pb-leido b { color: var(--tinta); }
-#contra-pegado .pb-tit { margin: 12px 0 4px; font-weight: 620; color: var(--tinta-2); }
-#contra-pegado .cuadre-items li .btn + .btn { margin-left: 4px; }
-.pb-descartadas { margin-top: 8px; }
-.pb-descartadas ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; color: var(--tinta-3); }
+/* «Se paga en», al comprobar: el mes en que el banco cobra el movimiento. */
+.mov-mes { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--tinta-3); }
+.mov-mes select { width: auto; min-height: 32px; padding: 4px 8px; font-size: 13px; }
 .cuadre .cuadre-bien { color: var(--ok-texto); }
 
 /* Posibles repetidos (Tarjetas). */
@@ -4242,7 +4238,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'f9dd1d6a30';
+window.__VERSION_APP__ = '433347aecf';
 
 M["cerradura"] = (function () {
 /**
@@ -15384,321 +15380,6 @@ function ofrecerAlArrancar(alTerminar) {
 return { ajusteConCambios, aplicarAjuste, aplicarTodos, cuantosPendientes, ofrecerAjustes, ofrecerAlArrancar, ofrecerNuevos, pasarASeptiembre, pendientes, revisarContraBanco };
 })();
 
-M["consumos_banco"] = (function () {
-/**
- * Los consumos del estado de cuenta, pegados como texto, contra la app.
- *
- * El texto sale del iPhone: en la captura del estado de cuenta se mantiene el
- * dedo sobre el texto (Texto en vivo), «Seleccionar todo» y «Copiar». No se
- * guarda en ningún sitio: se lee, se compara y se olvida.
- *
- * Texto en vivo no siempre respeta las filas de la tabla: a veces da cada
- * consumo en una línea («04/09/2026 MENESTRAS DEL NEGRO 15,47»), a veces la
- * fecha, el comercio y el valor en líneas seguidas, y a veces una columna
- * entera detrás de otra (todas las fechas, luego todos los comercios, luego
- * todos los valores). Se entienden las tres formas.
- *
- * Ninguna función de este módulo toca el DOM.
- */
-const {db, upsert} = M["store"];
-const {redondear, sumarMeses, claveMes} = M["calc"];
-const MESES = {
-  ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ago: 8, sep: 9, set: 9, oct: 10, nov: 11, dic: 12,
-  jan: 1, apr: 4, aug: 8, dec: 12,
-};
-const plano = (t) => String(t ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-const dos = (n) => String(n).padStart(2, '0');
-
-const RE_FECHA = new RegExp([
-  '\\b(\\d{4})-(\\d{2})-(\\d{2})\\b',
-  '\\b(\\d{1,2})[/.-](\\d{1,2})(?:[/.-](\\d{2,4}))?\\b',
-  '\\b(\\d{1,2})[\\s/.-]*(ene|feb|mar|abr|may|jun|jul|ago|sept?|set|oct|nov|dic|jan|apr|aug|dec)[a-z]*\\.?(?:[\\s/.-]*(\\d{2,4}))?(?![a-z0-9])',
-].join('|'), 'gi');
-// Un valor: con dos decimales, separador de miles opcional, signo o «CR».
-const RE_MONTO = /(-\s*)?(?:US)?\$?\s?(\d{1,3}(?:[.,]\d{3})+|\d+)([.,])(\d{2})(?!\d)(\s*-)?/g;
-// Lo que no es un consumo: cabeceras, totales y datos del estado de cuenta.
-const NO_ES_CONSUMO = /\b(total|saldo|pago minimo|minimo a pagar|cupo|fecha (de )?corte|fecha (maxima|limite)|disponible|vencimiento|tasa|periodo)\b/;
-// Los títulos de las columnas, cuando Texto en vivo los da sueltos.
-const ES_TITULO = /^(fecha( de)?( (transaccion|consumo|proceso|compra))?|descripcion|detalle|concepto|valor|monto|importe|comercio|establecimiento|referencia|cuotas?|plazo|movimientos?|consumos?)$/;
-const ES_ABONO = /\b(pago|abono|credito|devolucion|reverso|anulacion|nota de credito)\b/;
-
-/**
- * La fecha de una línea en 'YYYY-MM-DD', o null. Sin año, el del mes de
- * referencia. Una fecha de números sin año («04/09») solo vale al principio
- * de la línea: en medio es la cuota de un diferido («METALHIERRO 2/6»).
- */
-function fechaDe(texto, mesRef) {
-  for (const m of texto.matchAll(RE_FECHA)) {
-    if (m[4] && !m[6] && m.index > 0) continue;
-    const f = fechaDeCoincidencia(m, mesRef);
-    if (f) return f;
-  }
-  return null;
-}
-
-function fechaDeCoincidencia(m, mesRef) {
-  let d; let mes; let y;
-  if (m[1]) { y = Number(m[1]); mes = Number(m[2]); d = Number(m[3]); } else if (m[4]) {
-    d = Number(m[4]); mes = Number(m[5]); y = m[6] ? Number(m[6]) : null;
-  } else {
-    d = Number(m[7]); mes = MESES[plano(m[8]).slice(0, 3)] || MESES[plano(m[8])]; y = m[9] ? Number(m[9]) : null;
-  }
-  if (!mes || mes > 12 || !d || d > 31) return null;
-  if (y !== null && y < 100) y += 2000;
-  if (y === null) {
-    // Sin año: el del mes de referencia; un mes «de después» es del año anterior.
-    const [ry, rm] = mesRef.split('-').map(Number);
-    y = mes > rm + 1 ? ry - 1 : ry;
-  }
-  if (y < 2000 || y > 2100) return null;
-  return { iso: `${y}-${dos(mes)}-${dos(d)}`, texto: m[0] };
-}
-
-/** Los valores de una línea, de izquierda a derecha. */
-function montosDe(texto) {
-  const out = [];
-  for (const m of texto.matchAll(RE_MONTO)) {
-    const entero = m[2].replace(/[.,\s]/g, '');
-    const v = Number(`${entero}.${m[4]}`);
-    if (!Number.isFinite(v)) continue;
-    out.push({ v: m[1] || m[5] ? -v : v, texto: m[0], pos: m.index });
-  }
-  return out;
-}
-
-/** «2/6», «CUOTA 02 DE 06»: la cuota de un diferido, o null. */
-function cuotaDe(detalle) {
-  const m = /\b(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})\b/i.exec(detalle);
-  if (!m) return null;
-  const n = Number(m[1]);
-  const total = Number(m[2]);
-  return n >= 1 && total >= 2 && n <= total && total <= 72 ? { n, total } : null;
-}
-
-const limpiarDetalle = (t) => t.replace(/\s+/g, ' ').replace(/^[\s\-–—:·|*]+|[\s\-–—:·|*]+$/g, '').trim();
-
-/** Una línea del banco ya entendida. */
-function linea(fecha, detalle, monto) {
-  const d = limpiarDetalle(detalle);
-  const abono = monto < 0 || ES_ABONO.test(plano(d));
-  return {
-    fecha, detalle: d || 'Sin detalle', monto: redondear(Math.abs(monto)), abono, cuota: cuotaDe(d),
-  };
-}
-
-/**
- * Lee el texto pegado.
- *
- * @param {string} texto
- * @param {string} mesRef 'YYYY-MM', para las fechas que vienen sin año
- * @returns {{lineas: object[], descartadas: string[]}}
- */
-function leerConsumos(texto, mesRef) {
-  const filas = String(texto || '').split(/\r?\n/).map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
-  const info = filas.map((f) => {
-    const fecha = fechaDe(f, mesRef);
-    let resto = fecha ? f.replace(fecha.texto, ' ') : f;
-    const montos = montosDe(resto);
-    const monto = montos[montos.length - 1] || null;
-    if (monto) resto = resto.slice(0, monto.pos) + resto.slice(monto.pos + monto.texto.length);
-    // Los otros valores de la línea (saldo, valor original) no son el detalle.
-    montos.slice(0, -1).forEach((m) => { resto = resto.replace(m.texto, ' '); });
-    const det = limpiarDetalle(resto.replace(/\b\d{6,}\b/g, ' '));
-    return { f, fecha: fecha?.iso || null, monto: monto ? monto.v : null, det, cabecera: NO_ES_CONSUMO.test(plano(f)) || ES_TITULO.test(plano(f).replace(/[^a-z ]/g, '').trim()) };
-  });
-
-  // Columnas una detrás de otra: muchas líneas que son solo una fecha y muchas que son solo un valor.
-  const soloFecha = info.filter((x) => x.fecha && x.monto === null && !x.det);
-  const soloMonto = info.filter((x) => x.monto !== null && !x.fecha && !x.det && !x.cabecera);
-  const mixtas = info.filter((x) => x.fecha && x.monto !== null);
-  if (soloFecha.length >= 3 && soloMonto.length >= 3 && mixtas.length < soloFecha.length / 2) {
-    const textos = info.filter((x) => !x.fecha && x.monto === null && x.det && !x.cabecera && /[a-z]/i.test(x.det));
-    const n = Math.min(soloFecha.length, soloMonto.length);
-    const lineas = [];
-    for (let i = 0; i < n; i += 1) {
-      lineas.push(linea(soloFecha[i].fecha, textos.length === n ? textos[i].det : textos[i]?.det || '', soloMonto[i].monto));
-    }
-    const descartadas = [...soloFecha.slice(n), ...soloMonto.slice(n)].map((x) => x.f);
-    return { lineas, descartadas };
-  }
-
-  // Fila a fila: lo que falta en una línea (el valor, el comercio) puede venir en la siguiente.
-  const lineas = [];
-  const descartadas = [];
-  let abierta = null;
-  const cerrar = () => { if (abierta) descartadas.push(abierta.f); abierta = null; };
-  for (const x of info) {
-    if (x.cabecera) { cerrar(); descartadas.push(x.f); continue; }
-    if (x.fecha && x.monto !== null) { cerrar(); lineas.push(linea(x.fecha, x.det, x.monto)); continue; }
-    if (x.fecha) { cerrar(); abierta = { fecha: x.fecha, det: x.det, f: x.f }; continue; }
-    if (abierta && x.monto !== null) {
-      lineas.push(linea(abierta.fecha, [abierta.det, x.det].filter(Boolean).join(' '), x.monto));
-      abierta = null;
-      continue;
-    }
-    if (abierta && x.det) { abierta.det = [abierta.det, x.det].filter(Boolean).join(' '); abierta.f += ` ${x.f}`; continue; }
-    descartadas.push(x.f);
-  }
-  cerrar();
-  return { lineas, descartadas };
-}
-
-/* --- La comparación ------------------------------------------------------------ */
-
-const dia = (iso, n) => {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
-};
-const cent = (n) => Math.round((Number(n) || 0) * 100);
-
-/**
- * Hasta qué día llega el estado de cuenta que contiene `hasta`: el día de
- * corte de la tarjeta, o el último del mes si corta a fin de mes. Lo
- * apuntado entre la última línea pegada y el corte también debería salir.
- */
-function finDelCorte(tarjeta, hasta) {
-  const corte = String(db.cuentas.find((c) => c.id === tarjeta)?.dia_corte ?? '').trim().toLowerCase();
-  const [y, m] = hasta.split('-').map(Number);
-  const ultimo = (yy, mm) => new Date(yy, mm, 0).getDate();
-  const dia = Number(corte);
-  if (!corte || corte === 'fin' || !Number.isFinite(dia) || dia < 1) return `${y}-${dos(m)}-${dos(ultimo(y, m))}`;
-  const este = `${y}-${dos(m)}-${dos(Math.min(dia, ultimo(y, m)))}`;
-  if (este >= hasta) return este;
-  const [ys, ms] = sumarMeses(`${y}-${dos(m)}`, 1).split('-').map(Number);
-  return `${ys}-${dos(ms)}-${dos(Math.min(dia, ultimo(ys, ms)))}`;
-}
-
-/** El mes en que cuenta una compra de un solo pago (el de su cuota). */
-const mesDe = (g) => db.cuotas.find((c) => c.gasto_id === g.id)?.mes || g.mes_inicio || claveMes(g.fecha);
-
-/**
- * Pasa una compra de un solo pago a otro mes sin tocar su fecha: la compra se
- * hizo cuando se hizo, pero el banco la carga en el estado de cuenta
- * siguiente.
- */
-function pasarAMes(gasto, mes) {
-  upsert('gastosTarjeta', { ...gasto, mes_inicio: mes });
-  db.cuotas.filter((c) => c.gasto_id === gasto.id).forEach((c) => upsert('cuotas', { ...c, mes }));
-}
-
-/**
- * Cada línea del banco contra lo apuntado en la tarjeta.
- *
- * Una compra se busca por el valor, con la fecha de la app entre seis días
- * antes y dos después de la del banco (el banco la carga uno o dos días más
- * tarde). Primero el valor exacto, luego con hasta 25 centavos de diferencia
- * (eso es «valor distinto»); y una compra partida entre J y C el mismo día
- * vale como una. Una cuota de diferido («2/6») o una suscripción se busca
- * entre las cuotas de la tarjeta de esos meses.
- *
- * @returns {{coinciden, distintos, faltan, sobran, abonos, desde, hasta, totalBanco, totalCoinciden}}
- */
-function compararConsumos(tarjeta, lineas) {
-  const cargos = lineas.filter((l) => !l.abono);
-  const abonos = lineas.filter((l) => l.abono);
-  const fechas = cargos.map((l) => l.fecha).sort();
-  const desde = fechas[0] || null;
-  const hasta = fechas[fechas.length - 1] || null;
-  const gastos = new Map(db.gastosTarjeta.map((g) => [g.id, g]));
-
-  const compras = db.gastosTarjeta
-    .filter((g) => g.tarjeta === tarjeta && (g.tipo || 'Corriente') === 'Corriente')
-    .map((g) => ({ gasto: g, fecha: String(g.fecha || '').slice(0, 10), monto: Number(g.monto_total) || 0, mes: mesDe(g) }));
-  const cuotas = db.cuotas
-    .filter((c) => c.tarjeta === tarjeta && (gastos.get(c.gasto_id)?.tipo || 'Corriente') !== 'Corriente')
-    .map((c) => ({ gasto: gastos.get(c.gasto_id), cuota: c, mes: c.mes, monto: Number(c.monto) || 0 }));
-
-  const usadas = new Set();
-  const coinciden = [];
-  const distintos = [];
-  const faltan = [];
-
-  const buscarCuota = (l, margen) => {
-    const meses = [sumarMeses(l.fecha.slice(0, 7), -1), l.fecha.slice(0, 7), sumarMeses(l.fecha.slice(0, 7), 1)];
-    const libres = cuotas.filter((x) => !usadas.has(x) && meses.includes(x.mes));
-    return libres.find((x) => cent(x.monto) === cent(l.monto))
-      || (margen ? libres.filter((x) => Math.abs(x.monto - l.monto) <= Math.max(0.5, l.monto * 0.02))
-        .sort((a, b) => Math.abs(a.monto - l.monto) - Math.abs(b.monto - l.monto))[0] : null);
-  };
-
-  for (const l of cargos) {
-    let hallado = null;
-    if (!l.cuota) {
-      const libres = compras.filter((a) => !usadas.has(a) && a.fecha >= dia(l.fecha, -6) && a.fecha <= dia(l.fecha, 2));
-      const cercania = (a) => Math.abs(new Date(a.fecha) - new Date(l.fecha));
-      const exactas = libres.filter((a) => cent(a.monto) === cent(l.monto)).sort((a, b) => cercania(a) - cercania(b));
-      if (exactas.length) hallado = [exactas[0]];
-      if (!hallado) {
-        for (let i = 0; i < libres.length && !hallado; i += 1) {
-          for (let j = i + 1; j < libres.length && !hallado; j += 1) {
-            if (libres[i].fecha === libres[j].fecha && cent(libres[i].monto + libres[j].monto) === cent(l.monto)) hallado = [libres[i], libres[j]];
-          }
-        }
-      }
-      if (!hallado) {
-        const casi = libres.filter((a) => Math.abs(a.monto - l.monto) <= 0.25).sort((a, b) => Math.abs(a.monto - l.monto) - Math.abs(b.monto - l.monto))[0];
-        if (casi) hallado = [casi];
-      }
-    }
-    // Suscripciones y cuotas: también una compra sin «n/m» puede ser una suscripción.
-    if (!hallado) {
-      const c = buscarCuota(l, Boolean(l.cuota));
-      if (c) hallado = [c];
-    }
-    if (!hallado) { faltan.push(l); continue; }
-    hallado.forEach((a) => usadas.add(a));
-    const app = redondear(hallado.reduce((t, a) => t + a.monto, 0));
-    const fila = { banco: l, app, gastos: hallado.map((a) => a.gasto).filter(Boolean) };
-    if (cent(app) === cent(l.monto)) coinciden.push(fila); else distintos.push({ ...fila, dif: redondear(l.monto - app) });
-  }
-
-  /*
-   * Lo apuntado desde la primera fecha pegada hasta el corte que el banco no
-   * trae. Lo que ya se pasó a un mes posterior al de su fecha va aparte: es
-   * lo de fin de mes que el banco carga en el estado de cuenta siguiente.
-   */
-  const fin = hasta ? finDelCorte(tarjeta, hasta) : null;
-  const sinBanco = desde ? compras.filter((a) => !usadas.has(a) && a.fecha >= desde && a.fecha <= fin && !a.gasto.aplazado) : [];
-  const pasados = sinBanco.filter((a) => a.mes > claveMes(a.fecha));
-  const sobran = sinBanco.filter((a) => !pasados.includes(a));
-  const suma = (xs, f) => redondear(xs.reduce((t, x) => t + f(x), 0));
-  return {
-    coinciden, distintos, faltan, sobran, pasados, abonos, desde, hasta, fin,
-    totalBanco: suma(cargos, (l) => l.monto),
-    totalApp: suma([...coinciden, ...distintos], (x) => x.app),
-    totalFaltan: suma(faltan, (l) => l.monto),
-  };
-}
-
-/**
- * La categoría más usada en compras con un nombre parecido («MI COMISARIATO
- * 123» → la de «Mi comisariato»), o '' si no hay ninguna.
- */
-function categoriaParecida(detalle) {
-  const palabras = plano(detalle).replace(/[^a-z0-9 ]/g, ' ').split(' ').filter((p) => p.length >= 4 && !/^\d+$/.test(p));
-  if (!palabras.length) return '';
-  const cuenta = new Map();
-  [...db.gastosTarjeta, ...db.gastosEfectivo].forEach((g) => {
-    const d = plano(g.detalle);
-    const puntos = palabras.filter((p) => d.includes(p)).length;
-    if (!puntos || !g.categoria) return;
-    cuenta.set(g.categoria, (cuenta.get(g.categoria) || 0) + puntos);
-  });
-  return [...cuenta.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
-}
-
-/** «MENESTRAS DEL NEGRO» → «Menestras del negro»; lo que ya trae minúsculas se deja. */
-function detalleLegible(detalle) {
-  const t = String(detalle || '').trim();
-  if (t !== t.toUpperCase()) return t;
-  const m = t.toLowerCase();
-  return m.charAt(0).toUpperCase() + m.slice(1);
-}
-
-return { categoriaParecida, compararConsumos, detalleLegible, leerConsumos, pasarAMes };
-})();
-
 M["pantalla_llave"] = (function () {
 /**
  * La pantalla de la cerradura y lo que la dispara: autobloqueo y velo.
@@ -17700,20 +17381,13 @@ return { formCuenta, render };
 M["views/tarjetas"] = (function () {
 /** Vista «Tarjetas»: cupo, consumo del mes, diferidos vivos y movimientos. */
 
-const {db, tarjetas, eliminar, guardar, quitarCuotas} = M["store"];
+const {db, tarjetas, eliminar, guardar, quitarCuotas, upsert} = M["store"];
 const {mesActual, nombreMes, money, moneyHTML, sumarMeses, rangoMeses, estadoTarjeta, pagoDelMes, diferidosVigentes, cuotaPendiente, redondear, fechaPagoMes, fechaPagoCompra, textoFecha, pagoDeTarjeta, comprobacionDelMes, claveEstadoCuenta, totalPorDiferir, posiblesRepetidos, marcarNoRepetidos} = M["calc"];
 const {columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, aNumero, notaFila, marcaNota, notaTexto, centrarElegido, modal, brindis} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
 const {formCuenta} = M["views/cuentas"];
 const {revisarContraBanco, pasarASeptiembre, ajusteConCambios, aplicarAjuste} = M["ajustes"];
-const {leerConsumos, compararConsumos, categoriaParecida, detalleLegible, pasarAMes} = M["consumos_banco"];
-/*
- * Los consumos pegados del estado de cuenta: solo en memoria, nunca en la
- * base ni en el navegador. Al cerrar la comparación o la app, se van.
- */
-let pegado = null;
-
 const estado = {
   tarjeta: null, usuario: 'ambos', mes: null, comprobando: false,
   /*
@@ -17899,12 +17573,9 @@ function render(raiz) {
           ${est.porCobrar.map(({ cuota, gasto, dia }) => `${esc(gasto?.detalle || 'Suscripción')}
             <strong>${money(cuota.monto)}</strong> el ${dia}`).join(' · ')}</p>` : ''}
       <div class="sueldo-acciones">
-        <button class="btn pequeno" id="btn-pegar-banco">Comparar con el estado de cuenta</button>
         <button class="btn pequeno" id="btn-cuadrar">Cuadrar con el banco</button>
         <button class="btn pequeno" id="btn-editar-tarjeta">Cambiar cupo, corte o pago</button></div>
     </section>
-
-    <section class="tarjeta" id="contra-pegado" hidden></section>
 
     <section class="tarjeta" id="contra-banco" hidden></section>
 
@@ -17961,11 +17632,6 @@ function render(raiz) {
   // la lista de Cuentas solo enseña bancos: sin este botón no había dónde.
   pintarRepetidos(raiz);
   pintarContraBanco(raiz, t, mes);
-  pintarPegado(raiz, t, mes);
-  $('#btn-pegar-banco', raiz).addEventListener('click', () => formPegarConsumos(t, mes, () => {
-    render(raiz);
-    $('#contra-pegado', raiz)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  }));
   $('#btn-cuadrar', raiz).addEventListener('click', () => formCuadrar(t, () => render(raiz)));
   $('#btn-editar-tarjeta', raiz).addEventListener('click', () => formCuenta(t.id, () => render(raiz)));
   $('#btn-nuevo', raiz).addEventListener('click', () => formGastoTarjeta((nuevo) => {
@@ -18079,6 +17745,24 @@ function render(raiz) {
         gasto.aplazado = gasto.aplazado === 'Si' ? '' : 'Si';
         gasto._ts = Date.now();
         guardar();
+        render(raiz);
+      });
+    });
+
+    /*
+     * «Se paga en»: lo que el banco cobra en otro mes —una compra de los
+     * últimos días que entra en el estado de cuenta siguiente— se cambia de
+     * mes sin tocar su fecha. Un diferido se mueve entero: todas sus cuotas
+     * corren lo mismo, con sus marcas de pagado y comprobado.
+     */
+    $$('[data-mover]', caja).forEach((sel) => {
+      sel.addEventListener('change', () => {
+        const gasto = db.gastosTarjeta.find((g) => g.id === sel.dataset.mover);
+        const salto = mesesEntre(sel.dataset.mes, sel.value);
+        if (!gasto || !salto) return;
+        moverMeses(gasto, salto);
+        guardar();
+        brindis(`${gasto.detalle}: ahora en ${nombreMes(sel.value)}`);
         render(raiz);
       });
     });
@@ -18341,6 +18025,20 @@ function listaDiferidos(tarjetaId, usuario, conTotal = true) {
       en ${filas.length} ${filas.length === 1 ? 'compra diferida' : 'compras diferidas'}.</span></div>` : ''}`;
 }
 
+const mesesEntre = (a, b) => {
+  const [ya, ma] = a.split('-').map(Number);
+  const [yb, mb] = b.split('-').map(Number);
+  return (yb - ya) * 12 + (mb - ma);
+};
+
+/** Corre un gasto de tarjeta `salto` meses: su mes de inicio y cada cuota. */
+function moverMeses(gasto, salto) {
+  const cuotas = db.cuotas.filter((c) => c.gasto_id === gasto.id);
+  const inicio = gasto.mes_inicio || cuotas.map((c) => c.mes).sort()[0];
+  upsert('gastosTarjeta', { ...gasto, mes_inicio: sumarMeses(inicio, salto) });
+  cuotas.forEach((c) => upsert('cuotas', { ...c, mes: sumarMeses(c.mes, salto) }));
+}
+
 function listaMovimientos(tarjetaId, mes, usuario, marcable = false, busca = '') {
   const todas = db.cuotas
     .filter((c) => c.tarjeta === tarjetaId && c.mes === mes)
@@ -18413,6 +18111,13 @@ function listaMovimientos(tarjetaId, mes, usuario, marcable = false, busca = '')
         </div>
         <div class="monto">${money(cuota.monto)}</div>
         <div class="acciones">
+          ${marcable && gasto.tipo !== 'Recurrente' ? `
+          <label class="mov-mes" title="${esCuota ? 'Mes de esta cuota: mueve todo el diferido' : 'Mes en que se paga'}">
+            <span>Se paga en</span>
+            <select data-mover="${esc(gasto.id)}" data-mes="${esc(cuota.mes)}">${[-1, 0, 1, 2].map((d) => {
+    const m = sumarMeses(cuota.mes, d);
+    return `<option value="${m}"${d === 0 ? ' selected' : ''}>${esc(nombreMes(m, true))}</option>`;
+  }).join('')}</select></label>` : ''}
           ${marcaNota(gasto.proposito)}
           ${gasto.cuotas > 1 ? '' : gasto.aplazado === 'Si'
     ? `<button class="btn pequeno primario" data-diferir="${esc(gasto.id)}">Diferir</button>
@@ -18725,168 +18430,6 @@ function pintarContraBanco(raiz, t, mes) {
   }));
 }
 
-/* --- Comparar con los consumos pegados del estado de cuenta ------------------ */
-
-/**
- * Pegar el texto de los consumos (copiado de la captura con Texto en vivo).
- * Con una comparación abierta de la misma tarjeta, lo nuevo se añade: un
- * estado de cuenta largo son varias capturas. Las líneas idénticas que ya
- * estaban (las capturas se solapan) no se repiten.
- */
-function formPegarConsumos(t, mes, alTerminar) {
-  const anadir = pegado?.tarjeta === t.id;
-  modal({
-    titulo: anadir ? `Pegar más consumos de ${t.nombre}` : `Comparar ${t.nombre} con el estado de cuenta`,
-    cuerpo: `
-      <p class="pista" style="margin-top:0">Haz una captura solo de los consumos. En Fotos, mantén el dedo sobre
-        el texto, toca «Seleccionar todo» y «Copiar», y pégalo aquí. No se guarda: solo sirve para comparar.</p>
-      <div class="campo ancho"><label for="pb-texto">Consumos del estado de cuenta</label>
-        <textarea id="pb-texto" name="texto" rows="8" autocomplete="off" autocorrect="off" spellcheck="false"
-          placeholder="04/09/2026  MENESTRAS DEL NEGRO  15,47"></textarea></div>
-      <p class="pista" id="pb-vista"></p>`,
-    aceptar: 'Comparar',
-    alAbrir(form) {
-      const vista = $('#pb-vista', form);
-      $('#pb-texto', form).addEventListener('input', (e) => {
-        const r = leerConsumos(e.target.value, mes);
-        const cargos = r.lineas.filter((l) => !l.abono);
-        vista.textContent = !e.target.value.trim() ? ''
-          : r.lineas.length ? `Leo ${cargos.length} ${cargos.length === 1 ? 'consumo' : 'consumos'} por ${
-            money(redondear(cargos.reduce((s, l) => s + l.monto, 0)))}${r.lineas.length > cargos.length
-            ? ` y ${r.lineas.length - cargos.length} ${r.lineas.length - cargos.length === 1 ? 'pago o abono' : 'pagos o abonos'}` : ''}.`
-            : 'Todavía no encuentro consumos: cada uno necesita su fecha y su valor.';
-      });
-    },
-    alEnviar(d, form) {
-      const r = leerConsumos(d.texto, mes);
-      if (!r.lineas.length) {
-        $('#pb-vista', form).textContent = 'No encuentro consumos en el texto: cada uno necesita su fecha y su valor.';
-        return false;
-      }
-      const clave = (l) => `${l.fecha}|${l.monto}|${l.detalle}`;
-      if (anadir) {
-        const ya = new Set(pegado.lineas.map(clave));
-        const nuevas = r.lineas.filter((l) => !ya.has(clave(l)));
-        pegado.lineas.push(...nuevas.map((l, i) => ({ ...l, i: pegado.siguiente + i })));
-        pegado.siguiente += nuevas.length;
-        pegado.descartadas.push(...r.descartadas);
-      } else {
-        pegado = {
-          tarjeta: t.id, lineas: r.lineas.map((l, i) => ({ ...l, i })), siguiente: r.lineas.length,
-          descartadas: r.descartadas, quitadas: new Set(),
-        };
-      }
-      alTerminar?.();
-      return undefined;
-    },
-  });
-}
-
-/** Lo pegado contra la app: qué está, qué falta (con «Agregar») y qué sobra. */
-function pintarPegado(raiz, t, mes) {
-  const caja = $('#contra-pegado', raiz);
-  if (!caja) return;
-  if (pegado && pegado.tarjeta !== t.id) pegado = null;
-  caja.hidden = !pegado;
-  if (!pegado) { caja.innerHTML = ''; return; }
-  const lineas = pegado.lineas.filter((l) => !pegado.quitadas.has(l.i));
-  const r = compararConsumos(t.id, lineas);
-  const n = (k, uno, varios) => `${k} ${k === 1 ? uno : varios}`;
-  const fechaCorta = (iso) => textoFecha(iso).replace(/ de \d{4}$/, '');
-  const mesSolo = (m) => nombreMes(m).replace(/\s*\d{4}$/, '').toLowerCase();
-  const leidos = r.coinciden.length + r.distintos.length + r.faltan.length;
-  const sumaDe = (xs, f) => redondear(xs.reduce((s, x) => s + f(x), 0));
-  const sub = (l) => `${esc(fechaCorta(l.fecha))}${l.cuota ? ` · cuota ${l.cuota.n} de ${l.cuota.total}` : ''}`;
-
-  caja.innerHTML = `
-    <header><h2>Comparación con el banco</h2></header>
-    <p class="pb-leido">${leidos ? `Leí <b>${n(leidos, 'consumo', 'consumos')}</b> ${r.desde === r.hasta
-    ? `del ${esc(fechaCorta(r.desde))}` : `del ${esc(fechaCorta(r.desde))} al ${esc(fechaCorta(r.hasta))}`}
-      por <b>${money(r.totalBanco)}</b>: ${r.coinciden.length === leidos ? 'todos' : `<b>${r.coinciden.length}</b>`} ya
-      ${r.coinciden.length === 1 ? 'está' : 'están'} en la app. Compruébalo con la captura.` : 'No queda ningún consumo que comparar.'}</p>
-    ${leidos && !r.faltan.length && !r.distintos.length
-    ? '<p class="cuadre-veredicto cuadre-bien">✓ Todo lo del estado de cuenta está en la app.</p>' : ''}
-    ${r.faltan.length ? `
-      <p class="pista pb-tit">Faltan en la app · ${r.faltan.length} · ${money(r.totalFaltan)}</p>
-      <ul class="cuadre-items">${r.faltan.map((l) => `
-        <li><span>${esc(detalleLegible(l.detalle))}<small>${sub(l)}</small></span>
-          <strong>${money(l.monto)}</strong>
-          <button type="button" class="btn pequeno primario" data-pb-agregar="${l.i}">Agregar</button>
-          <button type="button" class="btn pequeno" data-pb-quitar="${l.i}" aria-label="Quitar de la comparación"
-            title="No es de esta tarjeta o se leyó mal">×</button></li>`).join('')}</ul>
-      <p class="pista">«Agregar» abre el gasto ya rellenado: revisa quién fue y la categoría, y guarda.
-        Con «×» se quita una línea que no es de esta tarjeta o que se leyó mal.</p>` : ''}
-    ${r.distintos.length ? `
-      <p class="pista pb-tit">Con otro valor en la app · ${r.distintos.length}</p>
-      <ul class="cuadre-items">${r.distintos.map((x, k) => `
-        <li><span>${esc(detalleLegible(x.banco.detalle))}<small>${sub(x.banco)} · banco ${money(x.banco.monto)} · app ${money(x.app)}</small></span>
-          <strong>${x.dif > 0 ? '+' : '−'}${money(Math.abs(x.dif))}</strong>
-          <button type="button" class="btn pequeno" data-pb-dif="${k}">Abrir</button></li>`).join('')}</ul>` : ''}
-    ${r.sobran.length ? `
-      <p class="pista pb-tit">En la app y no en lo pegado · ${r.sobran.length}</p>
-      <ul class="cuadre-items">${r.sobran.map((a, k) => `
-        <li><span>${esc(a.gasto.detalle)}<small>${esc(fechaCorta(a.fecha))} · ${esc(a.gasto.usuario || '')}</small></span>
-          <strong>${money(a.monto)}</strong>
-          <button type="button" class="btn pequeno" data-pb-sobra="${k}">Abrir</button>
-          <button type="button" class="btn pequeno primario" data-pb-pasar="${k}">Pasar a ${esc(mesSolo(sumarMeses(a.mes, 1)))}</button></li>`).join('')}</ul>
-      <p class="pista">Apuntado entre la primera fecha pegada y el corte, y el banco no lo trae: puede ser de otra
-        tarjeta, estar repetido o, si es de fin de mes, que salga en el estado de cuenta siguiente. Entonces
-        pásalo al mes siguiente: la fecha de la compra no cambia.</p>` : ''}
-    ${r.pasados.length ? `
-      <p class="pista pb-tit">Pasados al mes siguiente · ${r.pasados.length}</p>
-      <ul class="cuadre-items">${r.pasados.map((a, k) => `
-        <li><span>${esc(a.gasto.detalle)}<small>${esc(fechaCorta(a.fecha))} · cuenta en ${esc(mesSolo(a.mes))}</small></span>
-          <strong>${money(a.monto)}</strong>
-          <button type="button" class="btn pequeno" data-pb-devolver="${k}">Devolver a ${esc(mesSolo(a.fecha.slice(0, 7)))}</button></li>`).join('')}</ul>` : ''}
-    ${r.abonos.length ? `<p class="pista">No se comparan: ${n(r.abonos.length, 'pago o abono', 'pagos o abonos')}
-      por ${money(sumaDe(r.abonos, (l) => l.monto))}.</p>` : ''}
-    ${pegado.descartadas.length ? `<details class="pb-descartadas"><summary class="pista">${n(pegado.descartadas.length, 'línea', 'líneas')}
-      sin fecha o sin valor, no se compararon</summary><ul>${pegado.descartadas.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}
-    <div class="sueldo-acciones">
-      <button type="button" class="btn pequeno" id="pb-mas">Pegar más</button>
-      <button type="button" class="btn pequeno" id="pb-cerrar">Cerrar la comparación</button></div>`;
-
-  const otraVez = () => render(raiz);
-  const abrir = (g) => { if (g) formGastoTarjeta(otraVez, g); };
-  $$('[data-pb-agregar]', caja).forEach((b) => b.addEventListener('click', () => {
-    const l = r.faltan.find((x) => x.i === Number(b.dataset.pbAgregar));
-    if (!l) return;
-    const categoria = categoriaParecida(l.detalle);
-    // Una cuota «2 de 6»: el diferido entero, empezado los meses que toque antes.
-    const diferido = l.cuota ? {
-      tipo: 'Diferido', cuotas: l.cuota.total, monto_total: redondear(l.monto * l.cuota.total),
-      mes_inicio: sumarMeses(l.fecha.slice(0, 7), -(l.cuota.n - 1)),
-    } : { tipo: 'Corriente', monto_total: l.monto };
-    formGastoTarjeta(otraVez, {
-      fecha: l.fecha, tarjeta: t.id, usuario: estado.usuario === 'ambos' ? 'J' : estado.usuario,
-      detalle: detalleLegible(l.detalle).replace(/\s*\b\d{1,2}\s*(\/|de)\s*\d{1,2}\b\s*$/i, ''),
-      ...(categoria ? { categoria } : {}), ...diferido,
-    });
-  }));
-  $$('[data-pb-quitar]', caja).forEach((b) => b.addEventListener('click', () => {
-    pegado.quitadas.add(Number(b.dataset.pbQuitar));
-    otraVez();
-  }));
-  $$('[data-pb-dif]', caja).forEach((b) => b.addEventListener('click', () => abrir(r.distintos[Number(b.dataset.pbDif)]?.gastos[0])));
-  $$('[data-pb-sobra]', caja).forEach((b) => b.addEventListener('click', () => abrir(r.sobran[Number(b.dataset.pbSobra)]?.gasto)));
-  $$('[data-pb-pasar]', caja).forEach((b) => b.addEventListener('click', () => {
-    const a = r.sobran[Number(b.dataset.pbPasar)];
-    if (!a) return;
-    pasarAMes(a.gasto, sumarMeses(a.mes, 1));
-    guardar();
-    brindis(`${a.gasto.detalle} pasa a ${mesSolo(sumarMeses(a.mes, 1))}`);
-    otraVez();
-  }));
-  $$('[data-pb-devolver]', caja).forEach((b) => b.addEventListener('click', () => {
-    const a = r.pasados[Number(b.dataset.pbDevolver)];
-    if (!a) return;
-    pasarAMes(a.gasto, a.fecha.slice(0, 7));
-    guardar();
-    otraVez();
-  }));
-  $('#pb-mas', caja).addEventListener('click', () => formPegarConsumos(t, mes, otraVez));
-  $('#pb-cerrar', caja).addEventListener('click', () => { pegado = null; otraVez(); });
-}
 
 return { enfocarGasto, render };
 })();
