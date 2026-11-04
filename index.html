@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-wZnpGpOKLNvX9ZqTmDqHdZEe3lLCMKGFLOS2wbSCASw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-x6cv/iM6wgm0K3luy6qpLS6VMf7GTllBZCLdPmaIz2o='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4250,7 +4250,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '819adc2f7b';
+window.__VERSION_APP__ = 'd6ca8a9229';
 
 M["cerradura"] = (function () {
 /**
@@ -12572,7 +12572,7 @@ function cuentaDelSueldo(mes = mesActual(), usuario = 'J') {
  */
 const claveLimites = (u) => `limites_consumo_${u}`;
 const MESES_LIMITE = 6;
-const NO_ES_CONSUMO = /inter[eé]s|comisi[oó]n|impuesto|refinanciaci[oó]n/i;
+const NO_ES_CONSUMO = /inter[eé]s|comisi[oó]n|impuesto|refinanciaci[oó]n|hipotec|pr[eé]stamo/i;
 /** Las que salen siempre que haya compras, aunque no se repitan tanto. */
 const SIEMPRE_EN_LIMITES = ['Bebidas'];
 /** A partir de qué uso se avisa de que se está cerca del límite. */
@@ -14446,7 +14446,7 @@ M["ajustes"] = (function () {
 const {db, upsert, guardar, quitarCuotas, sepultar, eliminar} = M["store"];
 const {alCambiarSync, configurado, estadoSync} = M["sync"];
 const {registrarGastoTarjeta} = M["forms"];
-const {fijosManuales, borrarManual, compraQueLoCubre, recurrencias, estaExcluida, claveGasto, guardarAjuste} = M["plan"];
+const {fijosManuales, borrarManual, compraQueLoCubre, recurrencias, estaExcluida, claveGasto, guardarAjuste, guardarManual} = M["plan"];
 const {money, nombreMes, sumarMeses, claveEstadoCuenta, redondear, esIngresoReal, textoFecha} = M["calc"];
 const {$, esc, modal, brindis} = M["ui"];
 const CLAVE = 'ajustes_hechos';
@@ -14498,7 +14498,60 @@ function tarjetaBolivariano() {
 
 const CUPO = 6000;
 
+/*
+ * El crédito hipotecario tiene categoría propia, de pago fijo. Hasta ahora sus
+ * cuotas se apuntaban en «Intereses bancarios», que se queda solo con lo que
+ * cobra el banco: intereses de la tarjeta, comisiones por transferencia,
+ * programa de puntos… Se reconoce por el nombre («hipotecario»).
+ */
+const CAT_HIPOTECA = 'Crédito hipotecario';
+const ES_HIPOTECA = /hipotec/i;
+const esPagoHipoteca = (g) => ES_HIPOTECA.test(`${g.detalle || ''} ${g.proposito || ''}`);
+const pagosHipoteca = () => [
+  ...db.gastosEfectivo.filter(esPagoHipoteca).map((g) => ({ coleccion: 'gastosEfectivo', g, monto: Number(g.monto) || 0 })),
+  ...db.gastosTarjeta.filter(esPagoHipoteca).map((g) => ({ coleccion: 'gastosTarjeta', g, monto: Number(g.monto_total) || 0 })),
+].filter((x) => x.g.categoria !== CAT_HIPOTECA);
+const manualesHipoteca = () => fijosManuales().filter((f) => ES_HIPOTECA.test(f.detalle || '')
+  && (f.categoria !== CAT_HIPOTECA || f.simulacion === true));
+
 const AJUSTES = [
+  {
+    id: 'credito-hipotecario-categoria',
+    revisar() {
+      const pagos = pagosHipoteca();
+      const manuales = manualesHipoteca();
+      const falta = !db.categorias.some((c) => c.nombre === CAT_HIPOTECA);
+      if (!falta && !pagos.length && !manuales.length) return { estado: 'nada' };
+      const antes = [...new Set(pagos.map((x) => x.g.categoria || 'sin categoría'))];
+      const cuotas = pagos.map((x) => /cuota\s*(\d+)/i.exec(x.g.proposito || '')?.[1]).filter(Boolean).map(Number).sort((a, b) => a - b);
+      return {
+        estado: 'aplicar',
+        titulo: 'Categoría nueva: Crédito hipotecario',
+        texto: `<ul class="ajustes-pasos">
+          ${falta ? '<li>Se crea la categoría <strong>«Crédito hipotecario»</strong>, en el grupo «Pagos fijos».</li>' : ''}
+          ${pagos.length ? `<li>Lo ya pagado: ${pagos.length} ${pagos.length === 1 ? 'pago' : 'pagos'}
+            (${money(redondear(pagos.reduce((t, x) => t + x.monto, 0)))}${cuotas.length ? `, ${cuotas.length === 1 ? `cuota ${cuotas[0]}`
+    : `cuotas ${cuotas[0]} a ${cuotas[cuotas.length - 1]}`}` : ''}) pasa de «${esc(antes.join('», «'))}» a «Crédito hipotecario».</li>` : ''}
+          ${manuales.length ? `<li>Lo que falta por pagar: ${manuales.map((f) => `«${esc(f.detalle)}»`).join(', ')} de Presupuesto
+            queda en «Crédito hipotecario», como pago fijo; los pagos que hagas desde ahí ya irán a esa categoría.</li>` : ''}
+          </ul>
+          En «Intereses bancarios» quedan solo los cargos del banco: intereses de la tarjeta, comisiones por
+          transferencia, programa de puntos. Los importes no cambian.`,
+      };
+    },
+    aplicar() {
+      if (!db.categorias.some((c) => c.nombre === CAT_HIPOTECA)) {
+        upsert('categorias', { nombre: CAT_HIPOTECA, grupo: 'Pagos fijos', tipo: 'Gasto', presupuesto: 0, activa: 'Si' });
+      }
+      pagosHipoteca().forEach(({ coleccion, g }) => {
+        upsert(coleccion, { ...g, categoria: CAT_HIPOTECA });
+        if (coleccion === 'gastosTarjeta') {
+          db.cuotas.filter((c) => c.gasto_id === g.id).forEach((c) => upsert('cuotas', { ...c, categoria: CAT_HIPOTECA }));
+        }
+      });
+      manualesHipoteca().forEach((f) => guardarManual({ ...f, categoria: CAT_HIPOTECA, simulacion: false }));
+    },
+  },
   {
     /*
      * Gastos escritos a mano en Presupuesto que luego se compraron con
