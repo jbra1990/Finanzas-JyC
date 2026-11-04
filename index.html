@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FhhJo4kKAMhCFp7pH3uN3i3+TfWKXx3ZkVD2wQcAIoo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-5vySaIqPv2h4YS64zBzeo9rPkGLiKpePlmUgIUj2Hw4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4258,7 +4258,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'ca3b0f30a5';
+window.__VERSION_APP__ = 'aa176444b2';
 
 M["cerradura"] = (function () {
 /**
@@ -11099,7 +11099,7 @@ M["plan"] = (function () {
  */
 
 const {db} = M["store"];
-const {claveMes, mesActual, redondear, sumarDias, diasEntre, sumarMeses, rangoMeses, nombreMes, hoyLocal, esIngresoReal, esFinanciacion, comprometidoEnMes} = M["calc"];
+const {claveMes, mesActual, redondear, sumarDias, diasEntre, sumarMeses, rangoMeses, nombreMes, hoyLocal, money, esIngresoReal, esFinanciacion, comprometidoEnMes} = M["calc"];
 /** Con menos de tres apariciones no hay periodicidad, hay casualidad. */
 const MIN_OCURRENCIAS = 3;
 
@@ -11344,7 +11344,8 @@ const CONCEPTOS = [
   ['Papel higiénico', /\bpapel higienico\b/],
   ['Dentista', /\b(profilaxis|odontolog\w*|dentista|dental)\b/],
   ['Diésel', /\bdiesel\b/],
-  ['Gasolina', /\b(gasolina|super|extra|ecopais|eco pais)\b/, /combustible|gasolina/],
+  // «Gasollina», «gasolna»: lo escrito con prisa también es gasolina.
+  ['Gasolina', /\b(gasol+i?na|super|extra|ecopais|eco pais)\b/, /combustible|gasolina/],
 ];
 const sinTildes = (t) => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
@@ -12697,7 +12698,192 @@ function limitesConsumo(usuario = 'J', mes = mesActual()) {
   };
 }
 
-return { AVISO_LIMITE, ES_SUELDO, MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, compraQueLoCubre, conceptoDeGasto, cuentaDelSueldo, esSimulacion, estaExcluida, fijosManuales, guardarAjuste, guardarAjusteSueldo, guardarLimites, guardarManual, limitesConsumo, limitesGuardados, marcarPago, medioDe, mesesProyectados, otrosIngresos, porcentajeAhorro, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra, sueldoDelMes, sueldoEsperado };
+/* --- Lo común de «Comparar» -------------------------------------------------
+ *
+ * En la tarjeta 3 de Presupuesto, «comunes» no son las categorías que deduce
+ * la app sino una LISTA de gastos concretos que se compran cada cierto tiempo:
+ * el gel, la cera, los suplementos, el corte de cabello, la gasolina… cada uno
+ * con su valor y su frecuencia. La lista empieza con la que dio J y se edita en
+ * la propia tarjeta; vive en la configuración, que se sincroniza.
+ *
+ * Cada gasto de la lista se busca en el historial por sus palabras (en el
+ * comercio, en «Qué se compró» y en la categoría). Sirve para dos cosas:
+ *  - validarlo: cuántas compras hay, cada cuánto y a qué precio;
+ *  - no contarlo dos veces: lo que ya se compró es real. Un gasto mensual se
+ *    prevé solo por lo que falta del mes; uno cada N meses, a partir de su
+ *    última compra.
+ * Una compra de varias cosas («Gel, desodorante, cera») cuenta para cada gasto
+ * de la lista que nombra, repartida a partes iguales.
+ */
+const claveListaComunes = (u) => `comunes_lista_${u}`;
+const LISTA_INICIAL = {
+  J: [
+    { id: 'gel', nombre: 'Gel', monto: 5.5, cada: 1, palabras: ['gel'] },
+    { id: 'cera', nombre: 'Cera para barba', monto: 5.35, cada: 1, palabras: ['cera'] },
+    { id: 'salish', nombre: 'Salishka plus', monto: 21.5, cada: 2, palabras: ['salish', 'salishka'] },
+    // Sin valor: el promedio del historial.
+    { id: 'gasolina', nombre: 'Gasolina', monto: null, cada: 1, palabras: ['gasolina', 'diesel', 'combustible'] },
+    { id: 'glicinato', nombre: 'Glicinato de magnesio', monto: 17, cada: 3, palabras: ['glicinato'] },
+    { id: 'treonato', nombre: 'Treonato de magnesio', monto: 20, cada: 3, palabras: ['treonato'] },
+    { id: 'zinc', nombre: 'Zinc', monto: 17, cada: 3, palabras: ['zinc'] },
+    { id: 'proteina', nombre: 'Proteína', monto: 170, cada: 2, palabras: ['proteina', 'whey'] },
+    { id: 'omega', nombre: 'Omega 3', monto: 30, cada: 2, palabras: ['omega'] },
+    { id: 'creatina', nombre: 'Creatina', monto: 65, cada: 4, palabras: ['creatina'] },
+    { id: 'corte', nombre: 'Corte de cabello', monto: 8, cada: 1, palabras: ['corte de cabello', 'peluqueria', 'barberia'] },
+    {
+      id: 'higiene',
+      nombre: 'Higiene personal',
+      monto: 15,
+      cada: 1,
+      palabras: ['alcohol', 'panos humedos', 'panitos', 'guantes', 'cinta', 'algodon', 'jabon', 'desodorante', 'enjuague', 'shampoo', 'pasta dental', 'cepillo'],
+    },
+  ],
+  C: [],
+};
+
+/** La lista de una persona (J o C); la de los dos, juntas. */
+function listaComunes(quien = 'J') {
+  if (quien === 'Ambos') return [...listaComunes('J'), ...listaComunes('C')];
+  let lista = null;
+  try { lista = JSON.parse(db.config[claveListaComunes(quien)] || 'null'); } catch { lista = null; }
+  if (!Array.isArray(lista)) lista = LISTA_INICIAL[quien] || [];
+  return lista.map((x) => ({ ...x, usuario: quien }));
+}
+
+function guardarListaComunes(quien, lista) {
+  db.config[claveListaComunes(quien)] = JSON.stringify(lista.map(({ usuario, ...x }) => x));
+}
+
+/** ¿El texto nombra esta palabra (entera)? */
+const nombra = (texto, palabra) => {
+  const p = sinTildes(palabra).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return Boolean(p) && new RegExp(`(^|[^a-z0-9])${p}([^a-z0-9]|$)`).test(texto);
+};
+
+/** Las compras de una persona: cuándo, de qué y con qué se pagó. */
+function comprasDe(u) {
+  const de = (g) => esDe(g.usuario, u);
+  return [
+    ...db.gastosTarjeta.filter((g) => de(g) && g.tipo !== 'Recurrente')
+      .map((g) => ({ g, monto: Number(g.monto_total) || 0, medio: 'Tarjeta' })),
+    ...db.gastosEfectivo.filter(de).map((g) => ({ g, monto: Number(g.monto) || 0, medio: 'Efectivo' })),
+  ].map(({ g, monto, medio }) => ({
+    fecha: String(g.fecha || '').slice(0, 10), monto, medio,
+    texto: sinTildes(`${g.detalle || ''} ${g.proposito || ''} ${g.categoria || ''}`),
+  })).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) && x.monto > 0);
+}
+
+/**
+ * Cada gasto de la lista con lo que dice el historial (el último año), y cuánto
+ * se prevé en cada mes de `meses` sin contar lo ya comprado.
+ */
+function comunesDeLista(meses, quien = 'J') {
+  const hoy = hoyLocal();
+  const mesHoy = claveMes(hoy);
+  const haceUnAno = `${Number(hoy.slice(0, 4)) - 1}${hoy.slice(4)}`;
+  const personas = quien === 'Ambos' ? ['J', 'C'] : [quien];
+  const items = [];
+  for (const u of personas) {
+    const lista = listaComunes(u);
+    const asignadas = new Map(lista.map((x) => [x.id, []]));
+    for (const c of comprasDe(u)) {
+      const suyos = lista.filter((x) => (x.palabras || [x.nombre]).some((p) => nombra(c.texto, p)));
+      suyos.forEach((x) => asignadas.get(x.id).push({ ...c, monto: c.monto / suyos.length }));
+    }
+    lista.forEach((x) => items.push({ ...x, compras: asignadas.get(x.id).sort((a, b) => a.fecha.localeCompare(b.fecha)) }));
+  }
+
+  const porMes = new Map(meses.map((m) => [m, { total: 0, porMedio: Object.fromEntries(MEDIOS.map((k) => [k, 0])), lineas: [] }]));
+  const analizados = items.map((x) => {
+    const anio = x.compras.filter((c) => c.fecha > haceUnAno);
+    const fechas = [...new Set(anio.map((c) => c.fecha))].sort();
+    const huecos = fechas.slice(1).map((f, i) => diasEntre(fechas[i], f)).filter((d) => d > 0);
+    const precio = anio.length ? redondear(mediana(anio.map((c) => c.monto))) : null;
+    // Lo gastado al mes en los últimos seis meses enteros.
+    const seis = rangoMeses(sumarMeses(mesHoy, -6), sumarMeses(mesHoy, -1));
+    const alMesReal = redondear(x.compras.filter((c) => seis.includes(claveMes(c.fecha))).reduce((t, c) => t + c.monto, 0) / 6);
+    const monto = x.monto != null && x.monto !== '' ? redondear(Number(x.monto)) : alMesReal;
+    const cada = Math.max(1, Math.round(Number(x.cada) || 1));
+    const gastadoEn = (m) => redondear(x.compras.filter((c) => claveMes(c.fecha) === m).reduce((t, c) => t + c.monto, 0));
+    const tarjeta = anio.filter((c) => c.medio === 'Tarjeta').reduce((t, c) => t + c.monto, 0);
+    const totalAnio = anio.reduce((t, c) => t + c.monto, 0);
+    const reparto = totalAnio > 0 ? { Tarjeta: tarjeta / totalAnio, Efectivo: 1 - tarjeta / totalAnio } : { Efectivo: 1 };
+    const ultima = x.compras.length ? x.compras[x.compras.length - 1].fecha : null;
+
+    // ¿Cuadra lo que dice la lista con lo que dice el historial?
+    let validacion;
+    if (!anio.length) validacion = { estado: 'falta', texto: 'no aparece en el historial del último año' };
+    else if (cada === 1) {
+      const r = monto > 0 ? alMesReal / monto : 1;
+      validacion = r > 1.3 ? { estado: 'mas', texto: `gastas más: ~${money(alMesReal)} al mes` }
+        : r < 0.7 ? { estado: 'menos', texto: `gastas menos: ~${money(alMesReal)} al mes` }
+          : { estado: 'ok', texto: 'coincide' };
+      if (x.monto == null || x.monto === '') validacion = { estado: 'ok', texto: 'promedio del historial' };
+    } else if (anio.length === 1) validacion = { estado: 'poco', texto: 'solo 1 compra en el año' };
+    else {
+      const dias = mediana(huecos);
+      const rf = dias / (cada * DIAS_MES);
+      const rp = monto > 0 ? precio / monto : 1;
+      validacion = rf < 0.6 ? { estado: 'mas', texto: `más seguido: cada ~${Math.round(dias)} días` }
+        : rf > 1.6 ? { estado: 'menos', texto: `menos seguido: cada ~${Math.round(dias)} días` }
+          : rp > 1.3 ? { estado: 'mas', texto: `más caro: ~${money(precio)}` }
+            : rp < 0.7 ? { estado: 'menos', texto: `más barato: ~${money(precio)}` }
+              : { estado: 'ok', texto: 'coincide' };
+    }
+
+    // Lo que se prevé en cada mes, sin lo ya comprado.
+    const prevision = new Map();
+    if (cada === 1) {
+      meses.forEach((m) => {
+        if (m < mesHoy) return;
+        prevision.set(m, m === mesHoy ? Math.max(0, redondear(monto - gastadoEn(m))) : monto);
+      });
+    } else {
+      let toca = ultima ? sumarMeses(claveMes(ultima), cada) : mesHoy;
+      if (toca < mesHoy) toca = mesHoy;
+      meses.forEach((m) => {
+        if (m === toca) { prevision.set(m, monto); toca = sumarMeses(toca, cada); }
+      });
+    }
+    prevision.forEach((v, m) => {
+      if (!(v > 0) || !porMes.has(m)) return;
+      const c = porMes.get(m);
+      c.total = redondear(c.total + v);
+      Object.entries(reparto).forEach(([k, parte]) => { c.porMedio[k] = (c.porMedio[k] || 0) + v * parte; });
+      const comprado = m === mesHoy ? gastadoEn(m) : 0;
+      c.lineas.push({
+        detalle: x.nombre, monto: v, usuario: x.usuario, categoria: x.nombre, reparto,
+        cuando: cada === 1 ? (comprado > 0 ? `~ lo que falta del mes: ya van ${money(comprado)}` : '~ cada mes')
+          : `~ cada ${cada} meses`,
+      });
+    });
+
+    return {
+      ...x, monto, cada, alMes: redondear(monto / cada), alMesReal, precio, veces: anio.length,
+      cadaDias: huecos.length ? Math.round(mediana(huecos)) : null, ultima, validacion,
+      esteMes: gastadoEn(mesHoy), proxima: cada === 1 ? mesHoy : [...prevision.keys()].sort()[0] || null,
+    };
+  });
+  return { items: analizados, porMes };
+}
+
+/**
+ * Lo que se repite en el historial y no está en la lista: para proponerlo.
+ * Al menos tres compras, con un ritmo fiable y vigente, y $3 o más al mes.
+ */
+function sugerenciasComunes(quien = 'J') {
+  const lista = listaComunes(quien);
+  return ritmoDeCompra(quien === 'Ambos' ? null : quien)
+    .filter((r) => r.fiable && r.vigente && r.veces >= 3 && r.porMes >= 3)
+    .filter((r) => {
+      const texto = sinTildes(`${r.nombre} ${r.categoria}`);
+      return !lista.some((x) => (x.palabras || [x.nombre]).some((p) => nombra(texto, p)));
+    })
+    .sort((a, b) => b.porMes - a.porMes)
+    .slice(0, 8);
+}
+
+return { AVISO_LIMITE, ES_SUELDO, MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, compraQueLoCubre, comunesDeLista, conceptoDeGasto, cuentaDelSueldo, esSimulacion, estaExcluida, fijosManuales, guardarAjuste, guardarAjusteSueldo, guardarLimites, guardarListaComunes, guardarManual, limitesConsumo, limitesGuardados, listaComunes, marcarPago, medioDe, mesesProyectados, otrosIngresos, porcentajeAhorro, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra, sueldoDelMes, sueldoEsperado, sugerenciasComunes };
 })();
 
 M["pdf"] = (function () {
@@ -19515,7 +19701,7 @@ M["views/plan"] = (function () {
 const {db, guardar, categoriasGasto, cuentasBancarias, tarjetas, upsert, nuevoId, capitalizar} = M["store"];
 const {nombreMes, money, moneyHTML, redondear, mesActual, sumarMeses, rangoMeses, serieMensual, textoFecha, hoyLocal, ahorradoAl, pagoDelMes, pagoDeTarjeta} = M["calc"];
 const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, filaMovimiento, avisoInfo, confirmar, descargar} = M["ui"];
-const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago, esSimulacion, sueldoDelMes, porcentajeAhorro, claveGasto, otrosIngresos, fijosManuales} = M["plan"];
+const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago, esSimulacion, sueldoDelMes, porcentajeAhorro, claveGasto, otrosIngresos, fijosManuales, listaComunes, guardarListaComunes, comunesDeLista, sugerenciasComunes} = M["plan"];
 const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
 const vistaTarjetas = M["views/tarjetas"];
 const {plegable} = M["pliegue"];
@@ -19750,6 +19936,22 @@ function render(raiz, { irA } = {}) {
   });
 
   const recargar = () => render(raiz, { irA });
+  // Lo común de Comparar: la lista de gastos.
+  $$('[data-comun-editar]', raiz).forEach((btn) => btn.addEventListener('click', () => {
+    const [u, id] = btn.dataset.comunEditar.split(':');
+    const x = listaComunes(u).find((y) => y.id === id);
+    if (x) formComun(estado.quien, x, recargar);
+  }));
+  $('#btn-comun-nuevo', raiz)?.addEventListener('click', () => formComun(estado.quien, null, recargar));
+  $$('[data-comun-sugerido]', raiz).forEach((btn) => btn.addEventListener('click', () => {
+    const r = sugerenciasComunes(estado.quien)[Number(btn.dataset.comunSugerido)];
+    if (!r) return;
+    // Lo que se compra más de una vez al mes va como gasto mensual, con lo que suma al mes.
+    const cada = Math.max(1, Math.round(r.cadencia / 30.44));
+    formComun(estado.quien, {
+      nombre: r.nombre, monto: cada === 1 ? r.porMes : r.monto, cada, palabras: [r.nombre],
+    }, recargar);
+  }));
   $('#btn-fijo', raiz).addEventListener('click', () => formFijo({
     esNuevo: true, manual: true, simulacion: false, clase: 'plazos', medio: 'Préstamo',
   }, recargar));
@@ -20216,7 +20418,121 @@ const ESCENARIOS = [
   { k: 'comunes', rotulo: 'Real + simulado + comunes', gasto: (f) => f.real + f.simulacion + f.comunes, partes: { simulacion: true, comunes: true } },
 ];
 
-function tarjetaSimulacion({ plan, quien }) {
+/**
+ * El plan de la tarjeta 3: lo real y lo simulado, los de siempre; lo común, el
+ * de la lista de gastos (ver `comunesDeLista`) en vez de las categorías que
+ * deduce la app. Solo Comparar lo usa: el resto de Presupuesto no cambia.
+ */
+function conComunesDeLista(plan, quien, lista = comunesDeLista(plan.filas.map((f) => f.mes), quien)) {
+  return {
+    ...plan,
+    lista,
+    filas: plan.filas.map((f) => {
+      const c = lista.porMes.get(f.mes);
+      return {
+        ...f,
+        comunes: c.total,
+        porOrigen: { ...f.porOrigen, comunes: { ...Object.fromEntries(MEDIOS.map((k) => [k, 0])), ...c.porMedio } },
+        lineas: [...f.lineas.filter((l) => l.origen !== 'comunes'), ...c.lineas.map((l) => ({ ...l, origen: 'comunes' }))],
+      };
+    }),
+  };
+}
+
+const CADA = { 1: 'cada mes', 2: 'cada 2 meses', 3: 'cada 3 meses', 4: 'cada 4 meses', 6: 'cada 6 meses', 12: 'cada año' };
+const textoCada = (n) => CADA[n] || `cada ${n} meses`;
+
+/** La lista de lo común de Comparar: cada gasto con lo que dice el historial. */
+function listaDeComunes(lista, quien) {
+  const items = lista.items;
+  const alMes = redondear(items.reduce((t, x) => t + x.alMes, 0));
+  const sugeridos = sugerenciasComunes(quien);
+  const fila = (x) => `
+    <li class="detallada con-acciones">
+      <div class="principal">
+        <div class="titulo">${esc(x.nombre)}${quien === 'Ambos' ? ` <span class="chip">${esc(x.usuario)}</span>` : ''}
+          <span class="chip${x.validacion.estado === 'ok' ? '' : ' alerta'}">${x.validacion.estado === 'ok' ? '✓ ' : ''}${esc(x.validacion.texto)}</span></div>
+        <div class="meta">${x.monto > 0 ? `${money(x.monto)} ${textoCada(x.cada)}` : 'sin valor'}${
+  x.veces ? ` · en el año: ${x.veces} ${x.veces === 1 ? 'compra' : 'compras'}${x.cadaDias ? `, cada ~${x.cadaDias} días` : ''}${
+    x.cada === 1 ? `, ~${money(x.alMesReal)} al mes` : x.precio ? `, ~${money(x.precio)}` : ''}` : ''}</div>
+        <div class="meta">${x.esteMes > 0 ? `Este mes ya van ${money(x.esteMes)}: está en lo real${x.cada === 1 && x.esteMes < x.monto
+    ? `; se prevé lo que falta, ${money(redondear(x.monto - x.esteMes))}` : ''}.`
+    : x.proxima ? `Se prevé en ${esc(nombreMes(x.proxima))}${x.ultima ? ` (última compra: ${esc(textoFecha(x.ultima))})` : ''}.` : ''}</div>
+      </div>
+      <div class="monto">${money(x.alMes)}<span class="pie">al mes</span></div>
+      <div class="acciones"><button type="button" class="btn pequeno" data-comun-editar="${esc(x.usuario)}:${esc(x.id)}">Editar</button></div>
+    </li>`;
+  return listaPlegable('comunes-lista', 'Lo común que se compara', `${items.length} · ${money(alMes)} al mes`, `
+    <p class="pz-sub">Los gastos que compras cada cierto tiempo. Lo que ya compraste en el mes está en lo real
+      y no se prevé otra vez; lo que se compra cada varios meses se prevé desde la última compra.</p>
+    ${items.length ? `<ul class="lista">${items.map(fila).join('')}</ul>` : '<p class="vacio">La lista está vacía.</p>'}
+    <div class="barra-accion"><span class="crece"></span>
+      <button type="button" class="btn pequeno primario" id="btn-comun-nuevo">+ Agregar gasto</button></div>
+    ${sugeridos.length ? `
+      <p class="pz-sub-tit">Se repiten en el historial y no están en la lista</p>
+      <ul class="lista">${sugeridos.map((r, i) => `
+        <li class="con-acciones">
+          <div class="principal"><div class="titulo">${esc(r.nombre)}</div>
+            <div class="meta">${esc(r.categoria)} · ${esc(r.cadenciaTexto.toLowerCase())} · ${r.veces} veces</div></div>
+          <div class="monto">${money(r.porMes)}<span class="pie">al mes</span></div>
+          <div class="acciones"><button type="button" class="btn pequeno" data-comun-sugerido="${i}">Agregar</button></div>
+        </li>`).join('')}</ul>` : ''}`);
+}
+
+/** Agregar o corregir un gasto de la lista de lo común. */
+function formComun(quien, x, alTerminar) {
+  const u = x?.usuario || (quien === 'Ambos' ? 'J' : quien);
+  modal({
+    titulo: x?.id ? `Gasto común: ${x.nombre}` : 'Nuevo gasto común',
+    cuerpo: `
+      <div class="campo ancho"><label for="cm-nombre">Gasto</label>
+        <input id="cm-nombre" name="nombre" required value="${esc(x?.nombre || '')}" placeholder="Omega 3"></div>
+      <div class="filtros">
+        ${campoMonto('cm-monto', 'monto', { etiqueta: 'Valor (vacío = promedio del historial)', valor: x?.monto != null && x?.monto !== '' ? String(x.monto).replace('.', ',') : '' })}
+        <div class="campo"><label for="cm-cada">Frecuencia</label>
+          <select id="cm-cada" name="cada">${opciones([1, 2, 3, 4, 6, 12].map((n) => ({ valor: String(n), texto: textoCada(n) })), String(x?.cada || 1))}</select></div>
+      </div>
+      <div class="campo ancho"><label for="cm-palabras">Cómo se reconoce en el historial</label>
+        <input id="cm-palabras" name="palabras" value="${esc((x?.palabras || []).join(', '))}" placeholder="omega, omega 3"></div>
+      <p class="pista">Palabras separadas por comas: se buscan en el comercio, en «Qué se compró» y en la categoría.
+        Vacío = el nombre del gasto.</p>
+      ${x?.id ? '<p><button type="button" class="btn pequeno peligro" id="cm-quitar">Quitar de la lista</button></p>' : ''}`,
+    aceptar: 'Guardar',
+    alAbrir(form) {
+      $('#cm-quitar', form)?.addEventListener('click', () => {
+        guardarListaComunes(u, listaComunes(u).filter((y) => y.id !== x.id));
+        guardar();
+        brindis(`«${x.nombre}» quitado de lo común`);
+        form.closest('dialog').querySelector('.cerrar').click();
+        alTerminar?.();
+      });
+    },
+    alEnviar(d) {
+      const nombre = String(d.nombre || '').trim();
+      if (!nombre) return false;
+      const valor = String(d.monto ?? '').trim();
+      const palabras = String(d.palabras || '').split(',').map((p) => p.trim()).filter(Boolean);
+      const fila = {
+        id: x?.id || `c${Date.now().toString(36)}`,
+        nombre,
+        monto: valor === '' ? null : redondear(aNumero(valor)),
+        cada: Number(d.cada) || 1,
+        palabras: palabras.length ? palabras : [nombre],
+      };
+      const lista = listaComunes(u);
+      const i = lista.findIndex((y) => y.id === fila.id);
+      if (i >= 0) lista[i] = fila; else lista.push(fila);
+      guardarListaComunes(u, lista);
+      guardar();
+      brindis(x?.id ? 'Gasto común corregido' : `«${nombre}» agregado a lo común`);
+      alTerminar?.();
+      return undefined;
+    },
+  });
+}
+
+function tarjetaSimulacion({ plan: planBase, quien }) {
+  const plan = conComunesDeLista(planBase, quien);
   const cierre = ESCENARIOS.map((e) => cierres(plan, quien, e.partes));
   const ultimo = plan.filas[plan.filas.length - 1];
   const total = (e) => redondear(plan.filas.reduce((t, f) => t + e.gasto(f), 0));
@@ -20254,8 +20570,8 @@ function tarjetaSimulacion({ plan, quien }) {
   const totalReal = total(ESCENARIOS[0]);
   return `<header><h2><span class="pz-num sim">3</span>Comparar</h2><button type="button" class="btn pequeno" data-tabla="comparar">▦ Tabla</button></header>
     <p class="pz-sub">Cada mes, cuatro maneras de verlo: <b>solo lo real</b> (1), lo real <b>+ lo que simulas</b> (2),
-      lo real <b>+ los gastos comunes</b> que la app calcula por frecuencia (4), y lo real <b>+ lo simulado + los
-      comunes</b>. Cuánto se aparta cada uno de lo real,
+      lo real <b>+ lo común</b> (la lista de gastos que compras cada cierto tiempo, abajo), y lo real <b>+ lo simulado +
+      lo común</b>. Cuánto se aparta cada uno de lo real,
       cuánto queda del sueldo (en verde si llega al ahorro) y cuánto quedaría en cuentas, con los otros ingresos que
       tengas apuntados.</p>
     <div class="pz-comp-fin">
@@ -20264,6 +20580,7 @@ function tarjetaSimulacion({ plan, quien }) {
         <b>${money(cierre[k][cierre[k].length - 1].saldo)}</b>
         <small>gasto ${money(total(e))}${k ? ` · ${pctDe(total(e) - totalReal, totalReal)} que lo real` : ` en ${plan.filas.length} meses`}</small></div>`).join('')}
     </div>
+    ${listaDeComunes(plan.lista, quien)}
     <div class="pz-meses">${meses.join('')}</div>
     ${notaSimulacion(mesesCon(plan, quien, escenarioDe('comunes').gasto))}`;
 }
@@ -20336,10 +20653,10 @@ function abrirTabla(cual, contexto) {
     comunes: [],
   }[cual];
   const cargar = () => {
-    if (ver.quien !== contexto.quien || plan !== contexto.plan) {
-      plan = ver.quien === contexto.quien ? contexto.plan
-        : proyeccion(contexto.plan.filas.map((f) => f.mes), { quien: ver.quien });
-    }
+    const base = ver.quien === contexto.quien ? contexto.plan
+      : proyeccion(contexto.plan.filas.map((f) => f.mes), { quien: ver.quien });
+    // Comparar cuenta lo común con la lista de gastos, igual que su tarjeta.
+    plan = cual === 'comparar' ? conComunesDeLista(base, ver.quien) : base;
     meses = plan.filas;
     cuentas = meses.map((f) => cuentaDelMes(f, ver.quien));
     cierresDe = escenarios.map((e) => cierres(plan, ver.quien, e.partes));
