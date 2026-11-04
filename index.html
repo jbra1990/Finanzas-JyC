@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-x6cv/iM6wgm0K3luy6qpLS6VMf7GTllBZCLdPmaIz2o='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FhhJo4kKAMhCFp7pH3uN3i3+TfWKXx3ZkVD2wQcAIoo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3798,6 +3798,12 @@ body.velada .cabecera { filter: blur(18px); }
     color-mix(in srgb, var(--tinta-3) 30%, transparent) 3px 6px);
 }
 .pz-simulado { background: var(--acento); }
+/* Lo real más lo común, sin lo simulado: las rayas de lo común sobre el color de lo real. */
+.pz-realcomunes {
+  background: repeating-linear-gradient(135deg,
+    color-mix(in srgb, var(--serie-1) 70%, transparent) 0 3px,
+    color-mix(in srgb, var(--tinta-3) 35%, transparent) 3px 6px);
+}
 
 .pz-meses { margin-top: 4px; }
 .pz-mes { border-top: 1px solid var(--grid); }
@@ -3860,7 +3866,7 @@ body.velada .cabecera { filter: blur(18px); }
 
 /* El comparador: tres escenarios por mes. */
 .pz-comp-fin {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 12px;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 4px 0 12px;
   font-variant-numeric: tabular-nums;
 }
 .pz-comp-fin > .k { grid-column: 1 / -1; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tinta-3); }
@@ -3878,7 +3884,7 @@ body.velada .cabecera { filter: blur(18px); }
 .pz-comp-tabla { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; table-layout: fixed; }
 .pz-comp-tabla th, .pz-comp-tabla td { padding: 4px 2px; text-align: right; vertical-align: top; }
 .pz-comp-tabla thead th { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tinta-3); line-height: 1.2; }
-.pz-comp-tabla tbody th { text-align: left; font-weight: 620; color: var(--tinta-2); white-space: nowrap; width: 27%; }
+.pz-comp-tabla tbody th { text-align: left; font-weight: 620; color: var(--tinta-2); width: 31%; line-height: 1.25; }
 .pz-comp-tabla td { color: var(--tinta); font-weight: 640; }
 .pz-comp-tabla td small { display: block; font-size: 10.5px; font-weight: 500; color: var(--tinta-3); }
 .pz-comp-tabla td.ok { color: var(--ok-texto); }
@@ -3888,7 +3894,9 @@ body.velada .cabecera { filter: blur(18px); }
 .pz-comp-tabla thead th, .pz-comp-tabla tbody th, .pz-comp-tabla td {
   background: none; border: 0; position: static; white-space: normal;
 }
-.pz-comp-tabla tbody th { white-space: nowrap; }
+/* El nombre del escenario puede ir en dos líneas («Real + simulado + comunes»).
+   Con `table-layout: fixed` el ancho de la columna lo da la cabecera. */
+.pz-comp-tabla thead th:first-child { width: 33%; }
 .pz-comp-tabla tbody tr + tr { border-top: 1px solid var(--grid); }
 
 /* Los valores de cada tramo de la barra, debajo, con su color. */
@@ -4250,7 +4258,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'd6ca8a9229';
+window.__VERSION_APP__ = 'ca3b0f30a5';
 
 M["cerradura"] = (function () {
 /**
@@ -20192,15 +20200,20 @@ function tarjetaRealSim({ plan, quien, simulados }) {
 }
 
 /*
- * 3 · El comparador: por mes, los tres escenarios uno debajo del otro —solo lo
- * real; lo real más lo simulado; y además lo que la app espera por la
- * frecuencia de consumo—, cuánto se aparta cada uno de lo real (en dinero y en
- * %), y cuánto quedaría del sueldo y en cuentas en cada caso.
+ * 3 · El comparador: por mes, los cuatro escenarios uno debajo del otro —solo
+ * lo real; lo real más lo simulado; lo real más lo que la app espera por la
+ * frecuencia de consumo; y lo real con las dos cosas—, cuánto se aparta cada
+ * uno de lo real (en dinero y en %), y cuánto quedaría del sueldo y en
+ * cuentas en cada caso.
+ *
+ * Las claves son las de siempre («comunes» es el escenario completo, el que
+ * usa «Mes a mes»); «realcomunes» es lo real más lo común, sin lo simulado.
  */
 const ESCENARIOS = [
   { k: 'real', rotulo: 'Real', gasto: (f) => f.real, partes: {} },
-  { k: 'simulado', rotulo: '+ Simulado', gasto: (f) => f.real + f.simulacion, partes: { simulacion: true } },
-  { k: 'comunes', rotulo: '+ Comunes', gasto: (f) => f.real + f.simulacion + f.comunes, partes: { simulacion: true, comunes: true } },
+  { k: 'simulado', rotulo: 'Real + simulado', gasto: (f) => f.real + f.simulacion, partes: { simulacion: true } },
+  { k: 'realcomunes', rotulo: 'Real + comunes', gasto: (f) => f.real + f.comunes, partes: { comunes: true } },
+  { k: 'comunes', rotulo: 'Real + simulado + comunes', gasto: (f) => f.real + f.simulacion + f.comunes, partes: { simulacion: true, comunes: true } },
 ];
 
 function tarjetaSimulacion({ plan, quien }) {
@@ -20240,8 +20253,9 @@ function tarjetaSimulacion({ plan, quien }) {
 
   const totalReal = total(ESCENARIOS[0]);
   return `<header><h2><span class="pz-num sim">3</span>Comparar</h2><button type="button" class="btn pequeno" data-tabla="comparar">▦ Tabla</button></header>
-    <p class="pz-sub">Cada mes, tres maneras de verlo: <b>solo lo real</b> (1), lo real <b>+ lo que simulas</b> (2) y
-      además <b>+ los gastos comunes</b> que la app calcula por frecuencia (4). Cuánto se aparta cada uno de lo real,
+    <p class="pz-sub">Cada mes, cuatro maneras de verlo: <b>solo lo real</b> (1), lo real <b>+ lo que simulas</b> (2),
+      lo real <b>+ los gastos comunes</b> que la app calcula por frecuencia (4), y lo real <b>+ lo simulado + los
+      comunes</b>. Cuánto se aparta cada uno de lo real,
       cuánto queda del sueldo (en verde si llega al ahorro) y cuánto quedaría en cuentas, con los otros ingresos que
       tengas apuntados.</p>
     <div class="pz-comp-fin">
@@ -20251,7 +20265,7 @@ function tarjetaSimulacion({ plan, quien }) {
         <small>gasto ${money(total(e))}${k ? ` · ${pctDe(total(e) - totalReal, totalReal)} que lo real` : ` en ${plan.filas.length} meses`}</small></div>`).join('')}
     </div>
     <div class="pz-meses">${meses.join('')}</div>
-    ${notaSimulacion(mesesCon(plan, quien, ESCENARIOS[2].gasto))}`;
+    ${notaSimulacion(mesesCon(plan, quien, escenarioDe('comunes').gasto))}`;
 }
 
 /*
