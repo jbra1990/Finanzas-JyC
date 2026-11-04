@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-JyaQeiPYUfTMv8GrSBlbhIEZyi9cxJ52jMTomeO7j0E='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-wZnpGpOKLNvX9ZqTmDqHdZEe3lLCMKGFLOS2wbSCASw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -1534,6 +1534,18 @@ tr.detalle > td {
   font-size: 13px;
 }
 .desglose li:last-child { border-bottom: 0; }
+/* El detalle de un mes en Presupuesto, por grupos: efectivo, tarjeta, fijos, simulado, comunes. */
+.desglose-grupo {
+  display: flex; justify-content: space-between; gap: 8px; padding: 12px 12px 2px;
+  font-size: 11.5px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-3);
+}
+.desglose-grupo b { color: var(--tinta-2); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+/* Comunes: de qué se compone cada gasto que se repite. */
+.conceptos { list-style: none; margin: 6px 0 2px; padding: 0; font-size: 12.5px; }
+.conceptos li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px dashed var(--grid); color: var(--tinta-2); }
+.conceptos li span small { margin-left: 6px; color: var(--tinta-3); }
+.conceptos li b { font-weight: 620; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.conceptos li b small { margin-left: 4px; font-weight: 400; color: var(--tinta-3); }
 .desglose .principal { flex: 1; min-width: 0; }
 .desglose .titulo {
   font-weight: 570;
@@ -4238,7 +4250,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '433347aecf';
+window.__VERSION_APP__ = '819adc2f7b';
 
 M["cerradura"] = (function () {
 /**
@@ -11298,6 +11310,89 @@ function cubiertosPorManuales() {
   return (g) => esPagoDePresupuesto(g) || nombres.has(claveGasto(g.detalle));
 }
 
+/*
+ * Qué es cada gasto, dentro de su categoría: en Higiene, si fue el corte de
+ * cabello, el shampoo o el gel; en Combustible, la gasolina. Sale de «Qué se
+ * compró» y, si ahí no lo dice, del comercio (el corte de cabello suele
+ * apuntarse con ese nombre). Las palabras conocidas se juntan bajo un mismo
+ * nombre —«peluquería» y «barbería» son el corte de cabello—; una compra de
+ * varias cosas («Gel, desodorante, cera») se queda con su texto, que no hay
+ * forma de saber cuánto fue cada una.
+ */
+const CONCEPTOS = [
+  ['Corte de cabello', /\b(corte de (cabello|pelo)|peluquer\w*|barber\w*|corte)\b/, /higiene|cuidado|belleza|personal/],
+  ['Shampoo', /\b(shampoo|champu|champoo)\b/],
+  ['Acondicionador', /\bacondicionador\b/],
+  ['Pasta dental', /\b(pasta dental|crema dental|colgate)\b/],
+  ['Gel', /\bgel\b/],
+  ['Desodorante', /\bdesodorante\b/],
+  ['Cera', /\bcera\b/],
+  ['Enjuague bucal', /\benjuague( bucal)?\b/],
+  ['Cepillo de dientes', /\bcepillo( de dientes)?\b/],
+  ['Jabón', /\bjabon\b/],
+  ['Crema', /\bcrema\b/],
+  ['Afeitado', /\b(gillette|afeitar|afeitadora|rasuradora|prestobarba)\b/],
+  ['Perfume', /\b(perfume|colonia)\b/],
+  ['Papel higiénico', /\bpapel higienico\b/],
+  ['Dentista', /\b(profilaxis|odontolog\w*|dentista|dental)\b/],
+  ['Diésel', /\bdiesel\b/],
+  ['Gasolina', /\b(gasolina|super|extra|ecopais|eco pais)\b/, /combustible|gasolina/],
+];
+const sinTildes = (t) => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/** Los conceptos conocidos que nombra un texto, cada uno una vez. */
+function conocidos(texto, categoria) {
+  let t = ` ${sinTildes(texto)} `;
+  const cat = sinTildes(categoria);
+  const out = [];
+  for (const [nombre, re, soloEn] of CONCEPTOS) {
+    if (soloEn && !soloEn.test(cat)) continue;
+    if (re.test(t)) { out.push(nombre); t = t.replace(new RegExp(re.source, 'g'), ' '); }
+  }
+  return out;
+}
+
+/**
+ * De qué se compone un gasto que se repite: cada concepto con su parte del
+ * gasto del último año (o de todo, si no hay nada en el último año).
+ */
+function conceptosDe(items, hoy) {
+  const desde = `${Number(hoy.slice(0, 4)) - 1}${hoy.slice(4)}`;
+  const recientes = items.filter((x) => x.iso > desde);
+  const base = recientes.length ? recientes : items;
+  const m = new Map();
+  base.forEach((x) => {
+    const k = sinTildes(x.concepto);
+    if (!m.has(k)) m.set(k, { nombre: x.concepto, total: 0, veces: 0 });
+    const c = m.get(k);
+    c.total += x.monto;
+    c.veces += 1;
+  });
+  const total = [...m.values()].reduce((t, c) => t + c.total, 0);
+  const todos = [...m.values()].sort((a, b) => b.total - a.total)
+    .map((c) => ({ nombre: c.nombre, veces: c.veces, parte: total > 0 ? c.total / total : 0 }));
+  // Lo que pesa menos del 5 % va junto en «Otros»: si no, los intereses salían
+  // partidos en una docena de líneas de un centavo.
+  const chicos = todos.filter((c) => c.parte < 0.05);
+  if (chicos.length < 2) return todos;
+  return [...todos.filter((c) => c.parte >= 0.05), {
+    nombre: 'Otros', veces: chicos.reduce((t, c) => t + c.veces, 0), parte: chicos.reduce((t, c) => t + c.parte, 0),
+  }];
+}
+
+/** Qué es un gasto dentro de su categoría (ver CONCEPTOS). */
+function conceptoDeGasto(detalle, proposito, categoria) {
+  const p = String(proposito ?? '').trim();
+  const d = String(detalle ?? '').trim();
+  const enP = conocidos(p, categoria);
+  if (enP.length === 1) return enP[0];
+  if (enP.length > 1) return p;
+  const enD = conocidos(d, categoria);
+  if (enD.length === 1) return enD[0];
+  const texto = p || d || String(categoria ?? '') || 'Sin detalle';
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
 function recurrencias(quien = null) {
   const mios = ajustes();
   const grupos = new Map();
@@ -11314,7 +11409,7 @@ function recurrencias(quien = null) {
    * Los establecimientos no se pierden: se guardan para poder enseñar de qué se
    * compone cada línea.
    */
-  const anota = (detalle, fecha, monto, categoria, origen) => {
+  const anota = (detalle, fecha, monto, categoria, origen, proposito = '') => {
     const cat = String(categoria ?? '').trim() || 'Sin categoría';
     const clave = claveGasto(cat);
     // Una fecha con mala pinta se descarta aquí y no más adelante: todo lo que
@@ -11324,12 +11419,13 @@ function recurrencias(quien = null) {
     if (!grupos.has(clave)) {
       grupos.set(clave, {
         clave, detalle: cat, categoria: cat, origen,
-        fechas: [], montos: [], sitios: new Map(), porMedio: new Map(),
+        fechas: [], montos: [], sitios: new Map(), porMedio: new Map(), items: [],
       });
     }
     const g = grupos.get(clave);
     g.fechas.push(iso);
     g.montos.push(monto);
+    g.items.push({ iso, monto, concepto: conceptoDeGasto(detalle, proposito, cat) });
     const sitio = String(detalle ?? '').trim();
     if (sitio) g.sitios.set(sitio, (g.sitios.get(sitio) || 0) + 1);
     const medio = medioDe(origen);
@@ -11354,16 +11450,16 @@ function recurrencias(quien = null) {
   db.gastosTarjeta.forEach((g) => {
     if (!esDe(g.usuario, quien) || cubierto(g)) return;
     if (g.tipo === 'Corriente') {
-      anota(g.detalle, g.fecha, Number(g.monto_total) || 0, g.categoria, g.tarjeta);
+      anota(g.detalle, g.fecha, Number(g.monto_total) || 0, g.categoria, g.tarjeta, g.proposito);
     } else if (g.tipo === 'Recurrente') {
       (cuotasDe.get(g.id) || []).forEach((c) => {
-        anota(g.detalle, `${c.mes}-01`, Number(c.monto) || 0, g.categoria, g.tarjeta);
+        anota(g.detalle, `${c.mes}-01`, Number(c.monto) || 0, g.categoria, g.tarjeta, g.proposito);
       });
     }
   });
   db.gastosEfectivo.forEach((g) => {
     if (!esDe(g.usuario, quien) || cubierto(g)) return;
-    anota(g.detalle, g.fecha, Number(g.monto) || 0, g.categoria, g.cuenta);
+    anota(g.detalle, g.fecha, Number(g.monto) || 0, g.categoria, g.cuenta, g.proposito);
   });
 
   const hoy = hoyLocal();
@@ -11427,6 +11523,7 @@ function recurrencias(quien = null) {
         // menos, para poder desplegarlo y comprobar que el grupo tiene sentido.
         sitios: [...g.sitios.entries()].sort((a, b) => b[1] - a[1])
           .map(([nombre, veces]) => ({ nombre, veces })),
+        conceptos: conceptosDe(g.items, hoy),
         veces: fechas.length,
         fechas,
         mesesConRegistro: new Set(fechas.map(claveMes)),
@@ -12044,7 +12141,7 @@ function proyeccion(meses, { excluidas = null, quien = null } = {}) {
       });
       casilla.lineas.push({
         clave: r.clave, detalle: r.detalle, monto, cuando, reparto: r.reparto, origen, categoria: r.categoria || '',
-        usuario: r.usuario || '',
+        usuario: r.usuario || '', conceptos: r.conceptos || null,
       });
       if (conocido) {
         casilla.realLineas.push({
@@ -12592,7 +12689,7 @@ function limitesConsumo(usuario = 'J', mes = mesActual()) {
   };
 }
 
-return { AVISO_LIMITE, ES_SUELDO, MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, compraQueLoCubre, cuentaDelSueldo, esSimulacion, estaExcluida, fijosManuales, guardarAjuste, guardarAjusteSueldo, guardarLimites, guardarManual, limitesConsumo, limitesGuardados, marcarPago, medioDe, mesesProyectados, otrosIngresos, porcentajeAhorro, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra, sueldoDelMes, sueldoEsperado };
+return { AVISO_LIMITE, ES_SUELDO, MEDIOS, ajustes, aplicarPresupuesto, borrarManual, claveExcluida, claveGasto, compraQueLoCubre, conceptoDeGasto, cuentaDelSueldo, esSimulacion, estaExcluida, fijosManuales, guardarAjuste, guardarAjusteSueldo, guardarLimites, guardarManual, limitesConsumo, limitesGuardados, marcarPago, medioDe, mesesProyectados, otrosIngresos, porcentajeAhorro, presupuestoSugerido, proyeccion, recurrencias, ritmoDeCompra, sueldoDelMes, sueldoEsperado };
 })();
 
 M["pdf"] = (function () {
@@ -19838,7 +19935,13 @@ function tarjetaMesAMes({ plan, quien }) {
     ? `<b>Te pasas ${money(pasa)} del límite</b>: no llegas al ahorro del ${c.pct} % (${money(c.meta)}); ahorrarías ${money(Math.max(0, queda))}.`
     : `Te quedan <b>${money(redondear(c.limite - gasto))}</b> antes del límite y llegas al ahorro del ${c.pct} %.`}</p>
         </div>
-        ${grupoDetalle('Real (sí o sí)', 'cg-real', reales, true)}
+        ${(() => {
+    // Lo real, por cómo se paga: efectivo, tarjeta y pagos fijos.
+    const partes = [['Efectivo y débito', 'Efectivo y débito'], ['Tarjeta', 'Tarjeta'], ['Pagos fijos', 'Pago fijo']]
+      .map(([titulo, tipo]) => [titulo, reales.filter((l) => l.tipo === tipo)]).filter(([, ls]) => ls.length);
+    return partes.length ? partes.map(([titulo, ls]) => grupoDetalle(titulo, 'cg-real', ls, true)).join('')
+      : grupoDetalle('Real (sí o sí)', 'cg-real', [], true);
+  })()}
         ${grupoDetalle('Simulado', 'pz-simulado', sims, e.k !== 'real')}
         ${grupoDetalle('Recurrentes (comunes que estima la app)', 'pz-comunes', coms, e.k === 'comunes')}
       </div>
@@ -19867,7 +19970,7 @@ function tarjetaReal({ plan, quien, pagosFijos, suma }) {
         ${barraMes([[tarjeta, 'tarjeta', 'Tarjeta'], [efectivo, 'efectivo', 'Efectivo y débito'], [fijos, 'fijo', 'Pagos fijos']], c.sueldo, c.limite)}
         <div class="pz-mes-pie"><span>En cuentas al cierre del mes${cierre[i].poliza > 0 ? ' <small>(con la póliza que vence)</small>' : ''}</span><span>≈ <b>${money(saldo)}</b></span></div>
       </summary>
-      <div class="caja-desglose">${detalleReal(f)}</div>
+      <div class="caja-desglose">${detalleMes(f)}</div>
     </details>`;
   });
   const f0 = plan.filas[0];
@@ -20016,7 +20119,7 @@ function tarjetaRealSim({ plan, quien, simulados }) {
   })()}
         <div class="pz-mes-pie"><span>En cuentas al cierre del mes</span><span>≈ <b>${money(saldo)}</b></span></div>
       </summary>
-      <div class="caja-desglose">${detalleSimulado(f)}${detalleReal(f)}</div>
+      <div class="caja-desglose">${detalleMes(f, { simulado: true })}</div>
     </details>`;
   });
   return `<header><h2><span class="pz-num sim">2</span>Simulación</h2><button type="button" class="btn pequeno" data-tabla="sim">▦ Tabla</button></header>
@@ -20078,7 +20181,7 @@ function tarjetaSimulacion({ plan, quien }) {
           <tbody>${filas}</tbody>
         </table>
       </summary>
-      <div class="caja-desglose">${detallePrevisto(f)}</div>
+      <div class="caja-desglose">${detalleMes(f, { simulado: true, comunes: true })}</div>
     </details>`;
   });
 
@@ -20112,8 +20215,8 @@ const TABLAS = {
 };
 const TIPO_SIM = 'Simulado';
 const TIPO_COM = 'Común (app)';
-/** El orden de los grupos en la tabla: lo fijo, la tarjeta, el efectivo, lo simulado y lo común. */
-const ORDEN_TIPO = ['Pago fijo', 'Tarjeta', 'Efectivo y débito', TIPO_SIM, TIPO_COM];
+/** El orden de los grupos: el efectivo, la tarjeta, lo fijo, lo simulado y lo común. */
+const ORDEN_TIPO = ['Efectivo y débito', 'Tarjeta', 'Pago fijo', TIPO_SIM, TIPO_COM];
 const posTipo = (t) => { const i = ORDEN_TIPO.indexOf(t); return i < 0 ? ORDEN_TIPO.length : i; };
 
 /** De quién es una línea: J, C o de los dos. */
@@ -20126,10 +20229,27 @@ function lineasReales(f) {
   }));
 }
 function lineasPrevistas(f, origen) {
-  return f.lineas.filter((l) => l.origen === origen).map((l) => ({
-    detalle: l.detalle, monto: l.monto, categoria: l.categoria || l.detalle, de: deQuien(l.usuario),
-    tipo: origen === 'simulacion' ? TIPO_SIM : TIPO_COM,
-  }));
+  return f.lineas.filter((l) => l.origen === origen).flatMap((l) => {
+    const base = { categoria: l.categoria || l.detalle, de: deQuien(l.usuario), tipo: origen === 'simulacion' ? TIPO_SIM : TIPO_COM };
+    if (origen !== 'comunes') return [{ ...base, detalle: l.detalle, monto: l.monto }];
+    return porConcepto(l).map((c) => ({ ...base, detalle: c.nombre, monto: c.monto }));
+  });
+}
+
+/**
+ * Un gasto común del mes, partido en lo que es: Higiene y cuidado en el corte
+ * de cabello, el shampoo, el gel… cada uno con la parte que se lleva de lo
+ * gastado en el último año. Los centavos que sobran del reparto, al último.
+ */
+function porConcepto(l) {
+  const cs = (l.conceptos || []).filter((c) => c.parte > 0);
+  if (cs.length < 2) return [{ nombre: cs[0]?.nombre || l.detalle, monto: l.monto }];
+  let resto = l.monto;
+  return cs.map((c, i) => {
+    const monto = i === cs.length - 1 ? redondear(resto) : redondear(l.monto * c.parte);
+    resto -= monto;
+    return { nombre: c.nombre, monto };
+  });
 }
 
 function abrirTabla(cual, contexto) {
@@ -20321,19 +20441,6 @@ function abrirTabla(cual, contexto) {
   return dlg;
 }
 
-/** Lo simulado de un mes, para el detalle de «Real + simulado». */
-function detalleSimulado(fila) {
-  const lineas = fila.lineas.filter((l) => l.origen === 'simulacion');
-  if (!lineas.length) return '';
-  return `<ul class="desglose">${lineas.map((l) => `
-    <li>
-      <div class="principal">
-        <div class="titulo">${esc(l.detalle)} <span class="chip">simulado</span></div>
-        <div class="meta">${esc(String(l.cuando).startsWith('~') || /^cuota|^pago/.test(String(l.cuando)) ? l.cuando : textoFecha(l.cuando))}</div>
-      </div>
-      <div class="monto">${money(l.monto)}</div>
-    </li>`).join('')}</ul>`;
-}
 
 function tarjetaComunes({ comunes, suma }) {
   return `<header><h2><span class="pz-num com">4</span>Comunes</h2><button type="button" class="btn pequeno" data-tabla="comunes">▦ Tabla</button></header>
@@ -20347,25 +20454,6 @@ function tarjetaComunes({ comunes, suma }) {
         hacen falta al menos tres apariciones.</p>`)}`;
 }
 
-/** Lo previsto de un mes que no es real: lo común y lo simulado. */
-function detallePrevisto(fila) {
-  const lineas = fila.lineas.filter((l) => l.origen !== 'fijos');
-  if (!lineas.length) {
-    return `<p class="vacio">Nada previsto para ${esc(nombreMes(fila.mes))} además de lo real.</p>`;
-  }
-  return `<ul class="desglose">${lineas.map((l) => `
-    <li>
-      <div class="principal">
-        <div class="titulo">${esc(l.detalle)}
-          <span class="chip">${l.origen === 'simulacion' ? 'simulado' : 'app'}</span></div>
-        <div class="meta">${esc(String(l.cuando).startsWith('~') || /^cuota|^pago/.test(String(l.cuando)) ? l.cuando : textoFecha(l.cuando))}</div>
-      </div>
-      <div class="monto">${money(l.monto)}</div>
-    </li>`).join('')}
-    </ul>
-    <div class="pie-desglose">Lo real: <strong>${money(fila.real)}</strong> · comunes
-      <strong>${money(fila.comunes)}</strong> · simulado <strong>${money(fila.simulacion)}</strong></div>`;
-}
 
 /*
  * El mes que se le marca a un gasto al pagarlo. Para lo que se repite es el mes
@@ -20418,9 +20506,12 @@ function listaRecurrencias(filas, fuera) {
     // Un cargo recurrente ya tiene cuotas apuntadas por delante: decir que
     // la última fue «hace -98 días» no lo entiende nadie.
     : `apuntado hasta ${esc(nombreMes(r.ultima.slice(0, 7)))}`}`}</div>
-        ${r.sitios?.length ? `<div class="meta sitios">En: ${
-  esc(r.sitios.slice(0, 3).map((x) => x.nombre).join(' · '))}${
-  r.sitios.length > 3 ? ` y ${r.sitios.length - 3} más` : ''}</div>` : ''}
+        ${!r.manual && r.conceptos?.length > 1 ? `<ul class="conceptos">${r.conceptos.map((c) => `
+          <li><span>${esc(c.nombre)}<small>${c.veces} ${c.veces === 1 ? 'vez' : 'veces'}</small></span>
+            <b>${money(redondear(r.porMes * c.parte))}<small>al mes</small></b></li>`).join('')}</ul>`
+    : r.sitios?.length ? `<div class="meta sitios">En: ${
+      esc(r.sitios.slice(0, 3).map((x) => x.nombre).join(' · '))}${
+      r.sitios.length > 3 ? ` y ${r.sitios.length - 3} más` : ''}</div>` : ''}
         ${r.clase === 'plazos' || r.clase === 'unico' ? '' : `
           <div class="cifras">
             <span>${r.tipo === 'Fijo' ? 'Cobra' : 'Suele ser'}
@@ -20521,26 +20612,60 @@ function seccionRitmo(filas) {
       Prorrateados, <strong>${money(alMes)}</strong> al mes.</span></div>`;
 }
 
-function detalleReal(fila) {
+/**
+ * Cada gasto de un mes, por grupos y en este orden: lo pagado en efectivo o
+ * con débito, lo de la tarjeta, los pagos fijos, lo simulado y lo común que
+ * estima la app (este, partido en lo que es: el corte de cabello, el gel…).
+ * Cada grupo con su subtotal.
+ */
+function detalleMes(fila, { simulado = false, comunes = false } = {}) {
   if (!fila) return '';
-  if (!fila.realLineas.length) {
-    return `<p class="vacio">Todavía no hay nada registrado en
-      ${esc(nombreMes(fila.mes))}.</p>`;
-  }
-  return `<ul class="desglose">${fila.realLineas.map((l) => filaMovimiento({
+  const cuando = (l) => esc(String(l.cuando).startsWith('~') || /^cuota|^pago/.test(String(l.cuando)) ? l.cuando : textoFecha(l.cuando));
+  const real = (l) => filaMovimiento({
     titulo: l.detalle,
     // Lo escrito a mano se marca: es lo único de esta tabla que todavía no ha
     // pasado por una cuenta, y por tanto lo que hace que no cuadre con Resumen.
     extra: l.aMano ? '<span class="chip">a mano</span>' : '',
-    meta: `${esc(l.medio)}${l.nota ? ` · ${esc(l.nota)}` : ''}${
-  l.fecha ? ` · ${esc(textoFecha(l.fecha))}` : ''}`,
+    // El medio ya lo dice el grupo; se deja cuando dice algo más (un préstamo).
+    meta: [l.medio !== 'Tarjeta' && l.medio !== 'Efectivo' ? esc(l.medio) : '', l.nota ? esc(l.nota) : '',
+      l.fecha ? esc(textoFecha(l.fecha)) : ''].filter(Boolean).join(' · '),
     monto: money(l.monto),
     nota: l.proposito,
-  })).join('')}
-    </ul>
-    <div class="pie-desglose">${fila.realLineas.length}
-      ${fila.realLineas.length === 1 ? 'gasto' : 'gastos'} ·
-      <strong>${money(fila.real)}</strong></div>`;
+  });
+  const previsto = (l) => `
+    <li>
+      <div class="principal">
+        <div class="titulo">${esc(l.detalle)}</div>
+        <div class="meta">${l.meta}</div>
+      </div>
+      <div class="monto">${money(l.monto)}</div>
+    </li>`;
+  const grupos = [
+    ['Efectivo y débito', fila.realLineas.filter((l) => !l.aMano && l.medio !== 'Tarjeta'), real],
+    ['Tarjeta', fila.realLineas.filter((l) => !l.aMano && l.medio === 'Tarjeta'), real],
+    ['Pagos fijos', fila.realLineas.filter((l) => l.aMano), real],
+  ];
+  if (simulado) {
+    grupos.push(['Simulado', fila.lineas.filter((l) => l.origen === 'simulacion')
+      .map((l) => ({ detalle: l.detalle, monto: l.monto, meta: cuando(l) })), previsto]);
+  }
+  if (comunes) {
+    grupos.push(['Comunes (estimado)', fila.lineas.filter((l) => l.origen === 'comunes').flatMap((l) => {
+      const cat = l.categoria || l.detalle;
+      return porConcepto(l).map((c) => ({ detalle: c.nombre, monto: c.monto, meta: `${c.nombre === cat ? '' : `${esc(cat)} · `}${cuando(l)}` }));
+    }), previsto]);
+  }
+  const con = grupos.filter(([, ls]) => ls.length);
+  if (!con.length) {
+    return `<p class="vacio">Todavía no hay nada registrado en ${esc(nombreMes(fila.mes))}.</p>`;
+  }
+  const suma = (ls) => redondear(ls.reduce((t, l) => t + l.monto, 0));
+  const n = con.reduce((t, [, ls]) => t + ls.length, 0);
+  return `${con.map(([titulo, ls, pinta]) => `
+    <div class="desglose-grupo"><span>${titulo}</span><b>${money(suma(ls))}</b></div>
+    <ul class="desglose">${ls.map(pinta).join('')}</ul>`).join('')}
+    <div class="pie-desglose">${n} ${n === 1 ? 'gasto' : 'gastos'} ·
+      <strong>${money(redondear(con.reduce((t, [, ls]) => t + suma(ls), 0)))}</strong></div>`;
 }
 
 /**
