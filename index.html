@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-5vySaIqPv2h4YS64zBzeo9rPkGLiKpePlmUgIUj2Hw4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-IWq4D8uQoChvExwdSrpkpXqHzHB0COIy02DZ6AEAJFo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4258,7 +4258,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'aa176444b2';
+window.__VERSION_APP__ = '95cb6bc2cb';
 
 M["cerradura"] = (function () {
 /**
@@ -9463,6 +9463,174 @@ function escribirLibro(hojas) {
   });
 }
 
+// --- Informe con formato -----------------------------------------------------
+
+/*
+ * Un informe para abrir en Excel o en Numbers: con título, cabecera de color,
+ * grupos con su subtotal, totales y fórmulas (SUMA) que se recalculan si se
+ * cambia una cifra. `escribirLibro` sigue siendo el de los respaldos: hojas
+ * planas que la app vuelve a leer, y no se toca.
+ *
+ * Cada celda es un texto, un número, o { v, f, s }: valor, fórmula (sin «=»)
+ * y nombre de estilo (ver ESTILOS). Las fórmulas llevan también su valor, para
+ * que se vea bien aunque el programa no recalcule al abrir.
+ */
+const AZUL = 'FF1F3A5F';
+const FORMATO_DINERO = '"$"#,##0.00;-"$"#,##0.00;"—"';
+const FUENTES = [
+  '<font><sz val="11"/><name val="Calibri"/></font>',
+  '<font><b/><sz val="11"/><name val="Calibri"/></font>',
+  `<font><b/><sz val="15"/><color rgb="${AZUL}"/><name val="Calibri"/></font>`,
+  '<font><i/><sz val="10"/><color rgb="FF595959"/><name val="Calibri"/></font>',
+  '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>',
+  `<font><b/><sz val="11"/><color rgb="${AZUL}"/><name val="Calibri"/></font>`,
+  '<font><b/><sz val="11"/><color rgb="FF2E7D32"/><name val="Calibri"/></font>',
+  '<font><b/><sz val="11"/><color rgb="FFC62828"/><name val="Calibri"/></font>',
+];
+const RELLENOS = [
+  '<fill><patternFill patternType="none"/></fill>',
+  '<fill><patternFill patternType="gray125"/></fill>',
+  `<fill><patternFill patternType="solid"><fgColor rgb="${AZUL}"/><bgColor indexed="64"/></patternFill></fill>`,
+  '<fill><patternFill patternType="solid"><fgColor rgb="FFDCE6F2"/><bgColor indexed="64"/></patternFill></fill>',
+  '<fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill>',
+];
+const fino = (lado) => `<${lado} style="thin"><color rgb="FFBFBFBF"/></${lado}>`;
+const BORDES = [
+  '<border><left/><right/><top/><bottom/><diagonal/></border>',
+  `<border>${fino('left')}${fino('right')}${fino('top')}${fino('bottom')}<diagonal/></border>`,
+  `<border><left/><right/>${fino('top')}<bottom/><diagonal/></border>`,
+  `<border><left/><right/><top/><bottom style="medium"><color rgb="${AZUL}"/></bottom><diagonal/></border>`,
+  `<border><left/><right/><top style="double"><color rgb="${AZUL}"/></top><bottom/><diagonal/></border>`,
+];
+/* nombre: [fuente, relleno, borde, formato, alineación] (formato 164 = dinero, 165 = %) */
+const ESTILOS = {
+  normal: [0, 0, 0, 0],
+  titulo: [2, 0, 0, 0],
+  subtitulo: [3, 0, 0, 0],
+  cab: [4, 2, 1, 0, '<alignment horizontal="center" vertical="center" wrapText="1"/>'],
+  cabIzq: [4, 2, 1, 0, '<alignment horizontal="left" vertical="center"/>'],
+  grupo: [5, 3, 0, 0],
+  item: [0, 0, 0, 0, '<alignment indent="1"/>'],
+  texto: [0, 0, 0, 0, '<alignment horizontal="center"/>'],
+  dinero: [0, 0, 0, 164],
+  subtotalNombre: [1, 4, 2, 0, '<alignment indent="1"/>'],
+  subtotal: [1, 4, 2, 164],
+  totalNombre: [4, 2, 4, 0],
+  total: [4, 2, 4, 164],
+  seccion: [5, 0, 3, 0],
+  ok: [6, 0, 0, 164],
+  mal: [7, 0, 0, 164],
+  pct: [0, 0, 0, 165],
+  nota: [3, 0, 0, 0],
+};
+const NOMBRES_ESTILO = Object.keys(ESTILOS);
+
+function estilosInforme() {
+  const xfs = NOMBRES_ESTILO.map((n) => {
+    const [fuente, relleno, borde, formato, alinear] = ESTILOS[n];
+    const attrs = `numFmtId="${formato}" fontId="${fuente}" fillId="${relleno}" borderId="${borde}" xfId="0"`
+      + `${formato ? ' applyNumberFormat="1"' : ''}${fuente ? ' applyFont="1"' : ''}${relleno ? ' applyFill="1"' : ''}${borde ? ' applyBorder="1"' : ''}`;
+    return alinear ? `<xf ${attrs} applyAlignment="1">${alinear}</xf>` : `<xf ${attrs}/>`;
+  });
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    + `<numFmts count="2"><numFmt numFmtId="164" formatCode="${escXml(FORMATO_DINERO)}"/><numFmt numFmtId="165" formatCode="0.0%"/></numFmts>`
+    + `<fonts count="${FUENTES.length}">${FUENTES.join('')}</fonts>`
+    + `<fills count="${RELLENOS.length}">${RELLENOS.join('')}</fills>`
+    + `<borders count="${BORDES.length}">${BORDES.join('')}</borders>`
+    + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+    + `<cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs>`
+    + '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+    + '</styleSheet>';
+}
+
+/** Referencia de una celda: (fila 0, col 0) → A1. */
+const celdaRef = (fila, col) => `${letraColumna(col)}${fila + 1}`;
+
+/**
+ * Genera un .xlsx con formato.
+ * @param {Array<{nombre: string, filas: Array<Array<any>>, anchos?: number[], combinar?: string[],
+ *   fijar?: {filas: number, columnas: number}, apaisado?: boolean, altos?: Object<number, number>}>} hojas
+ * @returns {Blob}
+ */
+function escribirInforme(hojas) {
+  const hojasXml = hojas.map((h) => {
+    const cuerpo = h.filas.map((fila, r) => {
+      const celdas = (fila || []).map((c, col) => {
+        if (c === null || c === undefined || c === '') return '';
+        const x = typeof c === 'object' ? c : { v: c };
+        const ref = celdaRef(r, col);
+        const s = x.s ? ` s="${Math.max(0, NOMBRES_ESTILO.indexOf(x.s))}"` : '';
+        if (x.f) {
+          const v = typeof x.v === 'number' && Number.isFinite(x.v) ? `<v>${x.v}</v>` : '';
+          return `<c r="${ref}"${s}><f>${escXml(x.f)}</f>${v}</c>`;
+        }
+        if (typeof x.v === 'number' && Number.isFinite(x.v)) return `<c r="${ref}"${s}><v>${x.v}</v></c>`;
+        if (x.v === null || x.v === undefined || x.v === '') return s ? `<c r="${ref}"${s}/>` : '';
+        return `<c r="${ref}" t="inlineStr"${s}><is><t xml:space="preserve">${escXml(String(x.v))}</t></is></c>`;
+      }).join('');
+      const alto = h.altos?.[r] ? ` ht="${h.altos[r]}" customHeight="1"` : '';
+      return `<row r="${r + 1}"${alto}>${celdas}</row>`;
+    }).join('');
+    const f = h.fijar;
+    const vista = f && (f.filas || f.columnas)
+      ? `<sheetViews><sheetView workbookViewId="0"><pane${f.columnas ? ` xSplit="${f.columnas}"` : ''}${f.filas ? ` ySplit="${f.filas}"` : ''}`
+        + ` topLeftCell="${celdaRef(f.filas || 0, f.columnas || 0)}" activePane="${f.filas && f.columnas ? 'bottomRight' : f.filas ? 'bottomLeft' : 'topRight'}" state="frozen"/>`
+        + '</sheetView></sheetViews>'
+      : '<sheetViews><sheetView workbookViewId="0"/></sheetViews>';
+    const cols = h.anchos?.length
+      ? `<cols>${h.anchos.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>` : '';
+    const combinar = h.combinar?.length
+      ? `<mergeCells count="${h.combinar.length}">${h.combinar.map((m) => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : '';
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      + `<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>${vista}<sheetFormatPr defaultRowHeight="16"/>${cols}`
+      + `<sheetData>${cuerpo}</sheetData>${combinar}`
+      + '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>'
+      + `<pageSetup orientation="${h.apaisado === false ? 'portrait' : 'landscape'}" fitToWidth="1" fitToHeight="0"/>`
+      + '</worksheet>';
+  });
+
+  const workbook = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+    + ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+    + `<sheets>${hojas.map((h, i) => (
+      `<sheet name="${escXml(h.nombre.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`
+    )).join('')}</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`;
+  const rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    + `${hojas.map((_, i) => (
+      `<Relationship Id="rId${i + 1}" Target="worksheets/sheet${i + 1}.xml"`
+      + ' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"/>'
+    )).join('')}`
+    + '<Relationship Id="rIdS" Target="styles.xml"'
+    + ' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"/>'
+    + '</Relationships>';
+  const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    + '<Default Extension="xml" ContentType="application/xml"/>'
+    + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+    + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+    + `${hojas.map((_, i) => (
+      `<Override PartName="/xl/worksheets/sheet${i + 1}.xml"`
+      + ' ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+    )).join('')}</Types>`;
+  const raiz = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    + '<Relationship Id="rId1" Target="xl/workbook.xml"'
+    + ' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"/>'
+    + '</Relationships>';
+  return new Blob([crearZip([
+    { nombre: '[Content_Types].xml', datos: utf8(contentTypes) },
+    { nombre: '_rels/.rels', datos: utf8(raiz) },
+    { nombre: 'xl/workbook.xml', datos: utf8(workbook) },
+    { nombre: 'xl/_rels/workbook.xml.rels', datos: utf8(rels) },
+    { nombre: 'xl/styles.xml', datos: utf8(estilosInforme()) },
+    ...hojasXml.map((xml, i) => ({ nombre: `xl/worksheets/sheet${i + 1}.xml`, datos: utf8(xml) })),
+  ])], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
 // --- Lectura de libro --------------------------------------------------------
 
 /** Fecha serie de Excel → 'YYYY-MM-DD'. */
@@ -9566,7 +9734,7 @@ function filasAObjetos(filas, mapaColumnas) {
     });
 }
 
-return { escribirLibro, filasAObjetos, leerLibro, serialAFecha };
+return { celdaRef, escribirInforme, escribirLibro, filasAObjetos, leerLibro, serialAFecha };
 })();
 
 M["sync"] = (function () {
@@ -19704,6 +19872,7 @@ const {esc, $, $$, segmentado, modal, brindis, aNumero, campoMonto, opciones, fi
 const {MEDIOS, ritmoDeCompra, recurrencias, proyeccion, mesesProyectados, estaExcluida, guardarAjuste, guardarManual, borrarManual, marcarPago, esSimulacion, sueldoDelMes, porcentajeAhorro, claveGasto, otrosIngresos, fijosManuales, listaComunes, guardarListaComunes, comunesDeLista, sugerenciasComunes} = M["plan"];
 const {registrarGastoTarjeta, campoCategoria, conectarCategoria, categoriaElegida} = M["forms"];
 const vistaTarjetas = M["views/tarjetas"];
+const {escribirInforme, celdaRef} = M["xlsx"];
 const {plegable} = M["pliegue"];
 /*
  * `quien` arranca en J: el presupuesto es una herramienta de decisión personal
@@ -20594,11 +20763,11 @@ function tarjetaSimulacion({ plan: planBase, quien }) {
 const TABLAS = {
   real: { titulo: 'Lo real, mes a mes', lineas: (f) => lineasReales(f) },
   sim: { titulo: 'Simulación: lo real + lo simulado', lineas: (f) => [...lineasReales(f), ...lineasPrevistas(f, 'simulacion')] },
-  comparar: { titulo: 'Comparar: los tres escenarios', lineas: (f) => [...lineasReales(f), ...lineasPrevistas(f, 'simulacion'), ...lineasPrevistas(f, 'comunes')] },
+  comparar: { titulo: 'Comparar: los cuatro escenarios', lineas: (f) => [...lineasReales(f), ...lineasPrevistas(f, 'simulacion'), ...lineasPrevistas(f, 'comunes')] },
   comunes: { titulo: 'Gastos comunes que calcula la app', lineas: (f) => lineasPrevistas(f, 'comunes') },
 };
 const TIPO_SIM = 'Simulado';
-const TIPO_COM = 'Común (app)';
+const TIPO_COM = 'Común';
 /** El orden de los grupos: el efectivo, la tarjeta, lo fijo, lo simulado y lo común. */
 const ORDEN_TIPO = ['Efectivo y débito', 'Tarjeta', 'Pago fijo', TIPO_SIM, TIPO_COM];
 const posTipo = (t) => { const i = ORDEN_TIPO.indexOf(t); return i < 0 ? ORDEN_TIPO.length : i; };
@@ -20771,15 +20940,126 @@ function abrirTabla(cual, contexto) {
       + (ver.unidad === 'pct' ? ' · cada gasto en % del sueldo de su mes' : '');
   };
 
-  const csv = () => {
-    const n = (v) => String(redondear(v)).replace('.', ',');
-    const filas = conGrupos(datos());
+  /*
+   * El informe para Excel (o Numbers): título y de qué es; la cabecera de los
+   * meses; cada grupo —efectivo y débito, tarjeta, pagos fijos, simulado,
+   * común— con su título, sus filas y su subtotal; el total; y debajo el sueldo
+   * y lo que queda. Los subtotales, el total, el total de cada fila y lo que
+   * queda del sueldo son fórmulas: si se cambia una cifra, se recalculan.
+   * Siempre en dólares.
+   */
+  const informe = () => {
     const conDe = ver.por === 'gasto' && ver.quien === 'Ambos';
-    const cab = ['Fila', ...(conDe ? ['De'] : []), ...(ver.por === 'gasto' ? ['Tipo'] : []), ...meses.map((f) => nombreMes(f.mes)), 'Total'];
-    const lineasCsv = [cab, ...filas.map((x) => [x.grupo ? `${x.nombre.toUpperCase()} (subtotal)` : x.nombre,
-      ...(conDe ? [x.grupo ? '' : x.de] : []), ...(ver.por === 'gasto' ? [x.grupo ? '' : x.tipo] : []), ...x.valores.map(n), n(x.total)]),
-      ...pie().map((x) => [x.nombre, ...(conDe ? [''] : []), ...(ver.por === 'gasto' ? [''] : []), ...x.valores.map(n), x.sinTotal ? '' : n(x.valores.reduce((t, v) => t + v, 0))])];
-    return lineasCsv.map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    const filas = datos();
+    const nM = meses.length;
+    const c0 = conDe ? 2 : 1;
+    const cTot = c0 + nM;
+    const cProm = cTot + 1;
+    const col = (c) => celdaRef(0, c).replace(/\d+$/, '');
+    const ref = (r, c) => celdaRef(r, c);
+    const hoja = [];
+    const relleno = (s, desde = 1) => Array.from({ length: cProm + 1 - desde }, () => ({ v: '', s }));
+    const totalYProm = (r, total, s) => [
+      { f: `SUM(${ref(r, c0)}:${ref(r, cTot - 1)})`, v: redondear(total), s },
+      { f: `${ref(r, cTot)}/${nM}`, v: redondear(total / nM), s },
+    ];
+    const quien = ver.quien === 'Ambos' ? 'J y C' : ver.quien;
+    const porTexto = { gasto: 'por gasto', categoria: 'por categoría', tipo: 'por forma de pago' }[ver.por];
+    hoja.push([{ v: `Presupuesto · ${def.titulo}`, s: 'titulo' }]);
+    hoja.push([{ v: `${quien} · ${nombreMes(meses[0].mes)} a ${nombreMes(meses[nM - 1].mes)} · ${porTexto} · en dólares · descargado el ${textoFecha(hoyLocal())}`, s: 'subtitulo' }]);
+    hoja.push([]);
+    hoja.push([
+      { v: ver.por === 'gasto' ? 'Gasto' : ver.por === 'categoria' ? 'Categoría' : 'Forma de pago', s: 'cabIzq' },
+      ...(conDe ? [{ v: 'De', s: 'cab' }] : []),
+      ...meses.map((f) => ({ v: nombreMes(f.mes, true), s: 'cab' })),
+      { v: 'Total', s: 'cab' }, { v: 'Promedio al mes', s: 'cab' },
+    ]);
+    const filaGasto = (x) => {
+      const r = hoja.length;
+      hoja.push([
+        { v: x.nombre, s: 'item' }, ...(conDe ? [{ v: x.de, s: 'texto' }] : []),
+        ...x.valores.map((v) => ({ v: redondear(v), s: 'dinero' })), ...totalYProm(r, x.total, 'dinero'),
+      ]);
+      return r;
+    };
+    // Por grupos (salvo si las filas ya son las formas de pago): título, filas y subtotal.
+    const sumas = [];
+    if (ver.por === 'tipo') {
+      filas.forEach((x) => sumas.push(filaGasto(x)));
+    } else {
+      [...new Set(filas.map((x) => x.tipo))].forEach((tipo) => {
+        const delGrupo = filas.filter((x) => x.tipo === tipo);
+        hoja.push([{ v: `${tipo || 'Otros'} · ${delGrupo.length} ${delGrupo.length === 1 ? 'fila' : 'filas'}`, s: 'grupo' }, ...relleno('grupo')]);
+        const rs = delGrupo.map(filaGasto);
+        const r = hoja.length;
+        const valores = meses.map((_, i) => redondear(delGrupo.reduce((t, y) => t + y.valores[i], 0)));
+        hoja.push([
+          { v: `Subtotal ${String(tipo || 'otros').toLowerCase()}`, s: 'subtotalNombre' }, ...(conDe ? [{ v: '', s: 'subtotal' }] : []),
+          ...valores.map((v, i) => ({ f: `SUM(${ref(rs[0], c0 + i)}:${ref(rs[rs.length - 1], c0 + i)})`, v, s: 'subtotal' })),
+          ...totalYProm(r, valores.reduce((t, v) => t + v, 0), 'subtotal'),
+        ]);
+        sumas.push(r);
+      });
+    }
+    // El total: la suma de los subtotales (o de las filas).
+    const rTotal = hoja.length;
+    const totales = meses.map((f) => redondear(def.lineas(f).reduce((t, l) => t + l.monto, 0)));
+    const sumaDe = (c) => (sumas.length ? `SUM(${sumas.map((r) => ref(r, c)).join(',')})` : '0');
+    hoja.push([
+      { v: 'Total gasto', s: 'totalNombre' }, ...(conDe ? [{ v: '', s: 'total' }] : []),
+      ...totales.map((v, i) => ({ f: sumaDe(c0 + i), v, s: 'total' })),
+      ...totalYProm(rTotal, totales.reduce((t, v) => t + v, 0), 'total'),
+    ]);
+
+    // El sueldo y lo que queda, para las tarjetas que lo comparan con el sueldo.
+    if (escenarios.length) {
+      hoja.push([]);
+      hoja.push([{ v: 'Sueldo y resultado', s: 'seccion' }, ...relleno('seccion')]);
+      const vacia = conDe ? [{ v: '' }] : [];
+      const filaValores = (nombre, valores, { s = 'dinero', sinTotal = false, estilos = null } = {}) => {
+        const r = hoja.length;
+        hoja.push([{ v: nombre, s: 'item' }, ...vacia, ...valores.map((v, i) => ({ v: redondear(v), s: estilos ? estilos[i] : s })),
+          ...(sinTotal ? [] : totalYProm(r, valores.reduce((t, v) => t + v, 0), 'dinero'))]);
+        return r;
+      };
+      const rSueldo = filaValores('Sueldo', cuentas.map((c) => c.sueldo));
+      filaValores('Meta de ahorro', cuentas.map((c) => c.meta));
+      // El gasto de cada escenario: en Comparar, una fila por escenario; si no, el total de arriba.
+      const rGasto = escenarios.length > 1
+        ? escenarios.map((e) => filaValores(`Gasto ${e.k === 'real' ? 'real' : e.rotulo.toLowerCase()}`, meses.map((f) => e.gasto(f))))
+        : [rTotal];
+      escenarios.forEach((e, k) => {
+        const r = hoja.length;
+        const valores = meses.map((f, i) => redondear(cuentas[i].sueldo - e.gasto(f)));
+        hoja.push([
+          { v: `Queda del sueldo${escenarios.length > 1 ? ` · ${e.k === 'real' ? 'real' : e.rotulo.toLowerCase()}` : ''}`, s: 'item' }, ...vacia,
+          ...valores.map((v, i) => ({ f: `${ref(rSueldo, c0 + i)}-${ref(rGasto[k], c0 + i)}`, v, s: v >= cuentas[i].meta ? 'ok' : 'mal' })),
+          ...totalYProm(r, valores.reduce((t, v) => t + v, 0), 'dinero'),
+        ]);
+      });
+      if (escenarios.length === 1) {
+        const sueldoTotal = cuentas.reduce((t, c) => t + c.sueldo, 0);
+        const pctDe = (g, sdo) => (sdo ? g / sdo : 0);
+        hoja.push([{ v: 'Gasto en % del sueldo', s: 'item' }, ...vacia,
+          ...meses.map((_, i) => ({ f: `IF(${ref(rSueldo, c0 + i)}=0,0,${ref(rTotal, c0 + i)}/${ref(rSueldo, c0 + i)})`, v: pctDe(totales[i], cuentas[i].sueldo), s: 'pct' })),
+          { f: `IF(${ref(rSueldo, cTot)}=0,0,${ref(rTotal, cTot)}/${ref(rSueldo, cTot)})`, v: pctDe(totales.reduce((t, v) => t + v, 0), sueldoTotal), s: 'pct' }]);
+      }
+      escenarios.forEach((e, k) => filaValores(`En cuentas al cierre${escenarios.length > 1 ? ` · ${e.k === 'real' ? 'real' : e.rotulo.toLowerCase()}` : ''}`,
+        cierresDe[k].map((x) => x.saldo), { sinTotal: true }));
+      hoja.push([]);
+      hoja.push([{ v: 'Verde: el mes llega a la meta de ahorro; rojo: no llega. Los subtotales, el total y lo que queda del sueldo son fórmulas.', s: 'nota' }]);
+    }
+
+    const ultima = col(cProm);
+    const nombres = [...filas.map((x) => x.nombre), 'Queda del sueldo · real + simulado + comunes'];
+    return {
+      nombre: { real: 'Lo real', sim: 'Simulación', comparar: 'Comparar', comunes: 'Comunes' }[cual] || 'Presupuesto',
+      filas: hoja,
+      anchos: [Math.min(46, Math.max(26, ...nombres.map((t) => String(t).length + 4))), ...(conDe ? [7] : []), ...meses.map(() => 13), 14, 15],
+      combinar: [`A1:${ultima}1`, `A2:${ultima}2`, ...(escenarios.length ? [`A${hoja.length}:${ultima}${hoja.length}`] : [])],
+      fijar: { filas: 4, columnas: c0 },
+      altos: { 0: 24, 3: 30 },
+    };
   };
 
   const dlg = modal({
@@ -20803,8 +21083,8 @@ function abrirTabla(cual, contexto) {
       bajar.style.marginRight = 'auto';
       bajar.textContent = 'Descargar para Excel';
       bajar.addEventListener('click', () => {
-        descargar(new Blob([`﻿${csv()}`], { type: 'text/csv;charset=utf-8' }),
-          `presupuesto_${cual}_${ver.quien === 'Ambos' ? 'JyC' : ver.quien}_${meses[0].mes}_${meses[meses.length - 1].mes}.csv`);
+        descargar(escribirInforme([informe()]),
+          `presupuesto_${cual}_${ver.quien === 'Ambos' ? 'JyC' : ver.quien}_${meses[0].mes}_${meses[meses.length - 1].mes}.xlsx`);
       });
       pie.prepend(bajar);
       $('#pzt-quien', form).appendChild(segmentado(
