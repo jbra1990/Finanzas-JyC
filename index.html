@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-IWq4D8uQoChvExwdSrpkpXqHzHB0COIy02DZ6AEAJFo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-77HW5PRsoGId9zfYZUbOfGMa8RiL+XV+cxpIDFAK1bw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4258,7 +4258,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '95cb6bc2cb';
+window.__VERSION_APP__ = 'c28c13e9dd';
 
 M["cerradura"] = (function () {
 /**
@@ -15153,6 +15153,34 @@ const AJUSTES = [
   },
   {
     /*
+     * Pichincha según el estado de cuenta del 3 de noviembre de 2026 (ver
+     * ESTADO_PICH_NOV). Lo que no se arregla solo —compras que el banco no
+     * tiene, importes distintos— queda en Tarjetas, «Contra el estado de
+     * cuenta», con su botón.
+     */
+    id: 'pichincha-estado-2026-11',
+    revisar() {
+      if (!db.cuentas.some((c) => c.id === PI)) return { estado: 'nada' };
+      const r = PASOS_PICH_NOV.map((p) => p.revisar());
+      if (!r.some((x) => x.estado === 'aplicar')) return { estado: 'ya', titulo: 'Pichincha según el estado de cuenta del 3 de noviembre', texto: 'ya coincide: no se toca' };
+      const oct = redondear(db.cuotas.filter((c) => c.tarjeta === PI && c.mes === '2026-10').reduce((t, c) => t + c.monto, 0));
+      const despues = redondear(oct + redondear((r[0].faltan || []).reduce((t, b) => t + b.monto, 0)) + (r[1].masOct || 0));
+      const dif = redondear(ESTADO_PICH_NOV.total - despues);
+      return {
+        estado: 'aplicar',
+        titulo: 'Pichincha según el estado de cuenta del 3 de noviembre',
+        texto: `<ul class="ajustes-pasos">${r.map((x) => `<li class="${x.estado}">${x.texto}</li>`).join('')}</ul>
+          <p class="pista">Octubre de Pichincha quedará en <strong>${money(despues)}</strong>; el banco dice ${money(ESTADO_PICH_NOV.total)}
+          (se paga hasta el 18 de noviembre). Cupo: $9.000 − $1.153,65 usados al 3 de noviembre = $7.846,35 libres.${Math.abs(dif) < 0.005 ? ' Cuadra.'
+    : ` ${dif > 0 ? `Faltan ${money(dif)}` : `Sobran ${money(-dif)}`}: en Tarjetas → Pichincha → octubre, «Contra el estado de cuenta» dice qué línea es.`}</p>`,
+      };
+    },
+    aplicar() {
+      PASOS_PICH_NOV.forEach((p) => { if (p.revisar().estado === 'aplicar') p.aplicar(); });
+    },
+  },
+  {
+    /*
      * Lo único que le faltaba a Pichincha en el teléfono (4 oct 2026): en
      * septiembre la app tenía $1.361,54 y el banco $1.372,04. Diferidos
      * ($456,39) y recurrentes ($32,53) cuadraban al centavo; las corrientes,
@@ -15180,6 +15208,8 @@ const AJUSTES = [
       const c = ultimaCuotaRefi();
       if (!c) return { estado: 'nada' };
       if (cerca(c.monto, REFI_ULTIMA)) return { estado: 'ya', titulo: 'Refinanciación de Pichincha', texto: 'la última cuota ya es de $29,04' };
+      // El estado de cuenta de noviembre la dejó en $29,03 (ver REFI_CUOTAS): no se vuelve a tocar.
+      if (centavo(c.monto, 29.03)) return { estado: 'ya', titulo: 'Refinanciación de Pichincha', texto: 'la última cuota ya es de $29,03' };
       return {
         estado: 'aplicar',
         titulo: 'Refinanciación de Pichincha: la última cuota',
@@ -15314,17 +15344,18 @@ function faltanDelBanco() {
  * que septiembre (`otroMes`), que no suman al mes del estado. Se enseña en
  * Tarjetas mientras septiembre de Pichincha no cuadre.
  */
-function revisarContraBanco() {
+function revisarContraBanco(est = ESTADO_PICH_SEP) {
+  const MES = est.mes;
   const dia = (iso, n) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
   const cent = (n) => Math.round((Number(n) || 0) * 100);
   const gastos = new Map(db.gastosTarjeta.map((g) => [g.id, g]));
-  // Pedidos Ya cuenta aunque siga en Bolivariano: este mismo ajuste lo trae.
-  const pedidoYa = pedidos();
+  // Pedidos Ya cuenta aunque siga en Bolivariano: el ajuste de septiembre lo trae.
+  const pedidoYa = est === ESTADO_PICH_SEP ? pedidos() : null;
   const mesDe = (id) => cuotasDe(id)[0]?.mes;
 
   // 1. Las compras del banco contra las compras de un pago de la app.
-  const app = db.gastosTarjeta.filter((g) => (g.tarjeta === PI || g === pedidoYa) && g.tipo === 'Corriente'
-    && g.fecha >= '2026-08-28' && g.fecha <= '2026-10-03')
+  const app = db.gastosTarjeta.filter((g) => (g.tarjeta === est.tarjeta || g === pedidoYa) && g.tipo === 'Corriente'
+    && String(g.fecha).slice(0, 10) >= dia(est.desde, -7) && String(g.fecha).slice(0, 10) <= est.hasta)
     .map((g) => ({ id: g.id, gasto: g, fecha: String(g.fecha).slice(0, 10), monto: Number(g.monto_total) || 0 }));
   const usadas = new Set();
   const faltan = [];
@@ -15333,23 +15364,23 @@ function revisarContraBanco() {
   const anotar = (lista, b) => {
     lista.forEach((a) => {
       const mes = mesDe(a.id);
-      if (mes && mes !== PSEP) otroMes.push({ banco: b, gasto: a.gasto, mes });
+      if (mes && mes !== MES) otroMes.push({ banco: b, gasto: a.gasto, mes });
     });
-    const enSep = lista.filter((a) => mesDe(a.id) === PSEP);
+    const enSep = lista.filter((a) => mesDe(a.id) === MES);
     const suma = enSep.reduce((t, a) => t + a.monto, 0);
     if (enSep.length === lista.length && cent(suma) !== cent(b.monto)) {
       difImporte.push({ banco: b, gasto: enSep[0].gasto, app: redondear(suma), dif: redondear(b.monto - suma) });
     }
   };
-  for (const b of BANCO_PICH) {
+  for (const b of est.compras) {
     const desde = dia(b.fecha, -6);
     const hasta = dia(b.fecha, 1);
     const libres = app.filter((a) => !usadas.has(a.id) && a.fecha >= desde && a.fecha <= hasta);
     // Primero el importe exacto, luego con margen; y entre iguales, la de septiembre.
     const cerca25 = (a) => Math.abs(a.monto - b.monto) <= 0.25;
-    const una = libres.find((a) => cent(a.monto) === cent(b.monto) && mesDe(a.id) === PSEP)
+    const una = libres.find((a) => cent(a.monto) === cent(b.monto) && mesDe(a.id) === MES)
       || libres.find((a) => cent(a.monto) === cent(b.monto))
-      || libres.find((a) => cerca25(a) && mesDe(a.id) === PSEP)
+      || libres.find((a) => cerca25(a) && mesDe(a.id) === MES)
       || libres.find(cerca25);
     if (una) { usadas.add(una.id); anotar([una], b); continue; }
     let par = null;
@@ -15363,11 +15394,11 @@ function revisarContraBanco() {
   }
 
   // 2. Las cuotas del banco contra lo que queda de septiembre en la app.
-  const sep = db.cuotas.filter((c) => c.tarjeta === PI && c.mes === PSEP)
+  const sep = db.cuotas.filter((c) => c.tarjeta === est.tarjeta && c.mes === MES)
     .map((c) => ({ c, g: gastos.get(c.gasto_id), monto: Number(c.monto) || 0 }));
   const cuotaLibre = sep.filter((x) => !usadas.has(x.c.gasto_id));
   const tomadas = new Set();
-  for (const b of BANCO_CUOTAS_PICH) {
+  for (const b of est.cuotas) {
     const libres = cuotaLibre.filter((x) => !tomadas.has(x));
     const una = libres.find((x) => cent(x.monto) === cent(b.monto));
     if (una) { tomadas.add(una); continue; }
@@ -15390,7 +15421,7 @@ function revisarContraBanco() {
   const appTotal = redondear(sep.reduce((t, x) => t + x.monto, 0));
   return {
     faltan, otroMes, sobran, difImporte, appTotal,
-    tarjeta: PI, mes: PSEP, total: TOTAL_PICH,
+    tarjeta: est.tarjeta, mes: MES, total: est.total, estado: est,
   };
 }
 
@@ -15398,8 +15429,132 @@ function revisarContraBanco() {
 function pasarASeptiembre(gasto) {
   moverCompra(gasto, PSEP, PI);
 }
+
+/** Pasa una compra al mes de un estado de cuenta, en su tarjeta. */
+function pasarAlMesDelEstado(gasto, est) {
+  moverCompra(gasto, est.mes, est.tarjeta);
+}
 const PSEP = '2026-09';
 const TOTAL_PICH = 1372.04;
+
+/*
+ * Los estados de cuenta conocidos. `mes` es el de la app al que corresponde
+ * (con corte el 3, el del 3 de octubre es septiembre); `desde`–`hasta`, el
+ * periodo del banco; `compras` se buscan por fecha e importe, `cuotas` entre
+ * las cuotas del mes. `utilizado`, el cupo utilizado que dice el banco al corte.
+ */
+const ESTADO_PICH_SEP = {
+  id: 'pichincha-estado-2026-10', tarjeta: PI, mes: PSEP, desde: '2026-09-04', hasta: '2026-10-03',
+  corte: '3 oct', total: TOTAL_PICH, utilizado: 2452.09, compras: BANCO_PICH, cuotas: BANCO_CUOTAS_PICH,
+};
+
+/*
+ * Pichincha, estado de cuenta del 3 de noviembre de 2026 (4 oct – 3 nov):
+ * ninguna compra; los cargos del banco del 22 de octubre ($73,60) y nueve
+ * cuotas de diferidos ($450,16). A pagar $523,76 hasta el 18 de noviembre;
+ * cupo utilizado $1.153,65 (con $629,89 de diferido por facturar), de $9.000.
+ */
+const ESTADO_PICH_NOV = {
+  id: 'pichincha-estado-2026-11', tarjeta: PI, mes: '2026-10', desde: '2026-10-04', hasta: '2026-11-03',
+  corte: '3 nov', total: 523.76, utilizado: 1153.65, porFacturar: 629.89, cupo: 9000,
+  compras: [
+    ['2026-10-22', 'IVA (plan de recompensas)', 6.60, '21807-iva'], ['2026-10-22', 'IVA (prestaciones en el exterior)', 3.00, '57212-iva'],
+    ['2026-10-22', 'Plan de recompensas', 44.00, '21807'], ['2026-10-22', 'Prestaciones en el exterior', 20.00, '57212'],
+  ].map(([fecha, detalle, monto, ref]) => ({ fecha, detalle, monto, ref })),
+  cuotas: [
+    ['Metalhierro 3/6', 74.76], ['Dacar Collision Center 3/3 (final)', 37.53], ['Descuentos Jomas 12/12 (final)', 29.55],
+    ['Gnc 3/3 (final)', 33.52], ['T Ventas 4/6', 14.95], ['Dif con internacional online 10/12', 173.34],
+    ['Dif con nacional online 2/3 (refinanciación)', 29.03], ['Gerardo Ortiz e Hijos 3/3 (final)', 34.90],
+    ['Autorepuestos del Chino 3/3 (final)', 22.58],
+  ].map(([detalle, monto]) => ({ fecha: '2026-11-03', detalle, monto })),
+};
+const ESTADOS_DE_CUENTA = [ESTADO_PICH_SEP, ESTADO_PICH_NOV];
+
+/** El estado de cuenta conocido de una tarjeta y un mes de la app, si lo hay. */
+const estadoDeCuentaDe = (tarjeta, mes) => ESTADOS_DE_CUENTA.find((e) => e.tarjeta === tarjeta && e.mes === mes) || null;
+/** El último estado de cuenta conocido de una tarjeta. */
+const ultimoEstadoDeCuenta = (tarjeta) => ESTADOS_DE_CUENTA.filter((e) => e.tarjeta === tarjeta).at(-1) || null;
+
+/* La refinanciación (Dif con nacional online): 29,02 + 29,03 + 29,03 = 87,08. */
+const REFI_CUOTAS = [29.02, 29.03, 29.03];
+// Aquí importa el centavo: `cerca` da por buenos 29,02 y 29,03.
+const centavo = (a, b) => Math.round((Number(a) || 0) * 100) === Math.round(b * 100);
+function refinanciacion() {
+  const g = db.gastosTarjeta.find((x) => x.tarjeta === PI && (x.id === 'AJ-PICH-REFI-2026-09-15'
+    || (x.categoria === CAT_REFI && cuotasDe(x.id).some((c) => c.mes === PSEP && cerca(c.monto, 29.02)))));
+  if (!g) return null;
+  const cs = cuotasDe(g.id).sort((a, b) => a.n_cuota - b.n_cuota);
+  return cs.length === 3 ? { g, cs } : null;
+}
+
+const PASOS_PICH_NOV = [
+  {
+    // Los cargos del banco del 22 de octubre, si no están apuntados.
+    revisar() {
+      const usados = new Set();
+      const faltan = ESTADO_PICH_NOV.compras.filter((b) => {
+        const g = db.gastosTarjeta.find((x) => x.tarjeta === PI && !usados.has(x.id) && Math.round((Number(x.monto_total) || 0) * 100) === Math.round(b.monto * 100)
+          && String(x.fecha).slice(0, 10) >= '2026-10-04' && String(x.fecha).slice(0, 10) <= '2026-11-03');
+        if (g) usados.add(g.id);
+        return !g;
+      });
+      if (!faltan.length) return { estado: 'ya', texto: 'Cargos del banco del 22 de octubre ($73,60): ya están' };
+      return {
+        estado: 'aplicar',
+        faltan,
+        texto: `Se apuntan en Pichincha, octubre, los cargos del banco del 22 de octubre que faltan
+          (${money(redondear(faltan.reduce((t, b) => t + b.monto, 0)))}): ${faltan.map((b) => `${esc(b.detalle)} ${money(b.monto)}`).join(', ')}.
+          Van en «Intereses bancarios».`,
+      };
+    },
+    aplicar() {
+      (this.revisar().faltan || []).forEach((b) => nuevaCompraEn(PI, {
+        id: `AJ-PICH-2026-10-${b.ref}`, fecha: b.fecha, detalle: b.detalle, categoria: 'Intereses bancarios',
+        montoTotal: b.monto, mesInicio: '2026-10', notas: 'Según el estado de cuenta de Pichincha del 3 de noviembre',
+      }));
+    },
+  },
+  {
+    // La refinanciación: la 2/3 y la 3/3 son de $29,03.
+    revisar() {
+      const r = refinanciacion();
+      if (!r) return { estado: 'ya', texto: 'Refinanciación: no está apuntada en tres cuotas' };
+      const mal = r.cs.filter((c, i) => !centavo(c.monto, REFI_CUOTAS[i]));
+      if (!mal.length) return { estado: 'ya', texto: 'Refinanciación: ya es $29,02 + $29,03 + $29,03' };
+      return {
+        estado: 'aplicar',
+        masOct: redondear(r.cs.filter((c) => c.mes === '2026-10').reduce((t, c) => t + REFI_CUOTAS[c.n_cuota - 1] - c.monto, 0)),
+        texto: `Refinanciación (Dif con nacional online): ${mal.map((c) => `la ${c.n_cuota}/3 pasa de ${money(c.monto)} a <strong>${money(REFI_CUOTAS[c.n_cuota - 1])}</strong>`).join('; ')}.
+          El banco cobra $29,03 en octubre y deja $29,03 por facturar.`,
+      };
+    },
+    aplicar() {
+      const r = refinanciacion();
+      if (!r) return;
+      r.cs.forEach((c, i) => { if (!centavo(c.monto, REFI_CUOTAS[i])) upsert('cuotas', { ...c, monto: REFI_CUOTAS[i] }); });
+      upsert('gastosTarjeta', { ...r.g, monto_total: redondear(REFI_CUOTAS.reduce((t, v) => t + v, 0)) });
+    },
+  },
+  {
+    revisar() {
+      const t = db.cuentas.find((c) => c.id === PI);
+      if (!t || Number(t.cupo) === ESTADO_PICH_NOV.cupo) return { estado: 'ya', texto: 'Cupo de Pichincha: ya es $9.000' };
+      return { estado: 'aplicar', texto: `Cupo de Pichincha: de ${money(Number(t.cupo) || 0)} a <strong>$9.000</strong>, el autorizado del banco.` };
+    },
+    aplicar() {
+      const t = db.cuentas.find((c) => c.id === PI);
+      if (t) upsert('cuentas', { ...t, cupo: ESTADO_PICH_NOV.cupo });
+    },
+  },
+  {
+    revisar() {
+      const clave = claveEstadoCuenta(PI, '2026-10');
+      if (cerca(db.config[clave], ESTADO_PICH_NOV.total)) return { estado: 'ya', texto: 'Estado de cuenta: ya anotado' };
+      return { estado: 'aplicar', texto: `Se anota el estado de cuenta: <strong>${money(ESTADO_PICH_NOV.total)}</strong>, para comprobar octubre línea por línea` };
+    },
+    aplicar() { db.config[claveEstadoCuenta(PI, '2026-10')] = String(ESTADO_PICH_NOV.total); },
+  },
+];
 const CAT_REFI = 'Refinanciación de tarjeta';
 
 /** Una compra puesta tal cual (con sus cuotas), con identificador fijo. */
@@ -15889,7 +16044,7 @@ function ofrecerAlArrancar(alTerminar) {
   setTimeout(() => { dejar(); una(); }, 6000);
 }
 
-return { ajusteConCambios, aplicarAjuste, aplicarTodos, cuantosPendientes, ofrecerAjustes, ofrecerAlArrancar, ofrecerNuevos, pasarASeptiembre, pendientes, revisarContraBanco };
+return { ajusteConCambios, aplicarAjuste, aplicarTodos, cuantosPendientes, estadoDeCuentaDe, ofrecerAjustes, ofrecerAlArrancar, ofrecerNuevos, pasarASeptiembre, pasarAlMesDelEstado, pendientes, revisarContraBanco, ultimoEstadoDeCuenta };
 })();
 
 M["pantalla_llave"] = (function () {
@@ -17899,7 +18054,7 @@ const {columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, aNumero, notaFila, marcaNota, notaTexto, centrarElegido, modal, brindis} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
 const {formCuenta} = M["views/cuentas"];
-const {revisarContraBanco, pasarASeptiembre, ajusteConCambios, aplicarAjuste} = M["ajustes"];
+const {revisarContraBanco, pasarAlMesDelEstado, ajusteConCambios, aplicarAjuste, estadoDeCuentaDe, ultimoEstadoDeCuenta} = M["ajustes"];
 const estado = {
   tarjeta: null, usuario: 'ambos', mes: null, comprobando: false,
   /*
@@ -18853,19 +19008,43 @@ function pintarRepetidos(raiz) {
 /**
  * Mientras el mes de un estado de cuenta conocido no cuadre, qué líneas del
  * banco no están en la app y cuáles están en otro mes, con el arreglo a un
- * toque. Hoy: Pichincha, corte del 3 de octubre de 2026 (septiembre).
+ * toque. Hoy: Pichincha, cortes del 3 de octubre (septiembre) y del 3 de
+ * noviembre (octubre) de 2026. Con el último, además, el cupo utilizado.
  */
 function pintarContraBanco(raiz, t, mes) {
   const caja = $('#contra-banco', raiz);
   if (!caja) return;
-  const rev = revisarContraBanco();
-  const pendiente = t.id === rev.tarjeta && ajusteConCambios('pichincha-estado-2026-10');
+  const est = estadoDeCuentaDe(t.id, mes);
+  if (!est) { caja.hidden = true; caja.innerHTML = ''; return; }
+  const rev = revisarContraBanco(est);
+  const pendiente = ajusteConCambios(est.id);
   const dif = redondear(rev.total - rev.appTotal);
   const hayAlgo = rev.faltan.length || rev.otroMes.length || rev.sobran.length || rev.difImporte.length;
-  const toca = t.id === rev.tarjeta && mes === rev.mes && (Math.abs(dif) >= 0.005 || hayAlgo);
+  const suma = (l, f) => redondear(l.reduce((s, x) => s + f(x), 0));
+  const delMes = nombreMes(est.mes).replace(/\s*\d{4}$/, '').toLowerCase();
+  const diaMes = (iso) => textoFecha(iso).replace(/ de \d{4}$/, '');
+  const diaAntes = (iso) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); };
+
+  /*
+   * El cupo utilizado, con el último estado de cuenta: lo que dice el banco
+   * al corte, más lo comprado desde entonces y los cargos fijos ya cobrados,
+   * menos el pago de este estado si ya se hizo. Tiene que dar lo de la app.
+   */
+  let cupo = null;
+  if (est === ultimoEstadoDeCuenta(t.id) && est.utilizado) {
+    const et = estadoTarjeta(t.id);
+    const nuevas = db.gastosTarjeta.filter((g) => g.tarjeta === t.id && g.tipo !== 'Recurrente' && String(g.fecha).slice(0, 10) > est.hasta);
+    const tipoDe = new Map(db.gastosTarjeta.map((g) => [g.id, g.tipo]));
+    const fijos = et.cuentan.filter((c) => c.mes > est.mes && tipoDe.get(c.gasto_id) === 'Recurrente');
+    const pagado = pagoDeTarjeta(t.id, est.mes) ? est.total : 0;
+    const sNuevas = suma(nuevas, (g) => Number(g.monto_total) || 0);
+    const sFijos = suma(fijos, (c) => Number(c.monto) || 0);
+    const esperado = redondear(est.utilizado + sNuevas + sFijos - pagado);
+    cupo = { et, nuevas, sNuevas, sFijos, pagado, esperado, dif: redondear(et.utilizado - esperado) };
+  }
+  const toca = Math.abs(dif) >= 0.005 || hayAlgo || (cupo && Math.abs(cupo.dif) >= 0.005);
   caja.hidden = !toca;
   if (!toca) { caja.innerHTML = ''; return; }
-  const suma = (l, f) => redondear(l.reduce((s, x) => s + f(x), 0));
   const sFaltan = suma(rev.faltan, (x) => x.monto);
   const sOtro = suma(rev.otroMes, (x) => Number(x.gasto.monto_total) || 0);
   const sSobran = suma(rev.sobran, (x) => x.monto);
@@ -18874,12 +19053,12 @@ function pintarContraBanco(raiz, t, mes) {
     ? `<li><span>${rotulo}</span><b>${signo}${money(Math.abs(v))}</b></li>` : '');
   const nombre = (g) => esc(g?.detalle || '');
   caja.innerHTML = `
-    <header><h2>Contra el estado de cuenta</h2><span class="pista">Corte del 3 oct</span></header>
+    <header><h2>Contra el estado de cuenta</h2><span class="pista">Corte del ${esc(est.corte)}</span></header>
     ${pendiente ? `
       <div class="aviso alerta"><span class="icono">!</span><span class="crece">El ajuste de este estado de cuenta
-        (refinanciación, Solca, cuotas de Corla, seguro) no está aplicado.</span>
+        no está aplicado.</span>
         <button type="button" class="btn pequeno primario" id="cb-ajuste">Aplicar</button></div>` : ''}
-    <p class="pista" style="margin-top:0">Septiembre en la app: <strong>${money(rev.appTotal)}</strong>; el banco:
+    <p class="pista" style="margin-top:0">${esc(nombreMes(est.mes).replace(/\s*\d{4}$/, ''))} en la app: <strong>${money(rev.appTotal)}</strong>; el banco:
       <strong>${money(rev.total)}</strong>${Math.abs(dif) >= 0.005 ? ` (${dif > 0 ? 'faltan' : 'sobran'} ${money(Math.abs(dif))})` : ''}.
       Comparado línea por línea, en los dos sentidos:</p>
     <ul class="cuadre-suma">
@@ -18891,8 +19070,8 @@ function pintarContraBanco(raiz, t, mes) {
       <li class="total"><span>= El banco</span><b>${money(redondear(rev.appTotal - sSobran + sFaltan + sOtro + sDif))}</b></li>
     </ul>
     ${rev.sobran.length ? `
-      <p class="pista">Sobran: están en septiembre en la app y no en este estado de cuenta (repetidas, de otra
-        tarjeta, de antes del corte del 3 de septiembre o de después del 3 de octubre):</p>
+      <p class="pista">Sobran: están en ${esc(delMes)} en la app y no en este estado de cuenta (repetidas, de otra
+        tarjeta, de antes del corte del ${esc(diaMes(diaAntes(est.desde)))} o de después del ${esc(diaMes(est.hasta))}):</p>
       <ul class="cuadre-items">${rev.sobran.map((x, i) => `
         <li><span>${nombre(x.gasto)}<small>${esc(textoFecha(String(x.gasto?.fecha || '').slice(0, 10)))} · ${esc(x.gasto?.usuario || '')}${
   x.gasto?.tipo !== 'Corriente' ? ` · cuota ${x.cuota.n_cuota} de ${x.gasto?.cuotas}` : ''}</small></span>
@@ -18905,20 +19084,32 @@ function pintarContraBanco(raiz, t, mes) {
           <strong>${x.dif > 0 ? '+' : '−'}${money(Math.abs(x.dif))}</strong>
           <button type="button" class="btn pequeno" data-abrir-dif="${i}">Abrir</button></li>`).join('')}</ul>` : ''}
     ${rev.otroMes.length ? `
-      <p class="pista">Apuntadas en otro mes, no suman a septiembre:</p>
+      <p class="pista">Apuntadas en otro mes, no suman a ${esc(delMes)}:</p>
       <ul class="cuadre-items">${rev.otroMes.map((o, i) => `
         <li><span>${nombre(o.gasto)}<small>${esc(textoFecha(String(o.gasto.fecha).slice(0, 10)))} · está en ${esc(nombreMes(o.mes))}</small></span>
           <strong>${money(o.gasto.monto_total)}</strong>
-          <button type="button" class="btn pequeno" data-a-sep="${i}">Pasar a septiembre</button></li>`).join('')}</ul>` : ''}
+          <button type="button" class="btn pequeno" data-a-sep="${i}">Pasar a ${esc(delMes)}</button></li>`).join('')}</ul>` : ''}
     ${rev.faltan.length ? `
       <p class="pista">Faltan: están en el estado de cuenta y no en la app:</p>
       <ul class="cuadre-items">${rev.faltan.map((f, i) => `
-        <li><span>${esc(f.detalle)}<small>${f.tipo === 'cuota' ? 'cuota facturada el 3 de octubre' : `${esc(textoFecha(f.fecha))} en el banco`}</small></span>
+        <li><span>${esc(f.detalle)}<small>${f.tipo === 'cuota' ? `cuota facturada el ${esc(diaMes(est.hasta))}` : `${esc(textoFecha(f.fecha))} en el banco`}</small></span>
           <strong>${money(f.monto)}</strong>
-          ${f.tipo === 'compra' ? `<button type="button" class="btn pequeno primario" data-apuntar="${i}">Apuntar</button>` : ''}</li>`).join('')}</ul>` : ''}`;
+          ${f.tipo === 'compra' ? `<button type="button" class="btn pequeno primario" data-apuntar="${i}">Apuntar</button>` : ''}</li>`).join('')}</ul>` : ''}
+    ${cupo ? `
+      <p class="pista">Cupo utilizado, del estado de cuenta a hoy:</p>
+      <ul class="cuadre-suma">
+        <li><span>El banco al ${esc(diaMes(est.hasta))}</span><b>${money(est.utilizado)}</b></li>
+        ${linea(`Compras desde el corte (${cupo.nuevas.length})`, cupo.sNuevas, '+ ')}
+        ${linea('Cargos fijos cobrados desde el corte', cupo.sFijos, '+ ')}
+        ${linea(`Pago de ${esc(delMes)}`, cupo.pagado, '− ')}
+        <li class="total"><span>= Debería tener la app</span><b>${money(cupo.esperado)}</b></li>
+        <li><span>La app tiene</span><b class="${Math.abs(cupo.dif) < 0.005 ? 'ok' : 'mal'}">${money(cupo.et.utilizado)}</b></li>
+      </ul>
+      <p class="pista">${Math.abs(cupo.dif) < 0.005 ? `✓ El cupo cuadra: disponible ${money(cupo.et.disponible)} de ${money(cupo.et.cupo)}.`
+    : `${cupo.dif > 0 ? 'La app tiene' : 'A la app le faltan'} ${money(Math.abs(cupo.dif))}${cupo.dif > 0 ? ' de más' : ''}: lo de arriba dice qué línea es.`}</p>` : ''}`;
 
   $('#cb-ajuste', caja)?.addEventListener('click', () => {
-    aplicarAjuste('pichincha-estado-2026-10');
+    aplicarAjuste(est.id);
     render(raiz);
   });
   const abrir = (g) => { if (g) formGastoTarjeta(() => render(raiz), g); };
@@ -18927,7 +19118,7 @@ function pintarContraBanco(raiz, t, mes) {
   $$('[data-a-sep]', caja).forEach((b) => b.addEventListener('click', () => {
     const o = rev.otroMes[Number(b.dataset.aSep)];
     if (!o) return;
-    pasarASeptiembre(o.gasto);
+    pasarAlMesDelEstado(o.gasto, est);
     render(raiz);
   }));
   $$('[data-apuntar]', caja).forEach((b) => b.addEventListener('click', () => {
