@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-YPA+CoDWTSGN8t1KpwqjVgPOkAe48OT30Ot7AYpsFQo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-4B9GVmWd+9gjPZD9KlsXsRSUj7aN7GU+buJPKHmBwgc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2507,6 +2507,18 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
   font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
 }
 .veh-datos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+/* Lo que se le hizo al carro, en casillas: un pago puede llevar varios trabajos. */
+.trabajos { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 4px; }
+.trabajo { position: relative; display: inline-flex; margin: 0; cursor: pointer; text-transform: none; letter-spacing: 0; }
+.trabajo input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.trabajo span {
+  display: inline-block; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--borde);
+  background: var(--superficie-2); color: var(--tinta-2); font-size: 13px; font-weight: 560; line-height: 1.2;
+}
+.trabajo input:checked + span { background: var(--acento); border-color: var(--acento); color: #fff; font-weight: 680; }
+.trabajo input:checked + span::before { content: '✓ '; }
+.trabajo input:focus-visible + span { outline: 2px solid var(--acento); outline-offset: 2px; }
+.trabajo input:disabled + span { opacity: 0.5; }
 /* Vehículo: cuánto pasó desde la vez anterior. */
 .veh-desde { margin-top: 4px; font-size: 11.5px; color: var(--tinta-3); }
 .veh-dato, .dato-chip {
@@ -4260,7 +4272,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'f0a549d15b';
+window.__VERSION_APP__ = '065b0a9645';
 
 M["cerradura"] = (function () {
 /**
@@ -6751,6 +6763,21 @@ function clasificarMantenimiento(texto) {
   return m ? m.clave : '';
 }
 
+/** Todos los mantenimientos a los que suena un texto: «aceite y pastillas de freno» → aceite, frenos. */
+function clasificarMantenimientos(texto) {
+  const t = plano(texto);
+  if (!t) return [];
+  return MANTENIMIENTOS.filter((x) => x.pistas.some((pista) => t.includes(pista))).map((x) => x.clave);
+}
+
+/**
+ * Los trabajos de un gasto del carro. Un solo pago puede llevar varios —mano
+ * de obra, cambio de aceite y pastillas de freno en la misma factura—: se
+ * guardan juntos, separados por comas («aceite,frenos»), y el kilometraje y
+ * la fecha valen para cada uno.
+ */
+const trabajosDe = (valor) => [...new Set(String(valor ?? '').split(',').map((x) => x.trim()).filter(Boolean))];
+
 /**
  * Todo lo que se le ha hecho al carro, de donde sea que esté apuntado.
  *
@@ -6761,17 +6788,18 @@ function clasificarMantenimiento(texto) {
 function eventosVehiculo() {
   const out = [];
 
+  // Cada apunte lleva todos sus trabajos (`tipos`); `tipo` es el primero.
   const anota = (o) => {
     const fecha = String(o.fecha ?? '').slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
-    out.push({ ...o, fecha });
+    out.push({ ...o, fecha, tipo: o.tipos[0] || '' });
   };
 
   for (const g of db.gastosTarjeta) {
     if (!g.mantenimiento) continue;
     anota({
       id: g.id,
-      tipo: g.mantenimiento,
+      tipos: trabajosDe(g.mantenimiento),
       fecha: g.fecha,
       km: Number(g.km) || 0,
       monto: Number(g.monto_total) || 0,
@@ -6786,7 +6814,7 @@ function eventosVehiculo() {
     if (!g.mantenimiento) continue;
     anota({
       id: g.id,
-      tipo: g.mantenimiento,
+      tipos: trabajosDe(g.mantenimiento),
       fecha: g.fecha,
       km: Number(g.km) || 0,
       monto: Number(g.monto) || 0,
@@ -6799,7 +6827,7 @@ function eventosVehiculo() {
   for (const g of db.vehiculoGastos || []) {
     anota({
       id: g.id,
-      tipo: clasificarMantenimiento(`${g.detalle || ''} ${g.tipo || ''}`),
+      tipos: clasificarMantenimientos(`${g.detalle || ''} ${g.tipo || ''}`),
       fecha: g.fecha,
       km: Number(g.km) || 0,
       monto: Number(g.monto) || 0,
@@ -6901,7 +6929,7 @@ function buscarEnElCarro(termino) {
     if (esCifra) {
       return e.monto.toFixed(2).includes(cifra) || (e.km > 0 && String(e.km).includes(cifra));
     }
-    const texto = plano(`${e.detalle} ${e.nota} ${nombre(e.tipo)} ${e.origen}`);
+    const texto = plano(`${e.detalle} ${e.nota} ${e.tipos.map(nombre).join(' ')} ${e.origen}`);
     return palabras.every((p) => texto.includes(p));
   };
 
@@ -6915,7 +6943,7 @@ function buscarEnElCarro(termino) {
     const km = propio ? e.km : (kmEstimadoEnFecha(e.fecha) || 0);
     return {
       ...e,
-      nombreTipo: nombre(e.tipo),
+      nombreTipo: e.tipos.map(nombre).filter(Boolean).join(', '),
       km,
       kmPropio: propio,
       dias: diasEntre(e.fecha, hoy),
@@ -6945,9 +6973,14 @@ function costoTipico(clave, eventos = null) {
   if (plan?.costo > 0) {
     return { monto: redondear(plan.costo), base: 'mio', veces: 0, disperso: false };
   }
-  const suyos = (eventos || eventosVehiculo())
-    .filter((e) => e.tipo === clave && e.monto > 0)
-    .map((e) => e.monto);
+  const todos = (eventos || eventosVehiculo()).filter((e) => e.tipos.includes(clave) && e.monto > 0);
+  /*
+   * Un pago con varios trabajos no dice cuánto costó cada uno: mientras haya
+   * pagos de este trabajo solo, el precio sale de esos. Si no hay ninguno, se
+   * usa lo que hay, pero no se da por bueno.
+   */
+  const solos = todos.filter((e) => e.tipos.length === 1);
+  const suyos = (solos.length ? solos : todos).map((e) => e.monto);
   if (!suyos.length) return { monto: 0, base: 'ninguno', veces: 0, disperso: false };
 
   const orden = [...suyos].sort((a, b) => a - b);
@@ -6958,7 +6991,7 @@ function costoTipico(clave, eventos = null) {
     base: 'historial',
     veces: suyos.length,
     // Con el mayor más de tres veces el menor, no son el mismo trabajo.
-    disperso: orden.length >= 2 && orden[orden.length - 1] > orden[0] * 3,
+    disperso: !solos.length || (orden.length >= 2 && orden[orden.length - 1] > orden[0] * 3),
   };
 }
 
@@ -6977,7 +7010,7 @@ function estadoMantenimientos() {
 
   return planesMantenimiento().map((plan) => {
     const costo = costoTipico(plan.clave, eventos);
-    const suyos = eventos.filter((e) => e.tipo === plan.clave);
+    const suyos = eventos.filter((e) => e.tipos.includes(plan.clave));
     const ultimo = suyos[0] || null;
     if (!ultimo) {
       return {
@@ -7970,7 +8003,7 @@ function yaApuntado({ fecha, monto, detalle, usuario, excluir = '' }) {
   return comprasComparables().find((x) => x.clave !== excluir && mismaCompra(nuevo, x)) || null;
 }
 
-return { CLAVE_NO_REPETIDOS, DESVIO_GRAVE, ES_FINANCIACION, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, entreRecargas, esFinanciacion, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, intervalosReales, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasParaMedir, lecturasRevisadas, marcarNoRepetidos, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, posiblesRepetidos, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, umbralAviso, yaApuntado };
+return { CLAVE_NO_REPETIDOS, DESVIO_GRAVE, ES_FINANCIACION, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, clasificarMantenimientos, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, entreRecargas, esFinanciacion, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, intervalosReales, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasParaMedir, lecturasRevisadas, marcarNoRepetidos, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, posiblesRepetidos, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, trabajosDe, umbralAviso, yaApuntado };
 })();
 
 M["charts"] = (function () {
@@ -13588,7 +13621,7 @@ M["forms"] = (function () {
  */
 
 const {db, guardar, nuevoId, upsert, tocar, sepultar, cuentasBancarias, tarjetas, categoriasGasto, categoriasIngreso, usuarios, capitalizar} = M["store"];
-const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta, rangoMeses, topesDelMes, umbralAviso, TOPES, comprometidoEnMes, MANTENIMIENTOS, odometroHoy, yaApuntado, clasificarMantenimiento} = M["calc"];
+const {claveMes, mesActual, money, planificarCuotas, calcularPoliza, sumarDias, redondear, nombreMes, sumarMeses, textoCorte, fechaPagoCompra, textoFecha, saldoCuenta, rangoMeses, topesDelMes, umbralAviso, TOPES, comprometidoEnMes, MANTENIMIENTOS, odometroHoy, yaApuntado, clasificarMantenimientos, trabajosDe} = M["calc"];
 const {modal, opciones, brindis, alarma, hoyISO, esc, $, aNumero, campoMonto, segmentado} = M["ui"];
 const selUsuarios = (sel) => opciones(usuarios(), sel);
 
@@ -13757,24 +13790,21 @@ function formMantenimiento(alTerminar, existente = null) {
   const odometro = odometroHoy();
 
   const cuerpo = `
+    <div class="campo ancho"><label>Qué se hizo</label>
+      ${casillasTrabajos('mt-tipo', g?.mantenimiento ?? (g ? '' : 'aceite'))}
+      <span class="pista">Marca todo lo que entró en este pago: el kilometraje vale para cada cosa.</span></div>
     <div class="filtros">
-      <div class="campo"><label for="mt-tipo">Qué se hizo</label>
-        <select id="mt-tipo" name="mantenimiento" required>
-          ${opciones(MANTENIMIENTOS.map((m) => ({ valor: m.clave, texto: m.nombre })),
-    g?.mantenimiento)}
-          <option value="otro"${g?.mantenimiento === 'otro' ? ' selected' : ''}>Otro</option>
-        </select></div>
       <div class="campo"><label for="mt-fecha">Fecha</label>
         <input id="mt-fecha" name="fecha" type="date" value="${esc(g?.fecha || hoyISO())}"
                required></div>
-    </div>
-    <div class="filtros">
       <div class="campo"><label for="mt-km">Kilometraje</label>
         <input id="mt-km" name="km" type="number" inputmode="numeric" min="0" step="1"
                placeholder="${odometro > 0 ? String(Math.round(odometro)) : '0'}"
                value="${esc(g?.km || '')}"></div>
+    </div>
+    <div class="filtros">
       ${campoMonto('mt-monto', 'monto', {
-    etiqueta: 'Cuánto costó', valor: paraEditar(g?.monto_total ?? g?.monto), requerido: true,
+    etiqueta: 'Cuánto costó (todo)', valor: paraEditar(g?.monto_total ?? g?.monto), requerido: true,
   })}
     </div>
     <div class="campo ancho"><label for="mt-detalle">Taller o repuesto</label>
@@ -13836,20 +13866,23 @@ function formMantenimiento(alTerminar, existente = null) {
           n.querySelectorAll('input, select').forEach((c) => { c.disabled = !suyo; });
         });
       };
+      const trabajos = conectarTrabajos(form, 'mt-tipo');
       const refrescar = () => {
         const km = Number($('#mt-km', form).value) || 0;
         const monto = val(form, '#mt-monto');
-        const tipo = MANTENIMIENTOS.find((m) => m.clave === $('#mt-tipo', form).value);
-        const partes = [];
-        if (tipo?.km) {
-          partes.push(km > 0
-            ? `El siguiente tocaría a los <strong>${Math.round(km + tipo.km)
-              .toLocaleString('es-EC')} km</strong>.`
-            : `Este se hace cada ${tipo.km.toLocaleString('es-EC')} km. Escribe el
-               kilometraje y te digo a cuántos toca el siguiente.`);
+        const marcados = trabajos.valor();
+        // De cada trabajo con intervalo, cuándo toca el siguiente.
+        const partes = marcados.map((clave) => MANTENIMIENTOS.find((m) => m.clave === clave)).filter(Boolean).map((tipo) => {
+          const cada = [tipo.km ? `${tipo.km.toLocaleString('es-EC')} km` : '', tipo.meses ? `${tipo.meses} meses` : ''].filter(Boolean).join(' o ');
+          return tipo.km && km > 0
+            ? `${esc(tipo.nombre)}: el siguiente, a los <strong>${Math.round(km + tipo.km).toLocaleString('es-EC')} km</strong>${tipo.meses ? ` o en ${tipo.meses} meses` : ''}.`
+            : `${esc(tipo.nombre)}: cada ${cada}.`;
+        });
+        if (marcados.some((c) => MANTENIMIENTOS.find((m) => m.clave === c)?.km) && !(km > 0)) {
+          partes.push('Escribe el kilometraje y te digo a cuántos toca cada uno.');
         }
-        if (tipo?.meses) partes.push(`Y cada ${tipo.meses} meses.`);
-        if (monto > 0) partes.push(`Se apunta como gasto de ${money(monto)}.`);
+        if (!marcados.length) partes.push('Marca al menos una cosa de las que se hicieron.');
+        if (monto > 0) partes.push(`Se apunta como un solo gasto de ${money(monto)}.`);
         previa.innerHTML = partes.map((x) => `<div>${x}</div>`).join('');
       };
 
@@ -13865,6 +13898,8 @@ function formMantenimiento(alTerminar, existente = null) {
     },
     alEnviar(d) {
       if (!montoValido(d.monto)) return false;
+      // Sin nada marcado no sería un apunte del carro.
+      if (!trabajosDe(d.mantenimiento).length) return false;
       const comun = {
         fecha: d.fecha,
         detalle: capitalizar(d.detalle),
@@ -13958,6 +13993,35 @@ function esDelCarro(categoria) {
   return sinTildes(c?.grupo) === 'transporte' || SUENA_A_CARRO.test(sinTildes(categoria));
 }
 
+/*
+ * Lo que se le hizo al carro, en casillas: un solo pago puede llevar varios
+ * trabajos —mano de obra, cambio de aceite y pastillas de freno— y el
+ * kilometraje vale para cada uno. Lo marcado va junto en un campo oculto
+ * («aceite,frenos»), que es lo que se guarda.
+ */
+function casillasTrabajos(id, valor) {
+  const marcados = new Set(trabajosDe(valor));
+  const una = (clave, texto) => `<label class="trabajo"><input type="checkbox" value="${clave}"${
+    marcados.has(clave) ? ' checked' : ''}><span>${esc(texto)}</span></label>`;
+  return `<div class="trabajos" id="${id}" role="group" aria-label="Qué se le hizo al carro">
+      ${MANTENIMIENTOS.map((m) => una(m.clave, m.nombre)).join('')}${una('otro', 'Otro arreglo o repuesto')}</div>
+    <input type="hidden" name="mantenimiento" id="${id}-valor" value="${esc([...marcados].join(','))}">`;
+}
+
+/** Engancha las casillas: devuelve cómo leerlas, ponerlas y desactivarlas. */
+function conectarTrabajos(form, id, alTocar) {
+  const caja = $(`#${id}`, form);
+  const oculto = $(`#${id}-valor`, form);
+  const casillas = [...caja.querySelectorAll('input[type="checkbox"]')];
+  const volcar = () => { oculto.value = casillas.filter((c) => c.checked).map((c) => c.value).join(','); };
+  caja.addEventListener('change', () => { volcar(); alTocar?.(); });
+  return {
+    valor: () => casillas.filter((c) => c.checked).map((c) => c.value),
+    poner(claves) { casillas.forEach((c) => { c.checked = claves.includes(c.value); }); volcar(); },
+    desactivar(si) { oculto.disabled = si; casillas.forEach((c) => { c.disabled = si; }); },
+  };
+}
+
 /**
  * Campo del odómetro: aparece con la categoría combustible y con las del
  * carro. Con estas, además, qué se le hizo.
@@ -13972,32 +14036,30 @@ function campoKm(id, valor, mantenimiento = '') {
         <span class="pista" data-km-pista></span></div>
     </div>
     <div class="filtros" id="${id}-tipo-caja" hidden>
-      <div class="campo ancho"><label for="${id}-tipo">Qué se le hizo al carro</label>
-        <select id="${id}-tipo" name="mantenimiento">
-          <option value="">No es un arreglo (no va al historial del carro)</option>
-          ${opciones(MANTENIMIENTOS.map((m) => ({ valor: m.clave, texto: m.nombre })), mantenimiento)}
-          <option value="otro"${mantenimiento === 'otro' ? ' selected' : ''}>Otro arreglo o repuesto</option>
-        </select>
-        <span class="pista">Con esto y el kilometraje, Vehículo dice cada cuántos kilómetros y cada
-          cuánto tiempo lo cambias, y cuándo toca el siguiente.</span></div>
+      <div class="campo ancho"><label>Qué se le hizo al carro</label>
+        ${casillasTrabajos(`${id}-tipo`, mantenimiento)}
+        <span class="pista">Marca todo lo que entró en este pago: el kilometraje vale para cada cosa, y
+          Vehículo lleva de cada una cuándo toca otra vez. Sin marcar nada, no va al historial del carro.</span></div>
     </div>`;
 }
 
 /**
  * Enseña u oculta el odómetro según la categoría elegida. Con una categoría
  * del carro propone qué se le hizo, por lo que dice el gasto («Cambio de
- * aceite» → Cambio de aceite); lo que se elija a mano, manda.
+ * aceite y pastillas de freno» → Cambio de aceite y Frenos); lo que se marque
+ * a mano, manda.
  */
 function conectarKm(form, idCategoria, idKm, { textos = [], nuevo = true } = {}) {
   const caja = $(`#${idKm}-caja`, form);
   if (!caja) return;
   const cajaTipo = $(`#${idKm}-tipo-caja`, form);
-  const tipo = $(`#${idKm}-tipo`, form);
   const campo = $(`#${idKm}`, form);
   const pista = $('[data-km-pista]', caja);
   const sel = $(`#${idCategoria}`, form);
   const nueva = $(`#${idCategoria}-nueva`, form);
-  let aMano = Boolean(tipo.value);
+  let aMano = false;
+  const tipo = conectarTrabajos(form, `${idKm}-tipo`, () => { aMano = true; });
+  aMano = tipo.valor().length > 0;
   const categoria = () => (sel.value === NUEVA_CAT ? (nueva?.value || '') : sel.value);
   const proponer = () => {
     if (aMano || !esDelCarro(categoria())) return;
@@ -14005,8 +14067,9 @@ function conectarKm(form, idCategoria, idKm, { textos = [], nuevo = true } = {})
     // Al corregir un gasto que no estaba en el historial, solo si se escribe el kilometraje.
     if (!nuevo && !conKm) return;
     const texto = textos.map((id) => $(`#${id}`, form)?.value || '').join(' ');
-    tipo.value = clasificarMantenimiento(texto)
-      || (conKm || SUELE_SER_ARREGLO.test(sinTildes(categoria())) ? 'otro' : '');
+    const suena = clasificarMantenimientos(texto);
+    tipo.poner(suena.length ? suena
+      : (conKm || SUELE_SER_ARREGLO.test(sinTildes(categoria())) ? ['otro'] : []));
   };
   const refrescar = () => {
     const cat = categoria();
@@ -14017,13 +14080,12 @@ function conectarKm(form, idCategoria, idKm, { textos = [], nuevo = true } = {})
     // Escondido Y desactivado: si no, seguiría enviando el kilometraje de una
     // categoría que ya no lo lleva.
     caja.querySelectorAll('input').forEach((x) => { x.disabled = !si; });
-    tipo.disabled = !carro;
+    tipo.desactivar(!carro);
     pista.textContent = carro
       ? 'La lectura del odómetro cuando se hizo. Si no la sabes, déjalo vacío: la app la estima por la fecha.'
       : 'La lectura del odómetro al repostar. Con la de la vez anterior la app saca cuántos kilómetros hiciste con ese depósito.';
     proponer();
   };
-  tipo.addEventListener('change', () => { aMano = true; });
   sel.addEventListener('change', refrescar);
   nueva?.addEventListener('input', refrescar);
   campo.addEventListener('input', proponer);
@@ -23527,7 +23589,7 @@ function listaEventos(eventos) {
       <div class="veh-datos">
         <span class="veh-dato fuerte">${esc(textoFecha(e.fecha))}</span>
         ${kmDelApunte(e)}
-        ${e.tipo ? `<span class="veh-dato">${esc(nombreDe(e.tipo))}</span>` : ''}
+        ${e.tipos.map((t) => `<span class="veh-dato">${esc(nombreDe(t))}</span>`).join('')}
         ${e.nota ? `<span class="veh-dato">${esc(e.nota)}</span>` : ''}
         <span class="veh-dato">${esc(e.origen)}</span>
         ${e.deducido ? '<span class="veh-dato">del Excel</span>' : ''}
@@ -23644,9 +23706,8 @@ function seccionHallazgos(termino) {
   }
 
   const u = filas[0];
-  const estado = u.tipo
-    ? estadoMantenimientos().find((e) => e.clave === u.tipo && e.estado !== 'sin-datos')
-    : null;
+  // De cada trabajo de la última vez, cuándo toca el siguiente.
+  const estados = estadoMantenimientos().filter((e) => u.tipos.includes(e.clave) && e.estado !== 'sin-datos');
   const total = redondear(filas.reduce((s, f) => s + f.monto, 0));
   const real = intervalosReales(filas);
   const desde = (f) => (f.desdeAnterior
@@ -23684,8 +23745,8 @@ function seccionHallazgos(termino) {
     o.nota ? ` <small>· ${esc(o.nota)}</small>` : ''}</span>
             <b>${money(o.monto)}</b></div>`).join('')}
         </div>` : ''}
-      ${estado ? `<p class="hallazgo-proximo">El siguiente: ${textoProximo(estado)}${
-  estado.costo.monto > 0 ? ` · unos <strong>${money(estado.costo.monto)}</strong>` : ''}.</p>` : ''}
+      ${estados.map((estado) => `<p class="hallazgo-proximo">${estados.length > 1 ? `${esc(estado.nombre)}: ` : 'El siguiente: '}${textoProximo(estado)}${
+    estado.costo.monto > 0 && !estado.costo.disperso ? ` · unos <strong>${money(estado.costo.monto)}</strong>` : ''}.</p>`).join('')}
     </div>
 
     ${filas.length > 1 ? `
