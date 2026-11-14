@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-HkAKVnB2LV1DAZ+Z4TjFLMHZ/Gp38eT8Rvc3KG/iZZs='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-x5F+H4xiB2DwrIQGMwUScuNEgjvFv2ScTl2MnFOHuJA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2518,6 +2518,40 @@ li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
 .ti-corregir { position: absolute; right: -6px; bottom: 4px; }
 .ti-pie { justify-content: space-between; align-items: center; margin-top: 8px; }
 .ti-total { font-size: 12px; color: var(--tinta-3); font-variant-numeric: tabular-nums; }
+/* Último | Siguiente: dos columnas que se leen de un vistazo, como en una ficha de taller. */
+.ti-dos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 9px; }
+.ti-col { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ti-sig { padding-left: 12px; border-left: 1px solid var(--grid); }
+.ti-etq { font-size: 10px; font-weight: 640; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tinta-3); }
+.ti-val { font-size: 15px; font-weight: 660; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--tinta); }
+.ti-sub { font-size: 11.5px; line-height: 1.35; color: var(--tinta-3); font-variant-numeric: tabular-nums; }
+li[data-estado="vencido"] .ti-sig .ti-val { color: var(--critico); }
+li[data-estado="pronto"] .ti-sig .ti-val { color: var(--alerta); }
+.ti-gastado { flex: none; font-size: 13px; font-weight: 640; font-variant-numeric: tabular-nums; }
+.ti-otros .ti-veces-n { margin-left: 6px; padding: 1px 7px; font-size: 10.5px; }
+
+/* En el panel del carro: lo primero que toca, y un toque lleva a su fila. */
+.veh-proximo {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 12px; row-gap: 2px;
+  width: 100%; margin-top: 16px; padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14); border-left: 3px solid var(--ok);
+  border-radius: var(--radio-chico);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--panel-tinta); font: inherit; text-align: left; cursor: pointer;
+}
+.veh-proximo[data-estado="pronto"] { border-left-color: var(--alerta); }
+.veh-proximo[data-estado="vencido"] { border-left-color: var(--critico); }
+.veh-proximo:hover { background: rgba(255, 255, 255, 0.11); }
+.veh-proximo:focus-visible { outline: 2px solid var(--panel-tinta); outline-offset: 2px; }
+.veh-proximo-etq {
+  grid-column: 1 / -1; font-size: 10px; font-weight: 660; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--panel-tinta-2);
+}
+.veh-proximo-que { font-size: 15px; font-weight: 640; }
+.veh-proximo-cuando { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+.veh-proximo-cuando .ti-val { color: var(--panel-tinta); font-size: 15px; }
+.veh-proximo-cuando .ti-sub { color: var(--panel-tinta-2); }
+.veh-proximo-mas { grid-column: 1 / -1; font-size: 11.5px; color: var(--panel-tinta-2); }
 
 /*
  * El historial del vehículo. Se lee, no se recorre: cada apunte enseña todo
@@ -4310,7 +4344,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'dee147ad82';
+window.__VERSION_APP__ = 'b4eaffef27';
 
 M["cerradura"] = (function () {
 /**
@@ -23600,6 +23634,7 @@ function render(raiz) {
           <div><div class="etq">Recorridos</div>
             <div class="val">${esc(km(ritmo.recorrido))}</div></div>
         </div>` : ''}
+      ${loProximo(estados)}
       <div class="acciones-panel">
         <button type="button" data-accion="mantenimiento">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
@@ -23625,8 +23660,6 @@ function render(raiz) {
 
     <section class="tarjeta" id="veh-hallazgos"${busca ? '' : ' hidden'}></section>
 
-    ${bloqueLecturas()}
-
     <section class="tarjeta" id="veh-toca">
       <header><h2>Por trabajo</h2></header>
       ${bloqueQueToca(estados, pendientes, odometro, ritmo)}
@@ -23646,7 +23679,9 @@ function render(raiz) {
       <header><h2>Todo, por fecha</h2>${eventos.length
     ? `<span class="pista">${eventos.length} ${eventos.length === 1 ? 'apunte' : 'apuntes'}</span>` : ''}</header>
       ${listaEventos(eventos)}
-    </section>`;
+    </section>
+
+    ${bloqueLecturas()}`;
 
   /*
    * «Por trabajo» queda abierta: es a lo que se viene («¿cuándo cambié el
@@ -23654,6 +23689,8 @@ function render(raiz) {
    */
   plegable($('#veh-presupuesto', raiz), 'vehiculo:viene');
   plegable($('#veh-historial', raiz), 'vehiculo:historial');
+  // Revisar lecturas es una tarea de orden, no a lo que se viene: al final y plegada.
+  plegable($('#veh-lecturas', raiz), 'vehiculo:lecturas');
 
   const caja = $('#veh-hallazgos', raiz);
   const pintarHallazgos = () => {
@@ -23688,6 +23725,15 @@ function render(raiz) {
   $$('[data-apuntar]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => apuntarEnPresupuesto(btn.dataset.apuntar, () => render(raiz)));
   });
+  // «Lo próximo» lleva a su fila, abierta.
+  $$('[data-ir]', raiz).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const li = $(`#veh-toca li[data-clave="${btn.dataset.ir}"]`, raiz);
+      if (!li) return;
+      li.querySelector('details').open = true;
+      li.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    });
+  });
   $$('[data-plan]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => formPlan(btn.dataset.plan, () => render(raiz)));
   });
@@ -23721,7 +23767,7 @@ function render(raiz) {
  * viene; debajo, lo demás, para poder comprobar que no se olvida nada.
  */
 function bloqueQueToca(estados, pendientes, odometro, ritmo) {
-  const conDatos = estados.filter((e) => e.estado !== 'sin-datos');
+  const conDatos = porFecha(estados.filter((e) => e.estado !== 'sin-datos'));
   if (!conDatos.length) {
     return `<p class="vacio">Todavía no hay ningún mantenimiento apuntado. En
       cuanto apuntes el primero —con su fecha y su kilometraje— esta caja
@@ -23739,9 +23785,9 @@ function bloqueQueToca(estados, pendientes, odometro, ritmo) {
         <span class="crece">Nada pendiente${odometro > 0
     ? ` a los ${esc(km(odometro))}` : ''}.</span></div>`}
 
-    <p class="pista">Toca uno para ver todas las veces.</p>
+    <p class="pista">En el orden en que tocan. Toca uno para ver todas las veces.</p>
     <ul class="mantenimientos ti-lista">${conDatos.map((e) => `
-      <li data-estado="${esc(e.estado)}">
+      <li data-estado="${esc(e.estado)}" data-clave="${esc(e.clave)}">
         <details>
           <summary>
             <div class="ti-cab">
@@ -23749,17 +23795,26 @@ function bloqueQueToca(estados, pendientes, odometro, ritmo) {
                 ${e.ajustado ? '<span class="chip">a mi medida</span>' : ''}</span>
               <span class="ti-estado">${ESTADO_TEXTO[e.estado] || ''}</span>
             </div>
-            <div class="meta">Último el <strong>${esc(textoFecha(e.ultimo.fecha))}</strong>,
-              ${esc(haceCuanto(e.diasDesde))}${e.kmUltimo > 0
-    ? ` · a los <strong>${e.ultimo.km > 0 ? '' : '≈ '}${esc(km(e.kmUltimo))}</strong>` : ''}</div>
-            <div class="meta ti-proximo">${textoProximo(e)}</div>
+            <div class="ti-dos">
+              <div class="ti-col">
+                <span class="ti-etq">Último</span>
+                <span class="ti-val">${esc(fechaCorta(e.ultimo.fecha))}</span>
+                <span class="ti-sub">${e.kmUltimo > 0
+    ? `${e.ultimo.km > 0 ? '' : '≈ '}${esc(km(e.kmUltimo))} · ` : ''}${esc(haceCuanto(e.diasDesde))}</span>
+              </div>
+              <div class="ti-col ti-sig">
+                <span class="ti-etq">Siguiente</span>
+                ${siguiente(e)}
+              </div>
+            </div>
             <div class="mant-barra"><i style="width:${
   Math.min(100, Math.max(3, (e.uso || 0) * 100)).toFixed(0)}%"></i></div>
           </summary>
           <div class="ti-cuerpo">
             ${e.real.huecos.length ? `<div class="meta">Lo haces cada <strong>${esc(textoCada(e.real))}</strong>
               <small>(${e.real.veces} veces)</small></div>` : ''}
-            ${textoCuando(e, ritmo) ? `<div class="meta cuando">${textoCuando(e, ritmo)}</div>` : ''}
+            <div class="meta">${textoProximo(e)}.</div>
+            ${textoCuando(e, ritmo) ? `<div class="meta cuando">${textoCuando(e, ritmo)}.</div>` : ''}
             ${lasVeces(e.clave, eventosDe(e.clave), e.real)}
             <div class="veh-acciones ti-pie">
               <span class="ti-total">${e.veces} ${e.veces === 1 ? 'vez' : 'veces'} · ${money(e.gastado)}</span>
@@ -23855,6 +23910,62 @@ function kmDelApunte(e) {
 
 const ESTADO_TEXTO = { vencido: 'Toca ya', pronto: 'Pronto', 'al-dia': 'Al día' };
 
+/*
+ * En el orden en que van a tocar: lo vencido primero y luego por la fecha a
+ * la que cae (la que llegue antes, por km o por tiempo). «Lo que más se ha
+ * gastado del intervalo» no es lo mismo: un filtro de 20.000 km al 70 % cae
+ * después que un aceite al 65 % que vence por tiempo.
+ */
+const ORDEN_ESTADO = { vencido: 0, pronto: 1, 'al-dia': 2 };
+const porFecha = (xs) => [...xs].sort((a, b) => (ORDEN_ESTADO[a.estado] ?? 3) - (ORDEN_ESTADO[b.estado] ?? 3)
+  || String(a.fechaProxima || '9999').localeCompare(String(b.fechaProxima || '9999')));
+
+/** 2027-01-11 → «ene 2027». */
+const mesAnio = (iso) => `${MES_CORTO[Number(String(iso).slice(5, 7)) - 1]} ${String(iso).slice(0, 4)}`;
+
+/*
+ * La columna «Siguiente»: la cifra grande es lo que hay que mirar —los km a
+ * los que toca o, si va por tiempo, la fecha— y debajo cuánto falta y hacia
+ * cuándo cae. Si ya pasó, lo dice en grande.
+ */
+function siguiente(e) {
+  const val = (v, sub) => `<span class="ti-val">${v}</span><span class="ti-sub">${sub}</span>`;
+  if (e.estado === 'vencido') {
+    if (e.faltanKm != null && e.faltanKm < 0) {
+      return val('Ya', `se pasó ${esc(km(-e.faltanKm))}${e.proximoKm ? ` (tocaba a los ${esc(km(e.proximoKm))})` : ''}`);
+    }
+    return val('Ya', e.proximaFecha ? `tocaba el ${esc(fechaCorta(e.proximaFecha))}` : 'venció el plazo');
+  }
+  if (e.proximoKm) {
+    // Las dos medidas: manda la que llegue antes.
+    const porFecha = e.proximaFecha && (!e.haciaFecha || e.proximaFecha < e.haciaFecha);
+    const cuando = porFecha ? `o el ${esc(fechaCorta(e.proximaFecha))}`
+      : e.haciaFecha ? `≈ ${esc(mesAnio(e.haciaFecha))}` : '';
+    return val(esc(km(e.proximoKm)), `faltan ${esc(km(e.faltanKm))}${cuando ? ` · ${cuando}` : ''}`);
+  }
+  if (e.proximaFecha) return val(esc(fechaCorta(e.proximaFecha)), `en ${esc(duracion(e.faltanDias))}`);
+  return val('—', 'sin intervalo');
+}
+
+/*
+ * En el panel, lo primero que toca. Es la respuesta a «¿qué le tengo que
+ * hacer al carro?» sin bajar: el trabajo, a qué km o en qué fecha, y si hay
+ * más de uno pendiente, cuántos.
+ */
+function loProximo(estados) {
+  const con = porFecha(estados.filter((e) => e.estado !== 'sin-datos' && (e.proximoKm || e.proximaFecha)));
+  if (!con.length) return '';
+  const e = con[0];
+  const pend = con.filter((x) => x.estado === 'vencido' || x.estado === 'pronto').length;
+  return `
+    <button type="button" class="veh-proximo" data-ir="${esc(e.clave)}" data-estado="${esc(e.estado)}">
+      <span class="veh-proximo-etq">${e.estado === 'vencido' ? 'Toca ya' : 'Lo próximo'}</span>
+      <span class="veh-proximo-que">${esc(e.nombre)}</span>
+      <span class="veh-proximo-cuando">${siguiente(e)}</span>
+      ${pend > 1 ? `<span class="veh-proximo-mas">y ${pend - 1} más por hacer</span>` : ''}
+    </button>`;
+}
+
 /** 2026-11-10 → «10 nov 2026»: en una fila de la lista no cabe la fecha larga. */
 function fechaCorta(iso) {
   const [y, m, d] = String(iso).split('-').map(Number);
@@ -23925,11 +24036,11 @@ function bloqueOtros(eventos) {
             <summary>
               <div class="ti-cab">
                 <span class="titulo">${esc(g.nombre)}</span>
-                <span class="ti-veces-n">${g.eventos.length} ${g.eventos.length === 1 ? 'vez' : 'veces'}</span>
+                <span class="ti-gastado">${money(g.gastado)}</span>
               </div>
-              <div class="meta">Último el <strong>${esc(textoFecha(u.fecha))}</strong>,
-                ${esc(haceCuanto(dias))}${kmU ? ` · a los <strong>${u.km > 0 ? '' : '≈ '}${esc(km(kmU))}</strong>` : ''}</div>
-              <div class="meta">${money(g.gastado)} en total</div>
+              <div class="meta" title="${esc(haceCuanto(dias))}">Último el <strong>${esc(fechaCorta(u.fecha))}</strong>${kmU
+    ? ` · <strong>${u.km > 0 ? '' : '≈ '}${esc(km(kmU))}</strong>` : ''}
+                <span class="ti-veces-n">${g.eventos.length} ${g.eventos.length === 1 ? 'vez' : 'veces'}</span></div>
             </summary>
             <div class="ti-cuerpo">${lasVeces(g.clave, g.eventos)}</div>
           </details>
