@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-SUvpArRUSahum+iEdiJISb5qkq0kPPBkPb+EvkEmzHQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-HkAKVnB2LV1DAZ+Z4TjFLMHZ/Gp38eT8Rvc3KG/iZZs='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2443,37 +2443,56 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
  * Qué toca en el carro. La barra de la derecha es lo gastado del intervalo:
  * llena quiere decir que toca, y se ve sin leer una sola cifra.
  */
-.mantenimientos { list-style: none; margin: 12px 0; padding: 0; }
+.ti-lista { list-style: none; margin: 12px 0; padding: 0; }
 /*
- * En columna, no en dos. Con la barra y el botón robándole una columna a la
- * derecha, el texto se quedaba en ~215 px y partía «a los 270.602 / km» en
- * dos líneas. Aquí lo que importa es leer la frase entera, así que el texto
- * se lleva el ancho completo y la barra pasa debajo —donde además se lee
- * mejor como lo que es: cuánto se ha gastado del intervalo—.
+ * Una fila por trabajo. En columna: el texto se lleva el ancho entero y la
+ * barra va debajo, donde se lee como lo que es —cuánto se ha gastado del
+ * intervalo—. Al tocarla se abren todas las veces.
  */
-.mantenimientos li {
-  display: flex; flex-direction: column; align-items: stretch;
-  padding: 12px 2px 12px 10px;
+.ti-lista > li {
   border-bottom: 1px solid var(--grid);
   border-left: 3px solid transparent;
 }
-.mantenimientos li:last-child { border-bottom: 0; }
-.mantenimientos li[data-estado="vencido"] { border-left-color: var(--critico); }
-.mantenimientos li[data-estado="pronto"] { border-left-color: var(--alerta); }
-.mantenimientos li[data-estado="al-dia"] { border-left-color: var(--ok); }
-.mantenimientos .principal { min-width: 0; }
-.mantenimientos .titulo { font-weight: 570; font-size: 13px; }
-.mantenimientos .titulo > .chip { vertical-align: middle; margin-left: 7px; }
-.mantenimientos .meta {
-  margin-top: 3px; font-size: 11.5px; line-height: 1.45; color: var(--tinta-3);
+.ti-lista > li:last-child { border-bottom: 0; }
+.ti-lista > li[data-estado="vencido"] { border-left-color: var(--critico); }
+.ti-lista > li[data-estado="pronto"] { border-left-color: var(--alerta); }
+.ti-lista > li[data-estado="al-dia"] { border-left-color: var(--ok); }
+.ti-otros > li { border-left-color: var(--superficie-3); }
+.ti-lista summary {
+  display: block; list-style: none; cursor: pointer;
+  padding: 12px 26px 12px 10px; position: relative;
+  border-radius: var(--radio-chico);
+}
+.ti-lista summary::-webkit-details-marker { display: none; }
+.ti-lista summary::after {
+  content: ''; position: absolute; right: 8px; top: 17px;
+  width: 7px; height: 7px;
+  border-right: 2px solid var(--tinta-3); border-bottom: 2px solid var(--tinta-3);
+  transform: rotate(45deg); transition: transform 0.15s;
+}
+.ti-lista details[open] > summary::after { transform: rotate(225deg); top: 20px; }
+.ti-lista summary:focus-visible { outline: 2px solid var(--acento); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .ti-lista summary::after { transition: none; } }
+.ti-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.ti-lista .titulo { font-weight: 600; font-size: 14px; }
+.ti-lista .titulo > .chip { vertical-align: middle; margin-left: 7px; }
+.ti-estado, .ti-veces-n {
+  flex: none; font-size: 11px; font-weight: 640; letter-spacing: 0.02em;
+  padding: 2px 8px; border-radius: var(--radio-pill);
+  background: var(--superficie-2); color: var(--tinta-3);
+}
+li[data-estado="vencido"] .ti-estado { background: color-mix(in srgb, var(--critico) 14%, transparent); color: var(--critico); }
+li[data-estado="pronto"] .ti-estado { background: color-mix(in srgb, var(--alerta) 16%, transparent); color: var(--alerta); }
+li[data-estado="al-dia"] .ti-estado { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+.ti-lista .meta {
+  margin-top: 3px; font-size: 12px; line-height: 1.45; color: var(--tinta-3);
   font-variant-numeric: tabular-nums;
 }
-.mantenimientos .meta strong { color: var(--tinta-2); font-weight: 620; }
-.mant-lado {
-  display: flex; align-items: center; gap: 12px; margin-top: 10px;
-}
+.ti-lista .meta strong { color: var(--tinta-2); font-weight: 620; }
+.ti-lista .meta.cuando { color: var(--tinta-3); }
+.ti-lista .mant-barra { margin-top: 9px; }
 .mant-barra {
-  flex: 1; min-width: 0; height: 7px;
+  min-width: 0; height: 6px;
   border-radius: var(--radio-pill);
   background: var(--superficie-3);
   overflow: hidden;
@@ -2481,9 +2500,24 @@ td.acumulado, tfoot td.acumulado { color: var(--tinta-2); }
 .mant-barra > i { display: block; height: 100%; border-radius: var(--radio-pill); background: var(--ok); }
 li[data-estado="pronto"] .mant-barra > i { background: var(--alerta); }
 li[data-estado="vencido"] .mant-barra > i { background: var(--critico); }
-
-.mantenimientos .meta.cuando { color: var(--tinta-3); }
-.mantenimientos .meta.cuando strong { color: var(--tinta-2); }
+.ti-cuerpo { padding: 0 8px 12px 10px; }
+.ti-veces { list-style: none; margin: 10px 0 0; padding: 0; border-top: 1px solid var(--grid); }
+.ti-veces > li { position: relative; padding: 10px 0; border-bottom: 1px solid var(--grid); }
+.ti-veces > li:last-child { border-bottom: 0; }
+/* Fecha, kilometraje e importe en columnas: así se comparan de una vez a otra. */
+.ti-vez {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px;
+  align-items: baseline; font-variant-numeric: tabular-nums; font-size: 13px;
+}
+.ti-fecha { font-weight: 600; }
+.ti-km { color: var(--tinta-2); }
+.ti-monto { font-weight: 640; text-align: right; }
+.ti-que { margin-top: 3px; font-size: 12px; line-height: 1.4; color: var(--tinta-2); padding-right: 64px; }
+.ti-que span { color: var(--tinta-3); }
+.ti-junto { margin-top: 2px; font-size: 11.5px; color: var(--alerta); }
+.ti-corregir { position: absolute; right: -6px; bottom: 4px; }
+.ti-pie { justify-content: space-between; align-items: center; margin-top: 8px; }
+.ti-total { font-size: 12px; color: var(--tinta-3); font-variant-numeric: tabular-nums; }
 
 /*
  * El historial del vehículo. Se lee, no se recorre: cada apunte enseña todo
@@ -4276,7 +4310,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'b30f54a1b6';
+window.__VERSION_APP__ = 'dee147ad82';
 
 M["cerradura"] = (function () {
 /**
@@ -6959,6 +6993,83 @@ function buscarEnElCarro(termino) {
   });
 }
 
+/* --- Lo demás, por pieza ---------------------------------------------------
+ *
+ * Los mantenimientos con intervalo (aceite, frenos…) tienen su propia cuenta.
+ * Lo demás —un embrague, un radiador, una bobina— no se cambia cada tantos
+ * kilómetros, pero «¿cuándo le cambié el embrague?» se pregunta igual. Aquí
+ * se junta por pieza, de modo que «Kit de embrague» y «Bomba pedal embrague»
+ * caen en la misma fila. Solo sirve para enseñarlo: no hay intervalo, no
+ * entra en «qué toca» ni en el presupuesto.
+ *
+ * El orden importa: «Bomba pedal embrague» es del embrague antes que una
+ * bomba, y «Volante de inercia caja», del embrague antes que de la caja.
+ */
+const PIEZAS = [
+  { clave: 'embrague', nombre: 'Embrague', pistas: ['embrague', 'volante de inercia', 'clutch', 'collarin'] },
+  {
+    clave: 'suspension',
+    nombre: 'Suspensión y dirección',
+    pistas: ['amortiguador', 'rotula', 'mesa', 'barra', 'axial', 'terminal', 'buje', 'guardapolvo', 'cremallera'],
+  },
+  { clave: 'caja', nombre: 'Caja de cambios', pistas: ['caja de cambio', 'base de caja', 'caja de velocidad'] },
+  {
+    clave: 'refrigeracion',
+    nombre: 'Radiador y refrigeración',
+    pistas: ['radiador', 'refrigerante', 'termostato', 'ventilador'],
+  },
+  { clave: 'encendido', nombre: 'Bobinas y encendido', pistas: ['bobina', 'cable de bujia'] },
+  { clave: 'bomba-gasolina', nombre: 'Bomba de gasolina', pistas: ['bomba de gasolina', 'bomba de combustible'] },
+  { clave: 'motor', nombre: 'Motor: válvulas y empaques', pistas: ['valvula', 'empaque', 'pcv', 'banda', 'correa'] },
+  { clave: 'general', nombre: 'Mantenimiento general', pistas: ['mantenimiento general'] },
+  { clave: 'aditivos', nombre: 'Aditivos y grasa', pistas: ['aditivo', 'adtivo', 'grasa'] },
+  { clave: 'luces', nombre: 'Luces y focos', pistas: ['foco', 'faro', 'luces', 'bombillo'] },
+  { clave: 'electrico', nombre: 'Parte eléctrica', pistas: ['alternador', 'arranque', 'fusible', 'electric'] },
+  { clave: 'mano-obra', nombre: 'Mano de obra suelta', pistas: ['mano de obra'] },
+];
+
+/**
+ * Lo que se le ha hecho al carro y no es un mantenimiento con intervalo,
+ * juntado por pieza. Lo que no suena a ninguna pieza va por lo que dice.
+ *
+ * Un apunte con varias cosas puede salir en más de una fila: «Amortiguadores,
+ * discos de freno, rótulas» está en Frenos (con su intervalo) y aquí, en
+ * Suspensión. La mano de obra solo cuenta suelta: si el apunte dice qué se
+ * hizo, va con eso.
+ *
+ * @param {Array<object>} eventos los de eventosVehiculo(), del más reciente al más antiguo
+ * @returns {Array<{clave: string, nombre: string, eventos: Array<object>, gastado: number}>}
+ *   del que se tocó más recientemente al más antiguo
+ */
+function otrosArreglos(eventos = eventosVehiculo()) {
+  const conocidos = new Set(MANTENIMIENTOS.map((m) => m.clave));
+  const grupos = new Map();
+  const meter = (clave, nombre, e) => {
+    if (!grupos.has(clave)) grupos.set(clave, { clave, nombre, eventos: [] });
+    grupos.get(clave).eventos.push(e);
+  };
+  for (const e of eventos) {
+    const texto = plano(`${e.detalle} ${e.nota}`);
+    const piezas = PIEZAS.filter((p) => p.pistas.some((x) => texto.includes(x)));
+    const conIntervalo = e.tipos.some((t) => conocidos.has(t));
+    const propias = piezas.filter((p) => p.clave !== 'mano-obra');
+    if (propias.length) {
+      propias.forEach((p) => meter(p.clave, p.nombre, e));
+    } else if (!conIntervalo) {
+      if (piezas.length) meter('mano-obra', PIEZAS.find((p) => p.clave === 'mano-obra').nombre, e);
+      else {
+        // Por lo que dice: lo que se compró, no la tienda.
+        const que = (e.deducido ? e.detalle : (e.nota || e.detalle)) || 'Sin detalle';
+        const clave = `texto:${plano(que).replace(/[^a-z0-9]+/g, ' ').trim().split(' ').slice(0, 4).join(' ')}`;
+        meter(clave, que.charAt(0).toUpperCase() + que.slice(1), e);
+      }
+    }
+  }
+  return [...grupos.values()]
+    .map((g) => ({ ...g, gastado: redondear(g.eventos.reduce((s, e) => s + e.monto, 0)) }))
+    .sort((a, b) => b.eventos[0].fecha.localeCompare(a.eventos[0].fecha));
+}
+
 /**
  * Lo que cuesta un mantenimiento, para poder presupuestarlo.
  *
@@ -8007,7 +8118,7 @@ function yaApuntado({ fecha, monto, detalle, usuario, excluir = '' }) {
   return comprasComparables().find((x) => x.clave !== excluir && mismaCompra(nuevo, x)) || null;
 }
 
-return { CLAVE_NO_REPETIDOS, DESVIO_GRAVE, ES_FINANCIACION, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, clasificarMantenimientos, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, entreRecargas, esFinanciacion, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, intervalosReales, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasParaMedir, lecturasRevisadas, marcarNoRepetidos, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, posiblesRepetidos, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, trabajosDe, umbralAviso, yaApuntado };
+return { CLAVE_NO_REPETIDOS, DESVIO_GRAVE, ES_FINANCIACION, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, PIEZAS, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, clasificarMantenimientos, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, entreRecargas, esFinanciacion, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, intervalosReales, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasParaMedir, lecturasRevisadas, marcarNoRepetidos, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, otrosArreglos, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, posiblesRepetidos, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, trabajosDe, umbralAviso, yaApuntado };
 })();
 
 M["charts"] = (function () {
@@ -23419,7 +23530,7 @@ M["views/vehiculo"] = (function () {
  */
 
 const {db, eliminar, guardar, recolocar} = M["store"];
-const {money, redondear, textoFecha, odometroHoy, kmPorMes, kmEstimadoEnFecha, estadoMantenimientos, eventosVehiculo, planesMantenimiento, guardarPlanMantenimiento, MANTENIMIENTOS, gastoDeMantenimiento, costoTipico, nombreMes, claveMes, recorridosQueNoEncajan, DESVIO_GRAVE, buscarEnElCarro, rangoMeses, hoyLocal, intervalosReales} = M["calc"];
+const {money, redondear, textoFecha, odometroHoy, kmPorMes, kmEstimadoEnFecha, estadoMantenimientos, eventosVehiculo, planesMantenimiento, guardarPlanMantenimiento, MANTENIMIENTOS, gastoDeMantenimiento, costoTipico, nombreMes, claveMes, recorridosQueNoEncajan, DESVIO_GRAVE, buscarEnElCarro, rangoMeses, hoyLocal, intervalosReales, otrosArreglos} = M["calc"];
 const {fijosManuales, guardarManual} = M["plan"];
 const {seccionCombustible} = M["views/resumen"];
 const {esc, $, $$, confirmar, modal, brindis} = M["ui"];
@@ -23517,9 +23628,11 @@ function render(raiz) {
     ${bloqueLecturas()}
 
     <section class="tarjeta" id="veh-toca">
-      <header><h2>Mantenimiento que toca</h2></header>
+      <header><h2>Por trabajo</h2></header>
       ${bloqueQueToca(estados, pendientes, odometro, ritmo)}
     </section>
+
+    ${bloqueOtros(eventos)}
 
     <section class="tarjeta" id="veh-presupuesto">
       ${seccionPresupuesto()}
@@ -23529,14 +23642,18 @@ function render(raiz) {
       ${seccionCombustible({ usuario: 'ambos' }, { sinKm: true })}
     </section>
 
-    <section class="tarjeta">
-      <header><h2>Historial del carro</h2></header>
+    <section class="tarjeta" id="veh-historial">
+      <header><h2>Todo, por fecha</h2>${eventos.length
+    ? `<span class="pista">${eventos.length} ${eventos.length === 1 ? 'apunte' : 'apuntes'}</span>` : ''}</header>
       ${listaEventos(eventos)}
     </section>`;
 
-  // Las dos largas se pliegan al tocar su título.
-  plegable($('#veh-toca', raiz), 'vehiculo:toca');
+  /*
+   * «Por trabajo» queda abierta: es a lo que se viene («¿cuándo cambié el
+   * aceite?»). Las largas, plegadas hasta que se toca su título.
+   */
   plegable($('#veh-presupuesto', raiz), 'vehiculo:viene');
+  plegable($('#veh-historial', raiz), 'vehiculo:historial');
 
   const caja = $('#veh-hallazgos', raiz);
   const pintarHallazgos = () => {
@@ -23622,30 +23739,39 @@ function bloqueQueToca(estados, pendientes, odometro, ritmo) {
         <span class="crece">Nada pendiente${odometro > 0
     ? ` a los ${esc(km(odometro))}` : ''}.</span></div>`}
 
-    <ul class="mantenimientos">${conDatos.map((e) => `
+    <p class="pista">Toca uno para ver todas las veces.</p>
+    <ul class="mantenimientos ti-lista">${conDatos.map((e) => `
       <li data-estado="${esc(e.estado)}">
-        <div class="principal">
-          <div class="titulo">${esc(e.nombre)}
-            ${e.ajustado ? '<span class="chip">a mi medida</span>' : ''}</div>
-          <div class="meta">Último el ${esc(textoFecha(e.ultimo.fecha))},
-            ${esc(haceCuanto(e.diasDesde))}${e.kmUltimo > 0
-    ? ` · a los ${esc(km(e.kmUltimo))}` : ''}</div>
-          ${e.real.huecos.length ? `<div class="meta">Lo haces cada <strong>${esc(textoCada(e.real))}</strong>
-            <small>(${e.real.veces} veces)</small></div>` : ''}
-          <div class="meta">${textoProximo(e)}</div>
-          ${textoCuando(e, ritmo) ? `<div class="meta cuando">${textoCuando(e, ritmo)}</div>` : ''}
-        </div>
-        <div class="mant-lado">
-          <div class="mant-barra"><i style="width:${
+        <details>
+          <summary>
+            <div class="ti-cab">
+              <span class="titulo">${esc(e.nombre)}
+                ${e.ajustado ? '<span class="chip">a mi medida</span>' : ''}</span>
+              <span class="ti-estado">${ESTADO_TEXTO[e.estado] || ''}</span>
+            </div>
+            <div class="meta">Último el <strong>${esc(textoFecha(e.ultimo.fecha))}</strong>,
+              ${esc(haceCuanto(e.diasDesde))}${e.kmUltimo > 0
+    ? ` · a los <strong>${e.ultimo.km > 0 ? '' : '≈ '}${esc(km(e.kmUltimo))}</strong>` : ''}</div>
+            <div class="meta ti-proximo">${textoProximo(e)}</div>
+            <div class="mant-barra"><i style="width:${
   Math.min(100, Math.max(3, (e.uso || 0) * 100)).toFixed(0)}%"></i></div>
-          <button class="btn pequeno" data-plan="${esc(e.clave)}">Cada cuánto</button>
-        </div>
+          </summary>
+          <div class="ti-cuerpo">
+            ${e.real.huecos.length ? `<div class="meta">Lo haces cada <strong>${esc(textoCada(e.real))}</strong>
+              <small>(${e.real.veces} veces)</small></div>` : ''}
+            ${textoCuando(e, ritmo) ? `<div class="meta cuando">${textoCuando(e, ritmo)}</div>` : ''}
+            ${lasVeces(e.clave, eventosDe(e.clave), e.real)}
+            <div class="veh-acciones ti-pie">
+              <span class="ti-total">${e.veces} ${e.veces === 1 ? 'vez' : 'veces'} · ${money(e.gastado)}</span>
+              <button class="veh-btn apunta" data-plan="${esc(e.clave)}">Cada cuánto</button>
+            </div>
+          </div>
+        </details>
       </li>`).join('')}</ul>
 
-    ${ritmo ? `<p class="pista">Las fechas de «hacia» son una aproximación:
-      salen de los <strong>${esc(km(ritmo.kmMes))} al mes</strong> que llevas de
-      media, medidos sobre los últimos ${ritmo.meses.toFixed(0)} meses. Si cambia
-      el uso del carro, cambian.</p>` : ''}
+    ${ritmo ? `<p class="pista">Las fechas de «hacia» salen de los
+      <strong>${esc(km(ritmo.kmMes))} al mes</strong> que llevas de media
+      (${ritmo.meses.toFixed(0)} meses).</p>` : ''}
     ${estados.some((e) => e.estado === 'sin-datos') ? `
       <p class="pista">Sin apuntar todavía:
       ${estados.filter((e) => e.estado === 'sin-datos')
@@ -23725,6 +23851,91 @@ function kmDelApunte(e) {
   return estimado
     ? `<span class="veh-dato" title="Estimado entre dos lecturas">≈ ${esc(km(estimado))}</span>`
     : '';
+}
+
+const ESTADO_TEXTO = { vencido: 'Toca ya', pronto: 'Pronto', 'al-dia': 'Al día' };
+
+/** 2026-11-10 → «10 nov 2026»: en una fila de la lista no cabe la fecha larga. */
+function fechaCorta(iso) {
+  const [y, m, d] = String(iso).split('-').map(Number);
+  return `${d} ${MES_CORTO[m - 1]} ${y}`;
+}
+
+/*
+ * Qué se hizo y dónde. En un gasto normal el detalle es la tienda y el
+ * propósito lo que se compró; en el cuaderno del Excel es al revés: el detalle
+ * es la pieza y la nota, el taller.
+ */
+function queYDonde(e) {
+  if (e.deducido) return { que: e.detalle, donde: e.nota };
+  return e.nota ? { que: e.nota, donde: e.detalle } : { que: e.detalle, donde: '' };
+}
+
+/** Los apuntes de un mantenimiento, del más reciente al más antiguo. */
+const eventosDe = (clave) => eventosVehiculo().filter((e) => e.tipos.includes(clave));
+
+/*
+ * Cada vez que se hizo, una fila: la fecha, el kilometraje y lo que costó en
+ * una línea —es lo que se compara de una vez a otra—; debajo, qué se hizo,
+ * dónde, y cuánto pasó desde la anterior. Si el pago llevaba más trabajos, lo
+ * dice: esos $120 no son solo del aceite.
+ */
+function lasVeces(clave, eventos, real = intervalosReales(eventos)) {
+  if (!eventos.length) return '';
+  const hueco = new Map(real.huecos.map((h) => [h.hasta, h]));
+  return `<ol class="ti-veces">${eventos.map((e) => {
+    const { que, donde } = queYDonde(e);
+    const kmPropio = e.km > 0;
+    const kmVez = kmPropio ? e.km : kmEstimadoEnFecha(e.fecha);
+    const otros = e.tipos.filter((t) => t !== clave && MANTENIMIENTOS.some((m) => m.clave === t)).map(nombreDe);
+    const h = hueco.get(e.fecha);
+    return `
+      <li>
+        <div class="ti-vez">
+          <span class="ti-fecha">${esc(fechaCorta(e.fecha))}</span>
+          <span class="ti-km">${kmVez ? `${kmPropio ? '' : '≈ '}${esc(km(kmVez))}` : '—'}</span>
+          <span class="ti-monto">${money(e.monto)}</span>
+        </div>
+        <div class="ti-que">${esc(que || 'Sin detalle')}${donde ? ` <span>· ${esc(donde)}</span>` : ''}</div>
+        ${otros.length ? `<div class="ti-junto">En el mismo pago: ${esc(otros.join(', '))}</div>` : ''}
+        ${h ? `<div class="veh-desde">${h.km ? `${esc(km(h.km))} y ` : ''}${esc(duracion(h.dias))} después de la anterior</div>` : ''}
+        <button class="veh-btn ti-corregir" data-ver="${esc(e.coleccion)}:${esc(e.id)}">Corregir</button>
+      </li>`;
+  }).join('')}</ol>`;
+}
+
+/*
+ * Lo que no tiene intervalo —un embrague, un radiador, una bobina—, por pieza.
+ * No dice cuándo toca, pero sí cuándo fue la última vez, a cuántos kilómetros
+ * y cuánto costó, que es lo que se pregunta.
+ */
+function bloqueOtros(eventos) {
+  const grupos = otrosArreglos(eventos);
+  if (!grupos.length) return '';
+  return `
+    <section class="tarjeta" id="veh-otros">
+      <header><h2>Otros arreglos y repuestos</h2><span class="pista">por pieza</span></header>
+      <ul class="ti-lista ti-otros">${grupos.map((g) => {
+    const u = g.eventos[0];
+    const kmU = u.km > 0 ? u.km : kmEstimadoEnFecha(u.fecha);
+    const dias = Math.round((Date.parse(hoyLocal()) - Date.parse(u.fecha)) / 864e5);
+    return `
+        <li data-pieza="${esc(g.clave)}">
+          <details>
+            <summary>
+              <div class="ti-cab">
+                <span class="titulo">${esc(g.nombre)}</span>
+                <span class="ti-veces-n">${g.eventos.length} ${g.eventos.length === 1 ? 'vez' : 'veces'}</span>
+              </div>
+              <div class="meta">Último el <strong>${esc(textoFecha(u.fecha))}</strong>,
+                ${esc(haceCuanto(dias))}${kmU ? ` · a los <strong>${u.km > 0 ? '' : '≈ '}${esc(km(kmU))}</strong>` : ''}</div>
+              <div class="meta">${money(g.gastado)} en total</div>
+            </summary>
+            <div class="ti-cuerpo">${lasVeces(g.clave, g.eventos)}</div>
+          </details>
+        </li>`;
+  }).join('')}</ul>
+    </section>`;
 }
 
 function listaEventos(eventos) {
@@ -24031,7 +24242,7 @@ function seccionPresupuesto() {
     p.sinCosto ? `${p.sinCosto} sin costo estimado` : '',
     p.dudosas ? `${p.dudosas} con un historial que no se parece entre sí` : '',
   ].filter(Boolean).join(' y ')}: el total de arriba se queda corto.</p>` : ''}`;
-  // Lo que nunca se apuntó ya lo dice «Mantenimiento que toca» («Sin apuntar todavía»).
+  // Lo que nunca se apuntó ya lo dice «Por trabajo» («Sin apuntar todavía»).
 }
 
 const MES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
