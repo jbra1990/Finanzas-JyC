@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-x5F+H4xiB2DwrIQGMwUScuNEgjvFv2ScTl2MnFOHuJA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-B1kjF6yWW4veFjAAps5tauV3uFOc6XBIXF/wPMfdAi4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4344,7 +4344,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'b4eaffef27';
+window.__VERSION_APP__ = '3f3325ea9f';
 
 M["cerradura"] = (function () {
 /**
@@ -15545,7 +15545,52 @@ const AJUSTES = [
       if (g) upsert('gastosTarjeta', { ...g, monto_total: redondear(cuotasDe(g.id).reduce((t, x) => t + x.monto, 0)) });
     },
   },
+  {
+    /*
+     * Europcar ($111,04, 6 de noviembre) en Bolivariano: el 11 el banco pasó
+     * $111,00 a diferido en 6 cuotas con interés. La cuota es de $19,35
+     * ($17,91 de capital y $1,44 de interés la primera); los $0,04 que quedan
+     * fuera se pagan con noviembre, así que van en la primera: $19,39.
+     */
+    id: 'bolivariano-europcar-diferido',
+    revisar() {
+      const g = europcar();
+      if (!g) return { estado: 'nada' };
+      const titulo = 'Europcar en Bolivariano, como lo difirió el banco';
+      if (europcarComoBanco(g)) return { estado: 'ya', titulo, texto: 'ya está en 6 cuotas: $19,39 y cinco de $19,35' };
+      const ahora = cuotasDe(g.id).length > 1 ? `${cuotasDe(g.id).length} cuotas, ${money(g.monto_total)} en total` : `una compra de ${money(g.monto_total)}`;
+      return {
+        estado: 'aplicar',
+        titulo,
+        texto: `Ahora es ${ahora}. El 11 de noviembre el banco pasó $111,00 a <strong>6 cuotas con interés</strong>
+          ($17,91 de capital + $1,44 de interés la primera). Queda en <strong>$19,39 en noviembre</strong> (con los $0,04 que no
+          se difirieron) y <strong>$19,35 de diciembre a abril</strong>: $116,14 en total. Noviembre baja de lo que estaba a lo que cobra el banco.`,
+      };
+    },
+    aplicar() {
+      const g = europcar();
+      if (!g || europcarComoBanco(g)) return;
+      const base = cuotasDe(g.id)[0] || {};
+      // Se sobrescriben las cuotas 1–6 (misma clave) y se quitan las que sobren: sin borrar y volver a crear.
+      EUROPCAR.cuotas.forEach((monto, i) => upsert('cuotas', {
+        gasto_id: g.id, n_cuota: i + 1, mes: EUROPCAR.meses[i], monto, tarjeta: g.tarjeta,
+        usuario: g.usuario || base.usuario || 'J', categoria: g.categoria || base.categoria || '', pagado: '', conciliado: '',
+      }));
+      quitarCuotas(g.id, (c) => Number(c.n_cuota) > 6);
+      const actual = db.gastosTarjeta.find((x) => x.id === g.id) || g;
+      upsert('gastosTarjeta', { ...actual, tipo: 'Diferido', cuotas: 6, monto_total: EUROPCAR.total, mes_inicio: EUROPCAR.meses[0] });
+    },
+  },
 ];
+
+/* --- Europcar en Bolivariano, como lo difirió el banco -------------------- */
+const EUROPCAR = { meses: ['2026-11', '2026-12', '2027-01', '2027-02', '2027-03', '2027-04'], cuotas: [19.39, 19.35, 19.35, 19.35, 19.35, 19.35], total: 116.14 };
+const europcar = () => db.gastosTarjeta.find((g) => g.tarjeta === 'TC-BOLI' && /europcar/i.test(g.detalle || '')
+  && String(g.fecha).slice(0, 10) >= '2026-11-01' && String(g.fecha).slice(0, 10) <= '2026-11-14');
+const europcarComoBanco = (g) => {
+  const cs = cuotasDe(g.id).sort((a, b) => a.n_cuota - b.n_cuota);
+  return g.tipo === 'Diferido' && cs.length === 6 && cs.every((c, i) => c.mes === EUROPCAR.meses[i] && centavo(c.monto, EUROPCAR.cuotas[i]));
+};
 
 const REFI_ULTIMA = 29.04;
 /** La 3/3 de la refinanciación de Pichincha (noviembre), si está apuntada en 3 cuotas desde septiembre. */
@@ -15740,7 +15785,10 @@ function revisarContraBanco(est = ESTADO_PICH_SEP) {
   // 2. Las cuotas del banco contra lo que queda de septiembre en la app.
   // Con un período abierto, lo comprado después de la última fecha del banco no se compara.
   const despues = (g) => est.parcial && g?.tipo === 'Corriente' && String(g.fecha).slice(0, 10) > est.hasta;
-  const sep = db.cuotas.filter((c) => c.tarjeta === est.tarjeta && c.mes === MES && !despues(gastos.get(c.gasto_id)))
+  // Con `soloDelPeriodo`, solo lo comprado en el período (o un par de días antes, por la fecha de apunte).
+  const delPeriodo = (g) => !est.soloDelPeriodo || (g && g.tipo !== 'Recurrente' && String(g.fecha).slice(0, 10) >= dia(est.desde, -2));
+  const sep = db.cuotas.filter((c) => c.tarjeta === est.tarjeta && c.mes === MES && !despues(gastos.get(c.gasto_id))
+    && delPeriodo(gastos.get(c.gasto_id)))
     .map((c) => ({ c, g: gastos.get(c.gasto_id), monto: Number(c.monto) || 0 }));
   const cuotaLibre = sep.filter((x) => !usadas.has(x.c.gasto_id));
   const tomadas = new Set();
@@ -15865,7 +15913,33 @@ const ESTADO_PICH_NOV_PARCIAL = {
     ['Metalhierro 4/6 (aún sin facturar)', 74.76], ['Dif con nacional online 3/3 (aún sin facturar)', 29.03],
   ].map(([detalle, monto, total]) => ({ fecha: '2026-11-14', detalle, monto, total })),
 };
-const ESTADOS_DE_CUENTA = [ESTADO_PICH_SEP, ESTADO_PICH_NOV, ESTADO_PICH_NOV_PARCIAL];
+/*
+ * Bolivariano, los movimientos del banco del período que empieza el 6 de
+ * noviembre de 2026, vistos el 14: cinco compras y cargos, y Europcar
+ * ($111,04), que el 11 el banco pasó a diferido: «Transf. deuda normal a
+ * diferido» $111,00 y la 1/6, $17,91 de capital más $1,44 de interés. Los
+ * $0,04 que no pasó van en la primera cuota: 19,39 y luego 19,35 (ver el
+ * ajuste «bolivariano-europcar-diferido»).
+ *
+ * `soloDelPeriodo`: las suscripciones (Anthropic, Disney, Apple) y las cuotas
+ * de los diferidos de antes el banco las cobra en otros días del período, así
+ * que no se comparan: sin eso saldrían como «sobran» sin sobrar.
+ */
+const ESTADO_BOLI_NOV_PARCIAL = {
+  id: 'bolivariano-movimientos-2026-11-14', tarjeta: 'TC-BOLI', mes: '2026-11', desde: '2026-11-06', hasta: '2026-11-14',
+  corte: '14 nov, a la fecha', parcial: true, soloDelPeriodo: true, total: 67.99,
+  ajuste: 'bolivariano-europcar-diferido',
+  nota: 'Los movimientos del banco desde el 6 de noviembre. Solo se comparan las compras de estos días y el diferido de Europcar: las suscripciones y las cuotas de diferidos anteriores el banco las cobra en otras fechas.',
+  compras: [
+    ['2026-11-06', 'Estación de servicios Roj (gasolina $10 + comisión $0,20)', 10.20],
+    ['2026-11-06', 'Contribución Solca', 0.20], ['2026-11-07', 'Megamaxi Mall del Pacific', 16.14],
+    ['2026-11-09', 'PedidosYa', 21.78], ['2026-11-11', 'Contribución Solca', 0.28],
+  ].map(([fecha, detalle, monto]) => ({ fecha, detalle, monto })),
+  cuotas: [
+    ['Europcar 1/6 (diferido: $17,91 + interés $1,44 + $0,04 que no se difirió)', 19.39, 116.14],
+  ].map(([detalle, monto, total]) => ({ fecha: '2026-11-11', detalle, monto, total })),
+};
+const ESTADOS_DE_CUENTA = [ESTADO_PICH_SEP, ESTADO_PICH_NOV, ESTADO_PICH_NOV_PARCIAL, ESTADO_BOLI_NOV_PARCIAL];
 
 // Un estado de cuenta vale desde su última fecha: antes, el banco aún no lo había dado.
 const yaEmitido = (e) => e.hasta <= hoyLocal();
@@ -19467,7 +19541,8 @@ function pintarContraBanco(raiz, t, mes) {
   const est = estadoDeCuentaDe(t.id, mes);
   if (!est) { caja.hidden = true; caja.innerHTML = ''; return; }
   const rev = revisarContraBanco(est);
-  const pendiente = ajusteConCambios(est.id);
+  // El ajuste que acompaña al estado de cuenta: el suyo, o el que nombre (`ajuste`).
+  const pendiente = ajusteConCambios(est.ajuste || est.id);
   const dif = redondear(rev.total - rev.appTotal);
   const hayAlgo = rev.faltan.length || rev.otroMes.length || rev.sobran.length || rev.difImporte.length;
   const suma = (l, f) => redondear(l.reduce((s, x) => s + f(x), 0));
@@ -19567,7 +19642,7 @@ function pintarContraBanco(raiz, t, mes) {
     : `${cupo.dif > 0 ? 'La app tiene' : 'A la app le faltan'} ${money(Math.abs(cupo.dif))}${cupo.dif > 0 ? ' de más' : ''}: lo de arriba dice qué línea es.`}</p>` : ''}`;
 
   $('#cb-ajuste', caja)?.addEventListener('click', () => {
-    aplicarAjuste(est.id);
+    aplicarAjuste(est.ajuste || est.id);
     render(raiz);
   });
   const abrir = (g) => { if (g) formGastoTarjeta(() => render(raiz), g); };
