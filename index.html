@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-z4uAfHVfoeMloB5B2uRhrl1uPv8rSJ+IfmNUM4AMTbc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-SUvpArRUSahum+iEdiJISb5qkq0kPPBkPb+EvkEmzHQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4276,7 +4276,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = 'a7b6992b80';
+window.__VERSION_APP__ = 'b30f54a1b6';
 
 M["cerradura"] = (function () {
 /**
@@ -15535,6 +15535,9 @@ function revisarContraBanco(est = ESTADO_PICH_SEP) {
   const faltan = [];
   const otroMes = [];
   const difImporte = [];
+  // Compras que el banco aún tiene enteras («en proceso») y en la app ya están diferidas.
+  const yaDiferidas = [];
+  let totalBanco = est.total;
   const anotar = (lista, b) => {
     lista.forEach((a) => {
       const mes = mesDe(a.id);
@@ -15548,8 +15551,15 @@ function revisarContraBanco(est = ESTADO_PICH_SEP) {
   };
   for (const b of est.compras) {
     const desde = dia(b.fecha, -6);
-    const hasta = dia(b.fecha, 1);
-    const libres = app.filter((a) => !usadas.has(a.id) && a.fecha >= desde && a.fecha <= hasta);
+    /*
+     * La fecha de la app puede ir detrás de la del banco: lo que se apunta
+     * unos días después lleva la fecha del día en que se apunta. Con un
+     * período abierto vale hasta la última fecha del banco.
+     */
+    const hasta = est.parcial ? est.hasta : dia(b.fecha, 3);
+    const cercania = (a) => Math.abs(new Date(a.fecha) - new Date(b.fecha));
+    const libres = app.filter((a) => !usadas.has(a.id) && a.fecha >= desde && a.fecha <= hasta)
+      .sort((x, y) => cercania(x) - cercania(y));
     // Primero el importe exacto, luego con margen; y entre iguales, la de septiembre.
     const cerca25 = (a) => Math.abs(a.monto - b.monto) <= 0.25;
     const una = libres.find((a) => cent(a.monto) === cent(b.monto) && mesDe(a.id) === MES)
@@ -15564,6 +15574,21 @@ function revisarContraBanco(est = ESTADO_PICH_SEP) {
       }
     }
     if (par) { par.forEach((a) => usadas.add(a.id)); anotar(par, b); continue; }
+    /*
+     * ¿Está en la app ya diferida? El banco tarda unos días en pasar una
+     * compra a cuotas y mientras la enseña entera. Es la misma: del mes cuenta
+     * su cuota, no el total, y el total del banco se compara así.
+     */
+    const diferida = db.gastosTarjeta.find((g) => g.tarjeta === est.tarjeta && g.tipo === 'Diferido' && !usadas.has(g.id)
+      && Math.abs((Number(g.monto_total) || 0) - b.monto) <= 0.25
+      && String(g.fecha).slice(0, 10) >= desde && String(g.fecha).slice(0, 10) <= hasta);
+    if (diferida) {
+      usadas.add(diferida.id);
+      const cuota = cuotasDe(diferida.id).find((c) => c.mes === MES);
+      yaDiferidas.push({ banco: b, gasto: diferida, cuota: cuota ? Number(cuota.monto) || 0 : 0 });
+      totalBanco = redondear(totalBanco - b.monto + (cuota ? Number(cuota.monto) || 0 : 0));
+      continue;
+    }
     faltan.push({ ...b, tipo: 'compra' });
   }
 
@@ -15588,7 +15613,7 @@ function revisarContraBanco(est = ESTADO_PICH_SEP) {
     // Con unos centavos de diferencia: la cuota está, pero por otro importe.
     const casi = libres.filter((x) => x.g?.tipo !== 'Corriente' && Math.abs(x.monto - b.monto) <= Math.max(0.5, b.monto * 0.02))
       .sort((x, y) => Math.abs(x.monto - b.monto) - Math.abs(y.monto - b.monto))[0];
-    if (casi) { tomadas.add(casi); difImporte.push({ banco: b, gasto: casi.g, app: casi.monto, dif: redondear(b.monto - casi.monto) }); continue; }
+    if (casi) { tomadas.add(casi); difImporte.push({ banco: b, gasto: casi.g, app: casi.monto, dif: redondear(b.monto - casi.monto), cuota: casi.c }); continue; }
     faltan.push({ ...b, tipo: 'cuota' });
   }
 
@@ -15596,14 +15621,35 @@ function revisarContraBanco(est = ESTADO_PICH_SEP) {
   const sobran = cuotaLibre.filter((x) => !tomadas.has(x)).map((x) => ({ gasto: x.g, cuota: x.c, monto: x.monto }));
   const appTotal = redondear(sep.reduce((t, x) => t + x.monto, 0));
   return {
-    faltan, otroMes, sobran, difImporte, appTotal,
-    tarjeta: est.tarjeta, mes: MES, total: est.total, estado: est,
+    faltan, otroMes, sobran, difImporte, yaDiferidas, appTotal,
+    tarjeta: est.tarjeta, mes: MES, total: totalBanco, estado: est,
   };
 }
 
 /** Pasa una compra de Pichincha al mes del estado de cuenta (septiembre). */
 function pasarASeptiembre(gasto) {
   moverCompra(gasto, PSEP, PI);
+}
+
+/**
+ * Deja la cuota de un diferido como la cobra el banco. Si se sabe el total del
+ * diferido (`banco.total`), la diferencia va a la última cuota para que el
+ * total no cambie: el banco pone los centavos que sobran del reparto en la
+ * primera cuota y la app, en la última.
+ */
+function igualarCuotaAlBanco(x) {
+  const c = x.cuota && db.cuotas.find((y) => y.gasto_id === x.cuota.gasto_id && y.n_cuota === x.cuota.n_cuota);
+  const g = c && db.gastosTarjeta.find((y) => y.id === c.gasto_id);
+  if (!c || !g) return;
+  upsert('cuotas', { ...c, monto: x.banco.monto });
+  const todas = () => cuotasDe(g.id).sort((a, b) => a.n_cuota - b.n_cuota);
+  const suma = () => redondear(todas().reduce((t, y) => t + (Number(y.monto) || 0), 0));
+  const ultima = todas().at(-1);
+  if (x.banco.total && ultima && ultima.n_cuota !== c.n_cuota) {
+    const sobra = redondear(suma() - x.banco.total);
+    if (Math.abs(sobra) >= 0.005 && Math.abs(sobra) <= 1) upsert('cuotas', { ...ultima, monto: redondear(ultima.monto - sobra) });
+  }
+  upsert('gastosTarjeta', { ...g, monto_total: suma() });
 }
 
 /** Pasa una compra al mes de un estado de cuenta, en su tarjeta. */
@@ -15670,9 +15716,9 @@ const ESTADO_PICH_NOV_PARCIAL = {
   ].map(([fecha, detalle, monto]) => ({ fecha, detalle, monto })),
   cuotas: [
     ['Dif con internacional online 11/12', 173.34], ['T Ventas 5/6', 14.95],
-    ['Autorepuestos del Chino 1/6 (diferido de $332,78)', 55.48],
+    ['Autorepuestos del Chino 1/6 (diferido de $332,78)', 55.48, 332.78],
     ['Metalhierro 4/6 (aún sin facturar)', 74.76], ['Dif con nacional online 3/3 (aún sin facturar)', 29.03],
-  ].map(([detalle, monto]) => ({ fecha: '2026-11-14', detalle, monto })),
+  ].map(([detalle, monto, total]) => ({ fecha: '2026-11-14', detalle, monto, total })),
 };
 const ESTADOS_DE_CUENTA = [ESTADO_PICH_SEP, ESTADO_PICH_NOV, ESTADO_PICH_NOV_PARCIAL];
 
@@ -16252,7 +16298,7 @@ function ofrecerAlArrancar(alTerminar) {
   setTimeout(() => { dejar(); una(); }, 6000);
 }
 
-return { ajusteConCambios, aplicarAjuste, aplicarTodos, cuantosPendientes, estadoDeCuentaDe, ofrecerAjustes, ofrecerAlArrancar, ofrecerNuevos, pasarASeptiembre, pasarAlMesDelEstado, pendientes, revisarContraBanco, ultimoEstadoDeCuenta };
+return { ajusteConCambios, aplicarAjuste, aplicarTodos, cuantosPendientes, estadoDeCuentaDe, igualarCuotaAlBanco, ofrecerAjustes, ofrecerAlArrancar, ofrecerNuevos, pasarASeptiembre, pasarAlMesDelEstado, pendientes, revisarContraBanco, ultimoEstadoDeCuenta };
 })();
 
 M["pantalla_llave"] = (function () {
@@ -18262,7 +18308,7 @@ const {columnas, dona, alRedimensionar} = M["charts"];
 const {esc, $, $$, segmentado, confirmar, aNumero, notaFila, marcaNota, notaTexto, centrarElegido, modal, brindis} = M["ui"];
 const {formGastoTarjeta, formPagoTarjeta, formDiferir} = M["forms"];
 const {formCuenta} = M["views/cuentas"];
-const {revisarContraBanco, pasarAlMesDelEstado, ajusteConCambios, aplicarAjuste, estadoDeCuentaDe, ultimoEstadoDeCuenta} = M["ajustes"];
+const {revisarContraBanco, pasarAlMesDelEstado, ajusteConCambios, aplicarAjuste, igualarCuotaAlBanco, estadoDeCuentaDe, ultimoEstadoDeCuenta} = M["ajustes"];
 const estado = {
   tarjeta: null, usuario: 'ambos', mes: null, comprobando: false,
   /*
@@ -19342,7 +19388,14 @@ function pintarContraBanco(raiz, t, mes) {
       <ul class="cuadre-items">${rev.difImporte.map((x, i) => `
         <li><span>${nombre(x.gasto)}<small>app ${money(x.app)} · banco ${money(x.banco.monto)} (${esc(x.banco.detalle)})</small></span>
           <strong>${x.dif > 0 ? '+' : '−'}${money(Math.abs(x.dif))}</strong>
-          <button type="button" class="btn pequeno" data-abrir-dif="${i}">Abrir</button></li>`).join('')}</ul>` : ''}
+          ${x.cuota ? `<button type="button" class="btn pequeno primario" data-igualar="${i}">Poner ${money(x.banco.monto)}</button>`
+    : `<button type="button" class="btn pequeno" data-abrir-dif="${i}">Abrir</button>`}</li>`).join('')}</ul>` : ''}
+    ${rev.yaDiferidas.length ? `
+      <p class="pista">Ya diferidas en la app: el banco aún las tiene como una compra entera; cuando las pase a cuotas quedará igual.
+        Del mes cuenta la cuota.</p>
+      <ul class="cuadre-items">${rev.yaDiferidas.map((x) => `
+        <li><span>${nombre(x.gasto)}<small>banco ${money(x.banco.monto)} · en la app, ${x.gasto.cuotas} cuotas; la de ${esc(delMes)}, ${money(x.cuota)}</small></span>
+          <strong>✓</strong></li>`).join('')}</ul>` : ''}
     ${rev.otroMes.length ? `
       <p class="pista">Apuntadas en otro mes, no suman a ${esc(delMes)}:</p>
       <ul class="cuadre-items">${rev.otroMes.map((o, i) => `
@@ -19375,6 +19428,14 @@ function pintarContraBanco(raiz, t, mes) {
   const abrir = (g) => { if (g) formGastoTarjeta(() => render(raiz), g); };
   $$('[data-abrir-sobra]', caja).forEach((b) => b.addEventListener('click', () => abrir(rev.sobran[Number(b.dataset.abrirSobra)]?.gasto)));
   $$('[data-abrir-dif]', caja).forEach((b) => b.addEventListener('click', () => abrir(rev.difImporte[Number(b.dataset.abrirDif)]?.gasto)));
+  $$('[data-igualar]', caja).forEach((b) => b.addEventListener('click', () => {
+    const x = rev.difImporte[Number(b.dataset.igualar)];
+    if (!x) return;
+    igualarCuotaAlBanco(x);
+    guardar();
+    brindis(`${x.gasto?.detalle || 'Cuota'}: ${money(x.banco.monto)}, como el banco`);
+    render(raiz);
+  }));
   $$('[data-a-sep]', caja).forEach((b) => b.addEventListener('click', () => {
     const o = rev.otroMes[Number(b.dataset.aSep)];
     if (!o) return;
