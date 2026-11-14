@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-4B9GVmWd+9gjPZD9KlsXsRSUj7aN7GU+buJPKHmBwgc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-o6WwnkkeCOJt2ZQT88/btlGuZ8tYC9nSgtRNpd15NG0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3475,6 +3475,10 @@ body.velada .cabecera { filter: blur(18px); }
  * vez de descontarlo de la cifra grande, es lo que permite seguir comparando
  * con el estado de cuenta sin hacer cuentas de cabeza.
  */
+/* Tarjetas: el mes ya está pagado. */
+.panel-pagado { display: flex; flex-direction: column; gap: 3px; margin: 10px 0 8px; padding: 9px 12px; border-radius: 12px;
+  background: color-mix(in srgb, var(--ok-texto) 14%, transparent); font-size: 13px; }
+.panel-pagado small { font-size: 11.5px; opacity: 0.8; line-height: 1.35; }
 .panel-aplazado {
   display: flex;
   justify-content: space-between;
@@ -4272,7 +4276,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '065b0a9645';
+window.__VERSION_APP__ = '64803d02be';
 
 M["cerradura"] = (function () {
 /**
@@ -18344,6 +18348,9 @@ function render(raiz) {
   // El consumo del mes no se paga ese mes: vence con el corte de la tarjeta.
   const vence = fechaPagoMes(mes, t.id);
   const comp = comprobacionDelMes(t.id, mes, estado.usuario);
+  // El pago de este mes, si ya se registró: desde entonces no cuenta en el cupo.
+  const pagoMes = pagoDeTarjeta(t.id, mes);
+  const cuentaDe = (id) => db.cuentas.find((c) => c.id === id)?.nombre || id || '';
 
   /*
    * Los meses de la barra: los que tienen alguna cuota de ESTA tarjeta, más
@@ -18386,8 +18393,16 @@ function render(raiz) {
           <span>Por diferir, no se paga ahora</span>
           <strong>−${money(aplazado)}</strong>
         </div>` : ''}
+      ${pagoMes ? `
+        <div class="panel-pagado">
+          <span>✓ Pagado el ${esc(textoFecha(String(pagoMes.fecha).slice(0, 10)))} · <strong>${money(Number(pagoMes.monto) || 0)}</strong>${
+  pagoMes.cuenta_origen ? ` desde ${esc(cuentaDe(pagoMes.cuenta_origen))}` : ''}</span>
+          <small>Ya no cuenta en el cupo utilizado. Si el banco todavía no lo descuenta, allá el utilizado
+            sale ese tanto más alto.</small>
+        </div>
+        <button class="btn pequeno" id="btn-deshacer-pago">Deshacer el pago</button>` : `
       <button class="btn pequeno" id="btn-pagar"${aPagar <= 0 ? ' disabled' : ''}>
-        Registrar pago de ${money(aPagar)}</button>
+        Registrar pago de ${money(aPagar)}</button>`}
     </section>
 
     <section class="tarjeta">
@@ -18405,6 +18420,12 @@ function render(raiz) {
           <div class="kpi"><div class="etq">Pendiente ${esc(u)}</div>
             <div class="valor">${money(v)}</div></div>`).join('')}
       </div>
+      ${est.previoPagado ? (() => {
+    const p = pagoDeTarjeta(t.id, est.previo);
+    return `<p class="pista cupo-pagado">${esc(nombreMes(est.previo).replace(/\s*\d{4}$/, ''))} no cuenta: está pagado en la app
+          (${esc(textoFecha(String(p.fecha).slice(0, 10)).replace(/ de \d{4}$/, ''))}, <strong>${money(Number(p.monto) || 0)}</strong>).
+          Si el banco aún no lo descuenta, allá sale ese tanto más.</p>`;
+  })() : ''}
       ${est.porCobrar.length ? `
         <p class="pista cupo-por-cobrar">Aún no cuentan, el banco las cobra más adelante:
           ${est.porCobrar.map(({ cuota, gasto, dia }) => `${esc(gasto?.detalle || 'Suscripción')}
@@ -18475,8 +18496,24 @@ function render(raiz) {
     irAlGasto(nuevo);
     render(raiz);
   }));
-  $('#btn-pagar', raiz).addEventListener('click', () => {
+  $('#btn-pagar', raiz)?.addEventListener('click', () => {
     formPagoTarjeta(t.id, mes, aPagar, () => render(raiz));
+  });
+  /*
+   * Deshacer un pago registrado por error (o antes de hacerlo en el banco):
+   * se quita el movimiento —la plata vuelve a la cuenta de la que salió— y
+   * las cuotas del mes vuelven a estar pendientes, así que el mes cuenta
+   * otra vez en el cupo utilizado.
+   */
+  $('#btn-deshacer-pago', raiz)?.addEventListener('click', () => {
+    confirmar(`¿Deshacer el pago de ${nombreMes(mes)} (${money(Number(pagoMes.monto) || 0)})? `
+      + 'El mes vuelve a quedar pendiente y cuenta otra vez en el cupo utilizado; el dinero vuelve a la cuenta.', () => {
+      db.cuotas.filter((c) => c.tarjeta === t.id && c.mes === mes && c.pagado === 'Si')
+        .forEach((c) => upsert('cuotas', { ...c, pagado: '' }));
+      eliminar('movimientos', pagoMes.id);
+      brindis(`Pago de ${nombreMes(mes)} deshecho`);
+      render(raiz);
+    }, { aceptar: 'Deshacer' });
   });
   $('#btn-comprobar', raiz).addEventListener('click', () => {
     estado.comprobando = !estado.comprobando;
@@ -19027,7 +19064,7 @@ function formCuadrar(t, alTerminar) {
     const caja = $('#cq-res', form);
     const texto = $('#cq-banco', form).value.trim();
     const filas = [
-      [`${nombreMes(est.previo)}, sin pagar`, est.partes.previo],
+      [`${nombreMes(est.previo)}, ${est.previoPagado ? 'ya pagado en la app' : 'sin pagar'}`, est.partes.previo],
       [`${nombreMes(mesActual())}, lo cobrado`, est.partes.actual],
       ['Cuotas de diferidos por venir', est.partes.futuro],
     ];
@@ -19072,8 +19109,26 @@ function formCuadrar(t, alTerminar) {
             en ${esc(nombreMes(mesActual()))} con el detalle del banco a la vista.</p>`;
         }
       } else {
-        html += `<p class="cuadre-veredicto cuadre-mal">El banco tiene <strong>${money(-dif)}</strong> más que la app:
-          falta registrar algún cargo en ${esc(t.nombre)}.</p>`;
+        /*
+         * Lo más común cuando el banco tiene más: el mes anterior está pagado
+         * en la app y el banco todavía no lo descuenta (o el pago se registró
+         * aquí antes de hacerlo allá). La diferencia es ese pago.
+         */
+        const pago = est.previoPagado ? pagoDeTarjeta(t.id, est.previo) : null;
+        const delMes = pagoDelMes(t.id, est.previo, 'ambos');
+        const resto = redondear(-dif - delMes);
+        if (pago && Math.abs(resto) <= Math.max(1, delMes * 0.01)) {
+          html += `<p class="cuadre-veredicto cuadre-mal">El banco tiene <strong>${money(-dif)}</strong> más que la app:
+            es el pago de ${esc(nombreMes(est.previo))}.</p>
+            <p class="pista">En la app ${esc(nombreMes(est.previo))} está pagado (${esc(textoFecha(String(pago.fecha).slice(0, 10)))},
+              ${money(delMes)}) y por eso no cuenta en el cupo; el banco todavía lo tiene como utilizado. Si ya pagaste,
+              el banco lo descontará cuando lo procese y quedará igual que la app. Si aún no has pagado, ve a
+              ${esc(nombreMes(est.previo))} y toca «Deshacer el pago».${Math.abs(resto) >= 0.005
+    ? ` Aparte de eso queda una diferencia de ${money(Math.abs(resto))}${resto > 0 ? ' que falta en la app' : ' de más en la app'}.` : ''}</p>`;
+        } else {
+          html += `<p class="cuadre-veredicto cuadre-mal">El banco tiene <strong>${money(-dif)}</strong> más que la app:
+            falta registrar algún cargo en ${esc(t.nombre)}.</p>`;
+        }
       }
     }
     caja.innerHTML = html;
