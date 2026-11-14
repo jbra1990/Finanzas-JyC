@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-o6WwnkkeCOJt2ZQT88/btlGuZ8tYC9nSgtRNpd15NG0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-z4uAfHVfoeMloB5B2uRhrl1uPv8rSJ+IfmNUM4AMTbc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4276,7 +4276,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '64803d02be';
+window.__VERSION_APP__ = 'a7b6992b80';
 
 M["cerradura"] = (function () {
 /**
@@ -14983,7 +14983,7 @@ const {db, upsert, guardar, quitarCuotas, sepultar, eliminar} = M["store"];
 const {alCambiarSync, configurado, estadoSync} = M["sync"];
 const {registrarGastoTarjeta} = M["forms"];
 const {fijosManuales, borrarManual, compraQueLoCubre, recurrencias, estaExcluida, claveGasto, guardarAjuste, guardarManual} = M["plan"];
-const {money, nombreMes, sumarMeses, claveEstadoCuenta, redondear, esIngresoReal, textoFecha} = M["calc"];
+const {money, nombreMes, sumarMeses, claveEstadoCuenta, redondear, esIngresoReal, textoFecha, hoyLocal} = M["calc"];
 const {$, esc, modal, brindis} = M["ui"];
 const CLAVE = 'ajustes_hechos';
 /** Así lo escribe la gente —y así está en los datos—: «Anthropic» y «Antrhopic». */
@@ -15568,7 +15568,9 @@ function revisarContraBanco(est = ESTADO_PICH_SEP) {
   }
 
   // 2. Las cuotas del banco contra lo que queda de septiembre en la app.
-  const sep = db.cuotas.filter((c) => c.tarjeta === est.tarjeta && c.mes === MES)
+  // Con un período abierto, lo comprado después de la última fecha del banco no se compara.
+  const despues = (g) => est.parcial && g?.tipo === 'Corriente' && String(g.fecha).slice(0, 10) > est.hasta;
+  const sep = db.cuotas.filter((c) => c.tarjeta === est.tarjeta && c.mes === MES && !despues(gastos.get(c.gasto_id)))
     .map((c) => ({ c, g: gastos.get(c.gasto_id), monto: Number(c.monto) || 0 }));
   const cuotaLibre = sep.filter((x) => !usadas.has(x.c.gasto_id));
   const tomadas = new Set();
@@ -15619,7 +15621,8 @@ const TOTAL_PICH = 1372.04;
  */
 const ESTADO_PICH_SEP = {
   id: 'pichincha-estado-2026-10', tarjeta: PI, mes: PSEP, desde: '2026-09-04', hasta: '2026-10-03',
-  corte: '3 oct', total: TOTAL_PICH, utilizado: 2452.09, compras: BANCO_PICH, cuotas: BANCO_CUOTAS_PICH,
+  // Sin `utilizado`: el cupo se cuadra desde el estado de noviembre.
+  corte: '3 oct', total: TOTAL_PICH, compras: BANCO_PICH, cuotas: BANCO_CUOTAS_PICH,
 };
 
 /*
@@ -15642,12 +15645,43 @@ const ESTADO_PICH_NOV = {
     ['Autorepuestos del Chino 3/3 (final)', 22.58],
   ].map(([detalle, monto]) => ({ fecha: '2026-11-03', detalle, monto })),
 };
-const ESTADOS_DE_CUENTA = [ESTADO_PICH_SEP, ESTADO_PICH_NOV];
+/*
+ * Pichincha, los movimientos del banco al 14 de noviembre de 2026 (el período
+ * abierto, que cierra el 3 de diciembre): siete compras desde el corte y las
+ * cuotas de noviembre. Dos todavía no las factura el banco (Metalhierro 4/6 y
+ * la última de la refinanciación), pero se sabe que vienen.
+ *
+ * La de Autorepuestos del Chino es un diferido de $332,78 en seis cuotas:
+ * $55,48 la primera y $55,46 las demás. Con eso el cupo utilizado del banco
+ * era $2.364,89 antes del pago de octubre ($523,76) y $1.841,13 después.
+ *
+ * Es `parcial`: lo comprado después del 14 no se compara.
+ */
+const ESTADO_PICH_NOV_PARCIAL = {
+  id: 'pichincha-movimientos-2026-11-14', tarjeta: PI, mes: '2026-11', desde: '2026-11-04', hasta: '2026-11-14',
+  corte: '14 nov, a la fecha', parcial: true, total: 1226.02, utilizado: 1841.13,
+  nota: 'Los movimientos del banco al 14 de noviembre, más dos cuotas que aún no factura (Metalhierro 4/6 y la 3/3 de Dif con nacional online). El período cierra el 3 de diciembre.',
+  notaCupo: 'con el pago de octubre ya descontado',
+  compras: [
+    ['2026-11-07', 'Mi Comisariato', 335.16], ['2026-11-08', 'Estación de servicios Rum (gasolina + tarifa + IVA)', 10.23],
+    ['2026-11-10', 'La Tejedora', 7.75], ['2026-11-11', 'Autorepuestos del Chino', 143.00],
+    ['2026-11-12', 'Autorepuestos del Chino', 45.00], ['2026-11-12', "Carl's Manta (en proceso)", 9.98],
+    ['2026-11-13', 'Dacar Collision Center (en proceso)', 327.34],
+  ].map(([fecha, detalle, monto]) => ({ fecha, detalle, monto })),
+  cuotas: [
+    ['Dif con internacional online 11/12', 173.34], ['T Ventas 5/6', 14.95],
+    ['Autorepuestos del Chino 1/6 (diferido de $332,78)', 55.48],
+    ['Metalhierro 4/6 (aún sin facturar)', 74.76], ['Dif con nacional online 3/3 (aún sin facturar)', 29.03],
+  ].map(([detalle, monto]) => ({ fecha: '2026-11-14', detalle, monto })),
+};
+const ESTADOS_DE_CUENTA = [ESTADO_PICH_SEP, ESTADO_PICH_NOV, ESTADO_PICH_NOV_PARCIAL];
 
+// Un estado de cuenta vale desde su última fecha: antes, el banco aún no lo había dado.
+const yaEmitido = (e) => e.hasta <= hoyLocal();
 /** El estado de cuenta conocido de una tarjeta y un mes de la app, si lo hay. */
-const estadoDeCuentaDe = (tarjeta, mes) => ESTADOS_DE_CUENTA.find((e) => e.tarjeta === tarjeta && e.mes === mes) || null;
+const estadoDeCuentaDe = (tarjeta, mes) => ESTADOS_DE_CUENTA.find((e) => e.tarjeta === tarjeta && e.mes === mes && yaEmitido(e)) || null;
 /** El último estado de cuenta conocido de una tarjeta. */
-const ultimoEstadoDeCuenta = (tarjeta) => ESTADOS_DE_CUENTA.filter((e) => e.tarjeta === tarjeta).at(-1) || null;
+const ultimoEstadoDeCuenta = (tarjeta) => ESTADOS_DE_CUENTA.filter((e) => e.tarjeta === tarjeta && yaEmitido(e)).at(-1) || null;
 
 /* La refinanciación (Dif con nacional online): 29,02 + 29,03 + 29,03 = 87,08. */
 const REFI_CUOTAS = [29.02, 29.03, 29.03];
@@ -19283,7 +19317,8 @@ function pintarContraBanco(raiz, t, mes) {
       <div class="aviso alerta"><span class="icono">!</span><span class="crece">El ajuste de este estado de cuenta
         no está aplicado.</span>
         <button type="button" class="btn pequeno primario" id="cb-ajuste">Aplicar</button></div>` : ''}
-    <p class="pista" style="margin-top:0">${esc(nombreMes(est.mes).replace(/\s*\d{4}$/, ''))} en la app: <strong>${money(rev.appTotal)}</strong>; el banco:
+    ${est.nota ? `<p class="pista" style="margin-top:0">${esc(est.nota)}</p>` : ''}
+    <p class="pista" style="margin-top:0">${esc(nombreMes(est.mes).replace(/\s*\d{4}$/, ''))} en la app${est.parcial ? ` hasta el ${esc(diaMes(est.hasta))}` : ''}: <strong>${money(rev.appTotal)}</strong>; el banco:
       <strong>${money(rev.total)}</strong>${Math.abs(dif) >= 0.005 ? ` (${dif > 0 ? 'faltan' : 'sobran'} ${money(Math.abs(dif))})` : ''}.
       Comparado línea por línea, en los dos sentidos:</p>
     <ul class="cuadre-suma">
@@ -19317,13 +19352,13 @@ function pintarContraBanco(raiz, t, mes) {
     ${rev.faltan.length ? `
       <p class="pista">Faltan: están en el estado de cuenta y no en la app:</p>
       <ul class="cuadre-items">${rev.faltan.map((f, i) => `
-        <li><span>${esc(f.detalle)}<small>${f.tipo === 'cuota' ? `cuota facturada el ${esc(diaMes(est.hasta))}` : `${esc(textoFecha(f.fecha))} en el banco`}</small></span>
+        <li><span>${esc(f.detalle)}<small>${f.tipo === 'cuota' ? (est.parcial ? 'cuota de este período' : `cuota facturada el ${esc(diaMes(est.hasta))}`) : `${esc(textoFecha(f.fecha))} en el banco`}</small></span>
           <strong>${money(f.monto)}</strong>
           ${f.tipo === 'compra' ? `<button type="button" class="btn pequeno primario" data-apuntar="${i}">Apuntar</button>` : ''}</li>`).join('')}</ul>` : ''}
     ${cupo ? `
       <p class="pista">Cupo utilizado, del estado de cuenta a hoy:</p>
       <ul class="cuadre-suma">
-        <li><span>El banco al ${esc(diaMes(est.hasta))}</span><b>${money(est.utilizado)}</b></li>
+        <li><span>El banco al ${esc(diaMes(est.hasta))}${est.notaCupo ? ` <small>(${esc(est.notaCupo)})</small>` : ''}</span><b>${money(est.utilizado)}</b></li>
         ${linea(`Compras desde el corte (${cupo.nuevas.length})`, cupo.sNuevas, '+ ')}
         ${linea('Cargos fijos cobrados desde el corte', cupo.sFijos, '+ ')}
         ${linea(`Pago de ${esc(delMes)}`, cupo.pagado, '− ')}
