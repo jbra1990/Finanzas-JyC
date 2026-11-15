@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-QV52m7dr8UGTFsiMYOzBkHFvvJJW1ymImO/pzwFE7P0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-/XGb2b+XpGbfrULrSb3dQz3fHqBbZFZsp2hUUtEbJuI='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4385,7 +4385,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '699b9eb692';
+window.__VERSION_APP__ = '80c1153cb0';
 
 M["cerradura"] = (function () {
 /**
@@ -15967,14 +15967,24 @@ const ESTADO_PICH_NOV_PARCIAL = {
  * que no se comparan: sin eso saldrían como «sobran» sin sobrar.
  */
 const ESTADO_BOLI_NOV_PARCIAL = {
-  id: 'bolivariano-movimientos-2026-11-14', tarjeta: 'TC-BOLI', mes: '2026-11', desde: '2026-11-06', hasta: '2026-11-14',
-  corte: '14 nov, a la fecha', parcial: true, soloDelPeriodo: true, total: 67.99,
+  id: 'bolivariano-movimientos-2026-11-14', tarjeta: 'TC-BOLI', mes: '2026-11', desde: '2026-11-06', hasta: '2026-11-15',
+  corte: '15 nov, a la fecha', parcial: true, soloDelPeriodo: true, total: 74.46,
+  /*
+   * El 15 de noviembre el banco dice: utilizado $670,25, disponible $5.329,75
+   * de $6.000, con octubre ($233,26) ya cubierto. Su utilizado lleva el
+   * capital que falta del diferido de Europcar ($93,09), no el interés de
+   * las cuotas que vienen: la app sí lo cuenta (5 × $19,35 = $96,75), así que
+   * tiene $3,66 más sin que sobre nada.
+   */
+  utilizado: 670.25, notaCupo: 'utilizado de la app del banco',
+  cupoExtra: [{ texto: 'Interés de Europcar que el banco cobra con cada cuota (aún no en su utilizado)', monto: 3.66 }],
   ajuste: 'bolivariano-europcar-diferido',
-  nota: 'Los movimientos del banco desde el 6 de noviembre. Solo se comparan las compras de estos días y el diferido de Europcar: las suscripciones y las cuotas de diferidos anteriores el banco las cobra en otras fechas.',
+  nota: 'Los movimientos del banco del 6 al 15 de noviembre. Solo se comparan las compras de estos días y el diferido de Europcar: las suscripciones y las cuotas de diferidos anteriores el banco las cobra en otras fechas.',
   compras: [
     ['2026-11-06', 'Estación de servicios Roj (gasolina $10 + comisión $0,20)', 10.20],
     ['2026-11-06', 'Contribución Solca', 0.20], ['2026-11-07', 'Megamaxi Mall del Pacific', 16.14],
     ['2026-11-09', 'PedidosYa', 21.78], ['2026-11-11', 'Contribución Solca', 0.28],
+    ['2026-11-14', 'PedidosYa ($6,08 + propina $0,39)', 6.47],
   ].map(([fecha, detalle, monto]) => ({ fecha, detalle, monto })),
   cuotas: [
     ['Europcar 1/6 (diferido: $17,91 + interés $1,44 + $0,04 que no se difirió)', 19.39, 116.14],
@@ -19605,8 +19615,11 @@ function pintarContraBanco(raiz, t, mes) {
     const pagado = pagoDeTarjeta(t.id, est.mes) ? est.total : 0;
     const sNuevas = suma(nuevas, (g) => Number(g.monto_total) || 0);
     const sFijos = suma(fijos, (c) => Number(c.monto) || 0);
-    const esperado = redondear(est.utilizado + sNuevas + sFijos - pagado);
-    cupo = { et, nuevas, sNuevas, sFijos, pagado, esperado, dif: redondear(et.utilizado - esperado) };
+    // Lo que la app cuenta y el banco aún no, sabido y explicado (`cupoExtra`).
+    const extra = est.cupoExtra || [];
+    const sExtra = suma(extra, (x) => x.monto);
+    const esperado = redondear(est.utilizado + sNuevas + sFijos + sExtra - pagado);
+    cupo = { et, nuevas, sNuevas, sFijos, extra, pagado, esperado, dif: redondear(et.utilizado - esperado) };
   }
   const toca = Math.abs(dif) >= 0.005 || hayAlgo || (cupo && Math.abs(cupo.dif) >= 0.005);
   caja.hidden = !toca;
@@ -19675,6 +19688,7 @@ function pintarContraBanco(raiz, t, mes) {
         <li><span>El banco al ${esc(diaMes(est.hasta))}${est.notaCupo ? ` <small>(${esc(est.notaCupo)})</small>` : ''}</span><b>${money(est.utilizado)}</b></li>
         ${linea(`Compras desde el corte (${cupo.nuevas.length})`, cupo.sNuevas, '+ ')}
         ${linea('Cargos fijos cobrados desde el corte', cupo.sFijos, '+ ')}
+        ${cupo.extra.map((x) => linea(esc(x.texto), x.monto, '+ ')).join('')}
         ${linea(`Pago de ${esc(delMes)}`, cupo.pagado, '− ')}
         <li class="total"><span>= Debería tener la app</span><b>${money(cupo.esperado)}</b></li>
         <li><span>La app tiene</span><b class="${Math.abs(cupo.dif) < 0.005 ? 'ok' : 'mal'}">${money(cupo.et.utilizado)}</b></li>
