@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Nb4o2L5YbD/QgHOOD4mTc5MNjj3ONA8w6H1G/dLaGzE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-T8a2bxBeArqZEmnjleiwFcowglW+FN3gNwFMaPElW08='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -4388,7 +4388,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '55fd89cc49';
+window.__VERSION_APP__ = '9eb03707de';
 
 M["cerradura"] = (function () {
 /**
@@ -5780,6 +5780,31 @@ function diaDeCobro(gasto) {
  *  - las cuotas que faltan de los diferidos (el «saldo diferido»).
  * Las suscripciones de meses que vienen no cuentan: aún no se han cobrado.
  */
+/**
+ * Lo que queda de capital de un diferido con interés después de `k` cuotas.
+ *
+ * El banco cuenta en el cupo utilizado el capital que falta, no el interés de
+ * las cuotas que vienen: Europcar, $111,00 en 6 cuotas de $19,35, tras la
+ * primera ocupa $93,09 y no 5 × $19,35 = $96,75. La tasa no se apunta: sale de
+ * la cuota (sistema francés, cuota fija), que es lo que dice el banco.
+ */
+function saldoDeCapital(capital, cuota, n, k) {
+  const C = Number(capital) || 0;
+  const P = Number(cuota) || 0;
+  if (C <= 0 || P <= 0 || k >= n) return 0;
+  if (P * n <= C + 0.005) return redondear(Math.max(0, C - P * k));
+  const pago = (r) => (C * r) / (1 - (1 + r) ** -n);
+  let lo = 1e-9;
+  let hi = 1;
+  for (let i = 0; i < 200; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (pago(mid) > P) hi = mid; else lo = mid;
+  }
+  const r = (lo + hi) / 2;
+  const f = (1 + r) ** k;
+  return redondear(Math.max(0, C * f - (P * (f - 1)) / r));
+}
+
 function estadoTarjeta(tarjetaId, mesRef = mesActual()) {
   const tarjeta = db.cuentas.find((c) => c.id === tarjetaId);
   const cupo = Number(tarjeta?.cupo) || 0;
@@ -5796,11 +5821,19 @@ function estadoTarjeta(tarjetaId, mesRef = mesActual()) {
   const partes = { previo: 0, actual: 0, futuro: 0 };
   const cuentan = [];
   const porCobrar = [];
+  // Diferidos con su capital apuntado: de lo que viene cuenta el capital, como en el banco.
+  const conCapital = new Map();
   for (const c of db.cuotas) {
     if (c.tarjeta !== tarjetaId || c.pagado === 'Si' || c.mes < previo) continue;
     if (c.mes === previo && previoPagado) continue;
     const recurrente = tipos.get(c.gasto_id) === 'Recurrente';
     if (c.mes > mesRef && recurrente) continue;
+    const g = gastos.get(c.gasto_id);
+    if (c.mes > mesRef && g?.tipo === 'Diferido' && Number(g.capital) > 0) {
+      if (!conCapital.has(g.id)) conCapital.set(g.id, { gasto: g, cuotas: [] });
+      conCapital.get(g.id).cuotas.push(c);
+      continue;
+    }
     if (c.mes === mesRef && recurrente && enCurso) {
       const dia = Math.min(diaDeCobro(gastos.get(c.gasto_id)), ultimoDia);
       if (dia > diaHoy) { porCobrar.push({ cuota: c, gasto: gastos.get(c.gasto_id), dia }); continue; }
@@ -5810,6 +5843,16 @@ function estadoTarjeta(tarjetaId, mesRef = mesActual()) {
     partes[c.mes === previo ? 'previo' : (c.mes === mesRef ? 'actual' : 'futuro')] += c.monto;
     cuentan.push(c);
   }
+  const capitalPendiente = [...conCapital.values()].map(({ gasto, cuotas }) => {
+    const todas = db.cuotas.filter((c) => c.gasto_id === gasto.id).sort((a, b) => a.n_cuota - b.n_cuota);
+    const hechas = todas.filter((c) => c.mes <= mesRef).length;
+    const saldo = saldoDeCapital(gasto.capital, Number(todas.at(-1)?.monto) || 0, todas.length, hechas);
+    const enCuotas = redondear(cuotas.reduce((t, c) => t + (Number(c.monto) || 0), 0));
+    utilizado += saldo;
+    porUsuario[gasto.usuario] = (porUsuario[gasto.usuario] || 0) + saldo;
+    partes.futuro += saldo;
+    return { gasto, saldo, enCuotas, interes: redondear(enCuotas - saldo), cuotas: cuotas.length };
+  });
   utilizado = redondear(utilizado);
   return {
     tarjeta,
@@ -5823,6 +5866,7 @@ function estadoTarjeta(tarjetaId, mesRef = mesActual()) {
     previoPagado,
     partes: Object.fromEntries(Object.entries(partes).map(([k, v]) => [k, redondear(v)])),
     cuentan,
+    capitalPendiente,
     porCobrar: porCobrar.sort((a, b) => a.dia - b.dia),
   };
 }
@@ -8196,7 +8240,7 @@ function yaApuntado({ fecha, monto, detalle, usuario, excluir = '' }) {
   return comprasComparables().find((x) => x.clave !== excluir && mismaCompra(nuevo, x)) || null;
 }
 
-return { CLAVE_NO_REPETIDOS, DESVIO_GRAVE, ES_FINANCIACION, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, PIEZAS, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, clasificarMantenimientos, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, entreRecargas, esFinanciacion, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, intervalosReales, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasParaMedir, lecturasRevisadas, marcarNoRepetidos, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, otrosArreglos, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, posiblesRepetidos, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, trabajosDe, umbralAviso, yaApuntado };
+return { CLAVE_NO_REPETIDOS, DESVIO_GRAVE, ES_FINANCIACION, HORMIGA, MANTENIMIENTOS, MESES_HABITO, NIVELES, NO_ES_INGRESO, PIEZAS, TOPES, aPagarAhora, acumuladoHistorico, ahorradoAl, añosDisponibles, buscarEnElCarro, buscarHistorial, calcularPoliza, clasificarMantenimiento, clasificarMantenimientos, claveEstadoCuenta, claveMes, comprobacionDelMes, comprometidoEnMes, comprometidoProximos, costoTipico, cuotaFrancesa, cuotaPendiente, detalleDeCategoria, detalleDeGastos, deudaTotalTarjetas, diaDeCobro, diasEntre, difMeses, diferidosVigentes, dondeRecortar, entreRecargas, esFinanciacion, esIngresoReal, estadoMantenimientos, estadoTarjeta, eventosVehiculo, fechaAlKilometraje, fechaPagoCompra, fechaPagoMes, gastoDeMantenimiento, gastoHormiga, gastosEnMeses, guardarNivel, guardarPlanMantenimiento, hormigaPorCategoria, hoyLocal, ingresoDelMes, intervalosReales, isoLocal, kmEnFecha, kmEstimadoEnFecha, kmPorMes, lecturasParaMedir, lecturasRevisadas, marcarNoRepetidos, matrizCategoriaMes, mesActual, mesDeFacturacion, mesesConDatos, money, moneyCorto, moneyHTML, nivelDe, nivelEsMio, nombreMes, odometroHoy, otrosArreglos, pagoDeTarjeta, pagoDelMes, patrimonioNeto, planesMantenimiento, planificarCuotas, porDiferir, posiblesRepetidos, presupuestoVsReal, rangoMeses, realismoDeTopes, recorridoCombustible, recorridosQueNoEncajan, redondear, rendimientoProyectado, repartirCuotas, saldoCuenta, saldoDeCapital, serieMensual, sumarDias, sumarMeses, textoCorte, textoFecha, topesDelMes, totalAhorrado, totalInvertido, totalPorCategoria, totalPorDiferir, totalPorUsuario, trabajosDe, umbralAviso, yaApuntado };
 })();
 
 M["charts"] = (function () {
@@ -14373,6 +14417,12 @@ function registrarGastoTarjeta({
      * Día del mes en que el banco cobra una suscripción: hasta ese día no
      * ocupa cupo (ver `estadoTarjeta`). Se arrastra igual que lo anterior.
      */
+    /*
+     * El capital de un diferido con interés (lo pone el cuadre con el banco):
+     * se arrastra mientras sea el mismo diferido —mismas cuotas, mismo total—.
+     */
+    capital: tipo === 'Diferido' && Number(previo?.capital) > 0 && Number(previo.cuotas) === n
+      && Math.abs(Number(previo.monto_total) - redondear(montoTotal)) < 0.005 ? previo.capital : '',
     dia_cobro: tipo !== 'Recurrente' ? ''
       : (diaCobro !== undefined ? (Number(diaCobro) >= 1 && Number(diaCobro) <= 31 ? Math.round(Number(diaCobro)) : '')
         : (previo?.dia_cobro || '')),
@@ -15172,7 +15222,7 @@ const {db, upsert, guardar, quitarCuotas, sepultar, eliminar} = M["store"];
 const {alCambiarSync, configurado, estadoSync} = M["sync"];
 const {registrarGastoTarjeta} = M["forms"];
 const {fijosManuales, borrarManual, compraQueLoCubre, recurrencias, estaExcluida, claveGasto, guardarAjuste, guardarManual} = M["plan"];
-const {money, nombreMes, sumarMeses, claveEstadoCuenta, redondear, esIngresoReal, textoFecha, hoyLocal, estadoTarjeta, pagoDeTarjeta, diaDeCobro} = M["calc"];
+const {money, nombreMes, sumarMeses, claveEstadoCuenta, redondear, esIngresoReal, textoFecha, hoyLocal, estadoTarjeta, pagoDeTarjeta, diaDeCobro, saldoDeCapital} = M["calc"];
 const {$, esc, modal, brindis} = M["ui"];
 const CLAVE = 'ajustes_hechos';
 /** Así lo escribe la gente —y así está en los datos—: «Anthropic» y «Antrhopic». */
@@ -15673,23 +15723,23 @@ const AJUSTES = [
      *  3. Lo que aún falte para el cupo: cargos del banco del 31 de octubre
      *     al 5 de noviembre que no se han visto línea por línea. Una línea
      *     «por identificar», con lo que falte exactamente ($0,93 el 15).
-     * La gasolina se queda en $10,23: el estado de octubre cobra cada comisión
-     * a $0,23 ($0,20 + IVA), aunque el banco aún enseñe $0,20.
+     * Y para que el cupo sea el mismo número que el del banco: Europcar con su
+     * capital ($111,00), así cuenta lo que falta de capital y no el interés de
+     * las cuotas que vienen; y la gasolina como la tiene hoy el banco, $10,20.
      */
-    id: 'bolivariano-cuadre-2026-11-15',
+    id: 'bolivariano-cupo-como-banco',
     revisar() {
       // Sin Europcar no son los datos de este teléfono: nada que cuadrar.
       if (!db.cuentas.some((c) => c.id === 'TC-BOLI') || !europcar()) return { estado: 'nada' };
       const r = PASOS_BOLI_NOV.map((p) => ({ paso: p, ...p.revisar() }));
       if (!r.some((x) => x.estado === 'aplicar')) {
-        return { estado: 'ya', titulo: 'Bolivariano cuadrado al 15 de noviembre', texto: 'ya coincide con el banco: no se toca' };
+        return { estado: 'ya', titulo: 'Bolivariano igual que el banco al 15 de noviembre', texto: 'ya coincide con el banco: no se toca' };
       }
       return {
         estado: 'aplicar',
-        titulo: 'Bolivariano cuadrado con el banco al 15 de noviembre',
+        titulo: 'Bolivariano igual que el banco al 15 de noviembre',
         texto: `<ul class="ajustes-pasos">${r.map((x) => `<li class="${x.estado}">${x.texto}</li>`).join('')}</ul>
-          <p class="pista">El banco dice $670,25 de utilizado. La app tendrá $3,66 más: el interés de las cuotas de Europcar
-          que vienen, que el banco cobra con cada una.</p>`,
+          <p class="pista">El banco dice $670,25 de utilizado: la app tendrá lo mismo.</p>`,
       };
     },
     aplicar() {
@@ -15734,13 +15784,26 @@ const BOLI = 'TC-BOLI';
 const enRango = (g, desde, hasta) => String(g.fecha).slice(0, 10) >= desde && String(g.fecha).slice(0, 10) <= hasta;
 const solcaDel6 = () => db.gastosTarjeta.find((g) => g.tarjeta === BOLI && centavo(g.monto_total, 0.2) && enRango(g, '2026-11-04', '2026-11-08'));
 const ID_DIF_BOLI = 'AJ-BOLI-POR-IDENTIFICAR-2026-11';
+const CAPITAL_EUROPCAR = 111;
+const gasolinaRojas = () => db.gastosTarjeta.find((g) => g.tarjeta === BOLI && g.tipo === 'Corriente' && /estaci/i.test(g.detalle || '')
+  && enRango(g, '2026-11-02', '2026-11-08') && Math.abs((Number(g.monto_total) || 0) - 10.2) <= 0.25);
+/** Lo que el capital de Europcar quita del cupo: las cuotas que vienen menos el capital que falta. */
+function interesEuropcarPorVenir() {
+  const mes = hoyLocal().slice(0, 7);
+  const vienen = EUROPCAR.cuotas.filter((_, i) => EUROPCAR.meses[i] > mes);
+  const hechas = EUROPCAR.meses.filter((m) => m <= mes).length;
+  return redondear(vienen.reduce((t, x) => t + x, 0) - saldoDeCapital(CAPITAL_EUROPCAR, EUROPCAR.cuotas.at(-1), 6, hechas));
+}
 /** Cuánto le faltaría a la app con los pasos 1–3 hechos (positivo: le falta). */
 function faltaEnCupoBoli() {
   const r = cupoContraBanco(ESTADO_BOLI_NOV_PARCIAL);
   let cambio = 0;
   const e = europcar();
   if (e && !europcarComoBanco(e)) cambio += EUROPCAR.total - redondear(cuotasDe(e.id).filter((c) => c.pagado !== 'Si').reduce((t, c) => t + (Number(c.monto) || 0), 0));
+  if (e && !(Number(e.capital) > 0)) cambio -= interesEuropcarPorVenir();
   if (!solcaDel6()) cambio += 0.2;
+  const gas = gasolinaRojas();
+  if (gas && !centavo(gas.monto_total, 10.2)) cambio += 10.2 - Number(gas.monto_total);
   return redondear(-(r.dif + cambio));
 }
 
@@ -15764,7 +15827,20 @@ const PASOS_BOLI_NOV = [
       }));
       quitarCuotas(g.id, (c) => Number(c.n_cuota) > 6);
       const actual = db.gastosTarjeta.find((x) => x.id === g.id) || g;
-      upsert('gastosTarjeta', { ...actual, tipo: 'Diferido', cuotas: 6, monto_total: EUROPCAR.total, mes_inicio: EUROPCAR.meses[0] });
+      upsert('gastosTarjeta', { ...actual, tipo: 'Diferido', cuotas: 6, monto_total: EUROPCAR.total, mes_inicio: EUROPCAR.meses[0], capital: CAPITAL_EUROPCAR });
+    },
+  },
+  {
+    revisar() {
+      const g = europcar();
+      if (!g) return { estado: 'aviso', texto: 'Europcar: no la encuentro' };
+      if (Number(g.capital) > 0) return { estado: 'ya', texto: 'Europcar: ya cuenta en el cupo el capital que falta, como el banco' };
+      return { estado: 'aplicar', texto: `Europcar en el cupo: el capital que falta, como el banco, y no el interés de las cuotas que vienen
+        (<strong>−${money(interesEuropcarPorVenir())}</strong>). Las cuotas no cambian: se siguen pagando $19,35` };
+    },
+    aplicar() {
+      const g = europcar();
+      if (g && !(Number(g.capital) > 0)) upsert('gastosTarjeta', { ...g, capital: CAPITAL_EUROPCAR });
     },
   },
   {
@@ -15778,6 +15854,21 @@ const PASOS_BOLI_NOV = [
         id: 'AJ-BOLI-SOLCA-2026-11-06', fecha: '2026-11-06', tarjeta: BOLI, usuario: 'J', detalle: 'Contribución Solca',
         categoria: 'Intereses bancarios', tipo: 'Corriente', cuotas: 1, montoTotal: 0.2, mesInicio: '2026-11',
       });
+    },
+  },
+  {
+    revisar() {
+      const g = gasolinaRojas();
+      if (!g) return { estado: 'aviso', texto: 'Gasolina de Estación Rojas: no la encuentro, no se toca' };
+      if (centavo(g.monto_total, 10.2)) return { estado: 'ya', texto: 'Gasolina de Estación Rojas: ya está en $10,20, como el banco' };
+      return { estado: 'aplicar', texto: `Gasolina de Estación Rojas: ${money(g.monto_total)} → <strong>$10,20</strong>, como la tiene hoy el banco
+        ($10,00 + $0,20 de comisión). Si al corte cobra el IVA de la comisión ($0,03), saldrá en el estado de cuenta` };
+    },
+    aplicar() {
+      const g = gasolinaRojas();
+      if (!g || centavo(g.monto_total, 10.2)) return;
+      cuotasDe(g.id).forEach((c) => upsert('cuotas', { ...c, monto: 10.2 }));
+      upsert('gastosTarjeta', { ...g, monto_total: 10.2, proposito: g.proposito || 'Banco: 10,00 + comisión 0,20' });
     },
   },
   {
@@ -16148,7 +16239,7 @@ const ESTADO_PICH_NOV_PARCIAL = {
  * ($111,04), que el 11 el banco pasó a diferido: «Transf. deuda normal a
  * diferido» $111,00 y la 1/6, $17,91 de capital más $1,44 de interés. Los
  * $0,04 que no pasó van en la primera cuota: 19,39 y luego 19,35 (ver el
- * ajuste «bolivariano-cuadre-2026-11-15»).
+ * ajuste «bolivariano-cupo-como-banco»).
  *
  * `soloDelPeriodo`: las suscripciones (Anthropic, Disney, Apple) y las cuotas
  * de los diferidos de antes el banco las cobra en otros días del período, así
@@ -16156,24 +16247,19 @@ const ESTADO_PICH_NOV_PARCIAL = {
  */
 const ESTADO_BOLI_NOV_PARCIAL = {
   id: 'bolivariano-movimientos-2026-11-14', tarjeta: 'TC-BOLI', mes: '2026-11', desde: '2026-11-06', hasta: '2026-11-15',
-  corte: '15 nov, a la fecha', parcial: true, soloDelPeriodo: true, total: 74.49, restoPorIdentificar: true,
+  corte: '15 nov, a la fecha', parcial: true, soloDelPeriodo: true, total: 74.46, restoPorIdentificar: true,
   /*
    * El 15 de noviembre el banco dice: utilizado $670,25, disponible $5.329,75
-   * de $6.000, con octubre ($233,26) ya cubierto. Su utilizado lleva el
-   * capital que falta del diferido de Europcar ($93,09), no el interés de
-   * las cuotas que vienen: la app sí lo cuenta (5 × $19,35 = $96,75), así que
-   * tiene $3,66 más sin que sobre nada.
+   * de $6.000 (octubre, $730,27, pagado; noviembre lleva $233,26). Su
+   * utilizado lleva el capital que falta del diferido de Europcar ($93,09),
+   * no el interés de las cuotas que vienen; la app cuenta igual una vez que
+   * Europcar tiene su capital apuntado (ver `saldoDeCapital`).
    */
   utilizado: 670.25, notaCupo: 'utilizado de la app del banco',
-  cupoExtra: [
-    { texto: 'Interés de Europcar que el banco cobra con cada cuota (aún no en su utilizado)', monto: 3.66 },
-    // En el estado de octubre cada comisión de gasolinera es $0,23 ($0,20 + IVA); el banco aún enseña $0,20.
-    { texto: 'IVA de la comisión de la gasolina, que el banco carga al corte', monto: 0.03 },
-  ],
-  ajuste: 'bolivariano-cuadre-2026-11-15',
+  ajuste: 'bolivariano-cupo-como-banco',
   nota: 'Los movimientos del banco del 6 al 15 de noviembre. Solo se comparan las compras de estos días y el diferido de Europcar: las suscripciones y las cuotas de diferidos anteriores el banco las cobra en otras fechas.',
   compras: [
-    ['2026-11-06', 'Estación de servicios Roj (gasolina $10 + comisión $0,20 + IVA $0,03)', 10.23],
+    ['2026-11-06', 'Estación de servicios Roj (gasolina $10 + comisión $0,20)', 10.20],
     ['2026-11-06', 'Contribución Solca', 0.20], ['2026-11-07', 'Megamaxi Mall del Pacific', 16.14],
     ['2026-11-09', 'PedidosYa', 21.78], ['2026-11-11', 'Contribución Solca', 0.28],
     ['2026-11-14', 'PedidosYa ($6,08 + propina $0,39)', 6.47],
@@ -19723,15 +19809,20 @@ function formCuadrar(t, alTerminar) {
     }
     // Al final, después del veredicto: el detalle, por si hay que mirarlo cargo por cargo.
     const delMesAhora = agrupar(est.cuentan.filter((c) => c.mes === mesActual()));
-    const porVenir = agrupar(est.cuentan.filter((c) => c.mes > mesActual()));
+    const porVenir = [
+      ...agrupar(est.cuentan.filter((c) => c.mes > mesActual())),
+      // Los diferidos con interés cuentan su capital, como el banco.
+      ...(est.capitalPendiente || []).map((x) => ({ g: x.gasto, n: x.cuotas, suma: x.saldo, capital: x, meses: [] })),
+    ].sort((x, y) => y.suma - x.suma);
     if (delMesAhora.length || porVenir.length) {
       html += `<details class="cq-detalle"><summary>Ver cargo por cargo</summary>
         ${delMesAhora.length ? `<p class="pista">${esc(nombreMes(mesActual()))}, lo que cuenta (compáralo con los movimientos del banco):</p>
           <ul class="cuadre-items">${delMesAhora.map((x) => fila(x, (y) => `${esc(textoFecha(String(y.g?.fecha || '').slice(0, 10)))}${
     y.g?.tipo && y.g.tipo !== 'Corriente' ? ` · ${esc(y.g.tipo.toLowerCase())}` : ''}`)).join('')}</ul>` : ''}
         ${porVenir.length ? `<p class="pista">Lo que falta de cada diferido (compáralo con «Diferidos» en el banco, que da el capital sin el interés que viene):</p>
-          <ul class="cuadre-items">${porVenir.map((x) => fila(x, (y) => `${y.n} ${y.n === 1 ? 'cuota' : 'cuotas'}, ${
-    esc(nombreMes(y.meses.sort()[0]))} a ${esc(nombreMes(y.meses.sort().at(-1)))}`)).join('')}</ul>` : ''}
+          <ul class="cuadre-items">${porVenir.map((x) => fila(x, (y) => (y.capital
+    ? `capital que falta (${y.n} ${y.n === 1 ? 'cuota' : 'cuotas'} de ${money(y.capital.enCuotas)} con ${money(y.capital.interes)} de interés)`
+    : `${y.n} ${y.n === 1 ? 'cuota' : 'cuotas'}, ${esc(nombreMes(y.meses.sort()[0]))} a ${esc(nombreMes(y.meses.sort().at(-1)))}`))).join('')}</ul>` : ''}
       </details>`;
     }
     caja.innerHTML = html;
