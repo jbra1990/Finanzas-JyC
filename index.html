@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-/XGb2b+XpGbfrULrSb3dQz3fHqBbZFZsp2hUUtEbJuI='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-wyZ+90hkZhVUtMH/sttbElP5Q17t1hDYMVOQ9uOv32E='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -3774,6 +3774,9 @@ body.velada .cabecera { filter: blur(18px); }
 .cuadre-suma li.total span { color: var(--tinta); }
 .cuadre-items li span small { display: block; font-size: 11.5px; color: var(--tinta-3); }
 .cuadre-items li strong { color: var(--tinta); }
+.cuadre-items li b { color: var(--tinta); font-variant-numeric: tabular-nums; }
+.cq-detalle { margin-top: 10px; }
+.cq-detalle > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--acento); padding: 6px 0; }
 .cuadre-items { padding: 2px 10px; border: 1px solid var(--borde); border-radius: 10px; }
 .cuadre-items li:last-child { border-bottom: 0; }
 .cuadre-o { text-align: center; }
@@ -4385,7 +4388,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '80c1153cb0';
+window.__VERSION_APP__ = 'ca06b369f2';
 
 M["cerradura"] = (function () {
 /**
@@ -19420,6 +19423,35 @@ function formCuadrar(t, alTerminar) {
     ];
     let html = `<ul class="cuadre-suma">${filas.map(([e, v]) => `<li><span>${esc(e)}</span><b>${money(v)}</b></li>`).join('')}
       <li class="total"><span>Cupo utilizado en la app</span><b>${money(est.utilizado)}</b></li></ul>`;
+
+    /*
+     * El detalle, para ponerlo al lado del banco: lo de este mes, cargo por
+     * cargo (contra sus movimientos), y lo que queda de cada diferido (contra
+     * su pantalla de «Diferidos», que dice el capital que falta de cada uno).
+     */
+    const gastoDe = new Map(db.gastosTarjeta.map((g) => [g.id, g]));
+    const agrupar = (lista) => {
+      const m = new Map();
+      lista.forEach((c) => {
+        const x = m.get(c.gasto_id) || { g: gastoDe.get(c.gasto_id), n: 0, suma: 0, meses: [] };
+        x.n += 1; x.suma = redondear(x.suma + (Number(c.monto) || 0)); x.meses.push(c.mes);
+        m.set(c.gasto_id, x);
+      });
+      return [...m.values()].sort((x, y) => y.suma - x.suma);
+    };
+    const fila = (x, extra) => `<li><span>${esc(x.g?.detalle || 'Sin detalle')}<small>${extra(x)}</small></span><b>${money(x.suma)}</b></li>`;
+    const delMesAhora = agrupar(est.cuentan.filter((c) => c.mes === mesActual()));
+    const porVenir = agrupar(est.cuentan.filter((c) => c.mes > mesActual()));
+    if (delMesAhora.length || porVenir.length) {
+      html += `<details class="cq-detalle"><summary>Ver cargo por cargo</summary>
+        ${delMesAhora.length ? `<p class="pista">${esc(nombreMes(mesActual()))}, lo que cuenta (compáralo con los movimientos del banco):</p>
+          <ul class="cuadre-items">${delMesAhora.map((x) => fila(x, (y) => `${esc(textoFecha(String(y.g?.fecha || '').slice(0, 10)))}${
+    y.g?.tipo && y.g.tipo !== 'Corriente' ? ` · ${esc(y.g.tipo.toLowerCase())}` : ''}`)).join('')}</ul>` : ''}
+        ${porVenir.length ? `<p class="pista">Lo que falta de cada diferido (compáralo con «Diferidos» en el banco, que da el capital sin el interés que viene):</p>
+          <ul class="cuadre-items">${porVenir.map((x) => fila(x, (y) => `${y.n} ${y.n === 1 ? 'cuota' : 'cuotas'}, ${
+    esc(nombreMes(y.meses.sort()[0]))} a ${esc(nombreMes(y.meses.sort().at(-1)))}`)).join('')}</ul>` : ''}
+      </details>`;
+    }
 
     if (est.porCobrar.length) {
       html += `<p class="pista">No se cuentan porque el banco aún no las cobra: ${est.porCobrar
