@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-B1kjF6yWW4veFjAAps5tauV3uFOc6XBIXF/wPMfdAi4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-QV52m7dr8UGTFsiMYOzBkHFvvJJW1ymImO/pzwFE7P0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas J &amp; C</title>
@@ -2531,6 +2531,47 @@ li[data-estado="pronto"] .ti-sig .ti-val { color: var(--alerta); }
 .ti-otros .ti-veces-n { margin-left: 6px; padding: 1px 7px; font-size: 10.5px; }
 
 /* En el panel del carro: lo primero que toca, y un toque lleva a su fila. */
+/* Pestañas de Vehículo, a todo el ancho. */
+.veh-pestanas { margin: 14px 0 4px; }
+.veh-pestanas .segmentado { width: 100%; }
+.veh-pestanas .segmentado button { flex: 1 1 0; padding: 0 8px; }
+
+/* Por trabajo: cuántos van en cada estado, de un vistazo. */
+.ti-resumen { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+.ti-cuenta {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  padding: 4px 10px; border-radius: var(--radio-pill);
+  background: var(--superficie-2); font-size: 12px; color: var(--tinta-2);
+}
+.ti-cuenta b { font-size: 13px; font-variant-numeric: tabular-nums; }
+.ti-cuenta[data-estado="vencido"] { background: color-mix(in srgb, var(--critico) 16%, transparent); color: var(--critico); }
+.ti-cuenta[data-estado="pronto"] { background: color-mix(in srgb, var(--alerta) 16%, transparent); color: var(--alerta); }
+.ti-cuenta[data-estado="al-dia"] { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+/* El dibujo de cada trabajo, en una baldosa del color de su estado. */
+.ti-cab { align-items: center; }
+.ti-cab .titulo { flex: 1 1 auto; min-width: 0; }
+.ti-icono {
+  flex: none; display: grid; place-items: center;
+  width: 30px; height: 30px; border-radius: 9px;
+  background: var(--superficie-2); color: var(--tinta-2);
+}
+.ti-icono svg { width: 18px; height: 18px; }
+li[data-estado="al-dia"] .ti-icono { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+li[data-estado="pronto"] .ti-icono { background: color-mix(in srgb, var(--alerta) 17%, transparent); color: var(--alerta); }
+li[data-estado="vencido"] .ti-icono { background: color-mix(in srgb, var(--critico) 17%, transparent); color: var(--critico); }
+.ti-uso {
+  display: flex; justify-content: space-between; gap: 8px; margin: 4px 0 0;
+  font-size: 11px; color: var(--tinta-3); font-variant-numeric: tabular-nums;
+}
+.ti-sin { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--grid); }
+.ti-sin-lista { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.ti-sin-uno {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px;
+  border-radius: var(--radio-pill); background: var(--superficie-2); font-size: 12px; color: var(--tinta-3);
+}
+.ti-sin-uno .ti-icono { width: 22px; height: 22px; border-radius: 50%; background: transparent; }
+.ti-sin-uno .ti-icono svg { width: 14px; height: 14px; }
+
 .veh-proximo {
   display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 12px; row-gap: 2px;
   width: 100%; margin-top: 16px; padding: 12px 14px;
@@ -4344,7 +4385,7 @@ window.fetch = (url, ...resto) => (String(url).includes("seed.json")
   ? Promise.resolve(new Response(JSON.stringify(window.__SEMILLA__),
       { headers: { "Content-Type": "application/json" } }))
   : __fetchOriginal(url, ...resto));
-window.__VERSION_APP__ = '3f3325ea9f';
+window.__VERSION_APP__ = '699b9eb692';
 
 M["cerradura"] = (function () {
 /**
@@ -23642,7 +23683,7 @@ const {db, eliminar, guardar, recolocar} = M["store"];
 const {money, redondear, textoFecha, odometroHoy, kmPorMes, kmEstimadoEnFecha, estadoMantenimientos, eventosVehiculo, planesMantenimiento, guardarPlanMantenimiento, MANTENIMIENTOS, gastoDeMantenimiento, costoTipico, nombreMes, claveMes, recorridosQueNoEncajan, DESVIO_GRAVE, buscarEnElCarro, rangoMeses, hoyLocal, intervalosReales, otrosArreglos} = M["calc"];
 const {fijosManuales, guardarManual} = M["plan"];
 const {seccionCombustible} = M["views/resumen"];
-const {esc, $, $$, confirmar, modal, brindis} = M["ui"];
+const {esc, $, $$, confirmar, modal, brindis, segmentado} = M["ui"];
 const {formMantenimiento} = M["forms"];
 const {plegable} = M["pliegue"];
 /** 284546 → «284.546 km». */
@@ -23679,6 +23720,22 @@ function textoCada(real) {
  * repintado —corregir un apunte, apuntar algo— sin tener que volver a escribir.
  */
 let busca = '';
+
+/* La pestaña elegida: es cómo lo mira quien lo usa, en este teléfono; no es un dato. */
+const CLAVE_PESTANA = 'finanzas.jc.vehiculo.pestana';
+const PESTANAS = ['trabajos', 'combustible', 'historial'];
+let pestanaActual = null;
+function pestana() {
+  if (!pestanaActual) {
+    try { pestanaActual = localStorage.getItem(CLAVE_PESTANA); } catch { /* sin almacenamiento */ }
+    if (!PESTANAS.includes(pestanaActual)) pestanaActual = 'trabajos';
+  }
+  return pestanaActual;
+}
+function elegirPestana(v) {
+  pestanaActual = PESTANAS.includes(v) ? v : 'trabajos';
+  try { localStorage.setItem(CLAVE_PESTANA, pestanaActual); } catch { /* solo esta sesión */ }
+}
 
 /** El nombre de un mantenimiento a partir de su clave. */
 const nombreDe = (clave) => MANTENIMIENTOS.find((m) => m.clave === clave)?.nombre
@@ -23735,6 +23792,9 @@ function render(raiz) {
 
     <section class="tarjeta" id="veh-hallazgos"${busca ? '' : ' hidden'}></section>
 
+    <div class="barra-accion veh-pestanas"><div id="seg-vehiculo"></div></div>
+
+    <div class="veh-pestana" data-pestana="trabajos"${pestana() === 'trabajos' ? '' : ' hidden'}>
     <section class="tarjeta" id="veh-toca">
       <header><h2>Por trabajo</h2></header>
       ${bloqueQueToca(estados, pendientes, odometro, ritmo)}
@@ -23745,25 +23805,43 @@ function render(raiz) {
     <section class="tarjeta" id="veh-presupuesto">
       ${seccionPresupuesto()}
     </section>
+    </div>
 
+    <div class="veh-pestana" data-pestana="combustible"${pestana() === 'combustible' ? '' : ' hidden'}>
     <section class="tarjeta" id="combustible">
       ${seccionCombustible({ usuario: 'ambos' }, { sinKm: true })}
     </section>
+    </div>
 
+    <div class="veh-pestana" data-pestana="historial"${pestana() === 'historial' ? '' : ' hidden'}>
     <section class="tarjeta" id="veh-historial">
       <header><h2>Todo, por fecha</h2>${eventos.length
     ? `<span class="pista">${eventos.length} ${eventos.length === 1 ? 'apunte' : 'apuntes'}</span>` : ''}</header>
       ${listaEventos(eventos)}
     </section>
 
-    ${bloqueLecturas()}`;
+    ${bloqueLecturas()}
+    </div>`;
+
+  /*
+   * Tres pestañas en vez de una página de metro y medio: lo que se le hace al
+   * carro, lo que gasta en combustible y el historial. Se cambia sin repintar,
+   * así lo abierto en cada una sigue abierto al volver.
+   */
+  $('#seg-vehiculo', raiz).appendChild(segmentado([
+    { valor: 'trabajos', texto: 'Mantenimiento' },
+    { valor: 'combustible', texto: 'Combustible' },
+    { valor: 'historial', texto: 'Historial' },
+  ], pestana(), (v) => {
+    elegirPestana(v);
+    $$('.veh-pestana', raiz).forEach((d) => { d.hidden = d.dataset.pestana !== v; });
+  }));
 
   /*
    * «Por trabajo» queda abierta: es a lo que se viene («¿cuándo cambié el
    * aceite?»). Las largas, plegadas hasta que se toca su título.
    */
   plegable($('#veh-presupuesto', raiz), 'vehiculo:viene');
-  plegable($('#veh-historial', raiz), 'vehiculo:historial');
   // Revisar lecturas es una tarea de orden, no a lo que se viene: al final y plegada.
   plegable($('#veh-lecturas', raiz), 'vehiculo:lecturas');
 
@@ -23800,11 +23878,12 @@ function render(raiz) {
   $$('[data-apuntar]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => apuntarEnPresupuesto(btn.dataset.apuntar, () => render(raiz)));
   });
-  // «Lo próximo» lleva a su fila, abierta.
+  // «Lo próximo» lleva a su fila, abierta (en la pestaña de mantenimiento).
   $$('[data-ir]', raiz).forEach((btn) => {
     btn.addEventListener('click', () => {
       const li = $(`#veh-toca li[data-clave="${btn.dataset.ir}"]`, raiz);
       if (!li) return;
+      if (pestana() !== 'trabajos') $('#seg-vehiculo button[value="trabajos"]', raiz)?.click();
       li.querySelector('details').open = true;
       li.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
     });
@@ -23860,12 +23939,17 @@ function bloqueQueToca(estados, pendientes, odometro, ritmo) {
         <span class="crece">Nada pendiente${odometro > 0
     ? ` a los ${esc(km(odometro))}` : ''}.</span></div>`}
 
+    <div class="ti-resumen">${['vencido', 'pronto', 'al-dia'].map((k) => {
+    const n = conDatos.filter((e) => e.estado === k).length;
+    return n ? `<span class="ti-cuenta" data-estado="${k}"><b>${n}</b> ${esc(ESTADO_TEXTO[k].toLowerCase())}</span>` : '';
+  }).join('')}</div>
     <p class="pista">En el orden en que tocan. Toca uno para ver todas las veces.</p>
     <ul class="mantenimientos ti-lista">${conDatos.map((e) => `
       <li data-estado="${esc(e.estado)}" data-clave="${esc(e.clave)}">
         <details>
           <summary>
             <div class="ti-cab">
+              ${icono(e.clave)}
               <span class="titulo">${esc(e.nombre)}
                 ${e.ajustado ? '<span class="chip">a mi medida</span>' : ''}</span>
               <span class="ti-estado">${ESTADO_TEXTO[e.estado] || ''}</span>
@@ -23882,14 +23966,15 @@ function bloqueQueToca(estados, pendientes, odometro, ritmo) {
                 ${siguiente(e)}
               </div>
             </div>
-            <div class="mant-barra"><i style="width:${
+            <div class="mant-barra" role="img" aria-label="${esc(textoUso(e))}"><i style="width:${
   Math.min(100, Math.max(3, (e.uso || 0) * 100)).toFixed(0)}%"></i></div>
+            <div class="ti-uso"><span>${esc(textoUso(e))}</span><span>${Math.round((e.uso || 0) * 100)} %</span></div>
           </summary>
           <div class="ti-cuerpo">
             ${e.real.huecos.length ? `<div class="meta">Lo haces cada <strong>${esc(textoCada(e.real))}</strong>
               <small>(${e.real.veces} veces)</small></div>` : ''}
             <div class="meta">${textoProximo(e)}.</div>
-            ${textoCuando(e, ritmo) ? `<div class="meta cuando">${textoCuando(e, ritmo)}.</div>` : ''}
+            ${textoCuando(e, ritmo) ? `<div class="meta cuando">${textoCuando(e, ritmo).replace(/^\s*a /, 'A ')}.</div>` : ''}
             ${lasVeces(e.clave, eventosDe(e.clave), e.real)}
             <div class="veh-acciones ti-pie">
               <span class="ti-total">${e.veces} ${e.veces === 1 ? 'vez' : 'veces'} · ${money(e.gastado)}</span>
@@ -23903,9 +23988,42 @@ function bloqueQueToca(estados, pendientes, odometro, ritmo) {
       <strong>${esc(km(ritmo.kmMes))} al mes</strong> que llevas de media
       (${ritmo.meses.toFixed(0)} meses).</p>` : ''}
     ${estados.some((e) => e.estado === 'sin-datos') ? `
-      <p class="pista">Sin apuntar todavía:
-      ${estados.filter((e) => e.estado === 'sin-datos')
-    .map((e) => esc(e.nombre)).join(', ')}.</p>` : ''}`;
+      <div class="ti-sin">
+        <span class="ti-etq">Sin apuntar todavía</span>
+        <div class="ti-sin-lista">${estados.filter((e) => e.estado === 'sin-datos')
+    .map((e) => `<span class="ti-sin-uno">${icono(e.clave)}${esc(e.nombre)}</span>`).join('')}</div>
+      </div>` : ''}`;
+}
+
+/*
+ * Cuánto se lleva del intervalo, dicho con la medida que manda: «Llevas 1.512
+ * de 5.000 km» o, si va por tiempo, «4 de 6 meses». La barra sola no dice de qué.
+ */
+function textoUso(e) {
+  const usoKm = e.km && e.kmUltimo > 0 ? e.kmDesde / e.km : -1;
+  const usoDias = e.meses ? e.diasDesde / (e.meses * 30.44) : -1;
+  if (usoKm < 0 && usoDias < 0) return 'Sin intervalo';
+  if (usoKm >= usoDias) return `Llevas ${km(e.kmDesde).replace(' km', '')} de ${km(e.km)}`;
+  const meses = Math.floor(e.diasDesde / 30.44);
+  return `Llevas ${meses} de ${e.meses} ${e.meses === 1 ? 'mes' : 'meses'}`;
+}
+
+/* Un dibujo por trabajo: se reconoce antes de leer el nombre. Trazos, sin relleno. */
+const ICONOS = {
+  aceite: 'M12 3.5s5.5 6 5.5 10.2a5.5 5.5 0 0 1-11 0C6.5 9.5 12 3.5 12 3.5Z',
+  'filtro-aire': 'M3 8h10.5a2.5 2.5 0 1 0-2.5-2.5M3 12h14.5a2.5 2.5 0 1 1-2.5 2.5M3 16h7',
+  'filtro-combustible': 'M5 20V5.5A1.5 1.5 0 0 1 6.5 4h5A1.5 1.5 0 0 1 13 5.5V20M4 20h10M13 10h1.5a1.5 1.5 0 0 1 1.5 1.5v4a1.5 1.5 0 0 0 3 0V8.5L16.5 6M7.5 8h3',
+  llantas: 'M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17ZM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
+  frenos: 'M11 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM11 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM16.5 4.5a8.5 8.5 0 0 1 3.8 6',
+  bateria: 'M4 8h16v11H4zM8 5.5V8M16 5.5V8M7 13.5h3M15.5 12v3M14 13.5h3',
+  alineacion: 'M4 12h16M7.5 8 4 12l3.5 4M16.5 8l3.5 4-3.5 4',
+  bujias: 'M12 2.5v3.5M9.5 6h5v3.5h-5zM9 9.5h6l-1 6.5h-4zM12 16v5.5',
+  revision: 'M9 3.5h6v3H9zM7.5 5H5.5v15.5h13V5h-2M9 13.5l2 2 4-4',
+};
+const LLAVE = 'M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4Z';
+function icono(clave) {
+  return `<span class="ti-icono" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${ICONOS[clave] || LLAVE}"/></svg></span>`;
 }
 
 /** «Toca a los 288.234 km, faltan 3.488» / «Se pasó por 1.200 km». */
